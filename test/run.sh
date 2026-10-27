@@ -26,3 +26,14 @@ fi
 
 echo "== cross-check against vrxc_elrs (Python)"
 python3 "$here/crosscheck_vrxc.py" "$out/test_core"
+
+echo "== check_submodules.py pins the same FPVGate C5MK commit as the submodule"
+root="$here/../.."
+if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+    want=$(git -C "$root" ls-tree HEAD third_party/FPVGateC5MK | awk '{print $3}')
+    got=$(sed -n 's/^C5MK_COMMIT = "\([0-9a-f]*\)"/\1/p' "$here/../check_submodules.py")
+    if [ "$want" != "$got" ]; then
+        echo "FAIL: submodule is $want but check_submodules.py pins $got"; exit 1
+    fi
+    echo "ok ($got)"
+fi
