@@ -11,12 +11,6 @@ DNSServer      dnsServer;
 void wsText(const String& msg) { ws.textAll(msg); }
 void wsText(const char* msg)   { ws.textAll(msg); }
 
-bool wsTextLossy(const char* msg) {
-    if (!ws.availableForWriteAll()) return false;
-    ws.textAll(msg);
-    return true;
-}
-
 static void addSlots(JsonArray pa, bool withRace) {
     for (int s = 0; s < MAX_ACTIVE; s++) {
         JsonObject o = pa.add<JsonObject>();

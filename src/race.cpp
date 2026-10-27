@@ -153,29 +153,30 @@ static void onPass(const C5Pass& p) {
     if (r.justFinished) elrsPilotDone(p.slot, positions[p.slot], r.totalMs);
 }
 
+// All active slots in one message, 10 times a second. Sent with textAll like
+// everything else: it only queues to connected clients, and the library
+// closes a client whose queue fills (a dead phone), so one stale connection
+// can't stop telemetry for everyone else.
 static void sendTelemetry() {
-    for (int s = 0; s < MAX_ACTIVE; s++) {
-        if (!rosterValid(activePilots[s])) continue;
-        C5SlotLive l = c5Live(s);
-        char nameEsc[96];
-        {
-            // Names come from the UI; escape the two characters JSON cares about.
-            const char* src = activeName(s);
-            size_t j = 0;
-            for (size_t i = 0; src[i] && j + 2 < sizeof nameEsc; i++) {
-                char c = src[i];
-                if (c == '"' || c == '\\') nameEsc[j++] = '\\';
-                if ((unsigned char)c >= 0x20) nameEsc[j++] = c;
-            }
-            nameEsc[j] = '\0';
+    JsonDocument d;
+    d["type"] = "rssi_all";
+    d["ts"] = millis();
+    JsonArray arr = d["p"].to<JsonArray>();
+    {
+        Guard g;
+        for (int s = 0; s < MAX_ACTIVE; s++) {
+            if (!rosterValid(activePilots[s])) continue;
+            C5SlotLive l = c5Live(s);
+            JsonObject o = arr.add<JsonObject>();
+            o["pilot"]    = s;
+            o["name"]     = activeName(s);
+            o["rssi"]     = l.filtered;
+            o["raw"]      = l.raw;
+            o["crossing"] = l.inside;
+            o["signal"]   = l.signal;
         }
-        char msg[220];
-        snprintf(msg, sizeof msg,
-                 R"({"type":"rssi","pilot":%d,"name":"%s","rssi":%u,"raw":%u,"crossing":%s,"signal":%s,"ts":%lu})",
-                 s, nameEsc, l.filtered, l.raw, l.inside ? "true" : "false", l.signal ? "true" : "false",
-                 (unsigned long)millis());
-        wsTextLossy(msg);   // telemetry: drop rather than starve lap messages
     }
+    if (arr.size()) wsJson(d);
 }
 
 void sendC5Status() {
@@ -199,9 +200,7 @@ void sendC5Status() {
     el["peer"]      = e.peer;
     el["version"]   = e.version;
     el["bytes"]     = e.bytesSent;
-    String s;
-    serializeJson(d, s);
-    wsTextLossy(s.c_str());
+    wsJson(d);
 }
 
 void raceLoop() {

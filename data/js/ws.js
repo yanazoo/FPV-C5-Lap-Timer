@@ -52,6 +52,10 @@ function onMsg(d){
     if(activeTab==='config')renderC5Status();
     return;
   }
+  if(d.type==='rssi_all'){
+    (d.p||[]).forEach(x=>{x.type='rssi';x.ts=d.ts;onMsg(x);});
+    return;
+  }
   if(d.type==='rssi'){
     var s=d.pilot;if(s<0||s>=N)return;
     var p=slots[s];
