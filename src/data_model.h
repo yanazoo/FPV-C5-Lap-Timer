@@ -48,7 +48,9 @@ extern int          activePilots[MAX_ACTIVE];
 extern Settings     settings;
 extern ElrsSettings elrsCfg;
 extern String       adminPassword;
-extern String       apSsid, apPass;
+extern String       apSsid, apPass;     // host mode: our access point
+extern uint8_t      netMode;            // NetMode (wifi_mgr.h)
+extern String       staSsid, staPass;   // client mode: network to join
 
 extern race::Core   raceCore;
 extern bool         sdPresent;

@@ -10,6 +10,8 @@ Settings     settings;
 ElrsSettings elrsCfg;
 String       adminPassword = "admin";   // public default; changed from the Config tab
 String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
+uint8_t      netMode = 0;   // NET_AP until configured
+String       staSsid, staPass;
 
 static Preferences prefs;
 static const uint32_t kElrsVer = 1;   // bump when ElrsSettings' layout changes
@@ -64,12 +66,16 @@ void saveAdminPassword(const String& pw) {
     prefs.end();
 }
 
-void saveAp(const String& ssid, const String& pass) {
-    apSsid = ssid;
-    apPass = pass;
+void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP) {
+    netMode = mode;
+    apSsid = apS, apPass = apP;
+    staSsid = staS, staPass = staP;
     prefs.begin("net", false);
-    prefs.putString("ssid", ssid);
-    prefs.putString("pass", pass);
+    prefs.putUChar("mode", mode);
+    prefs.putString("ssid", apS);
+    prefs.putString("pass", apP);
+    prefs.putString("stassid", staS);
+    prefs.putString("stapass", staP);
     prefs.end();
 }
 
@@ -118,5 +124,8 @@ void loadAll() {
     prefs.begin("net", true);
     apSsid = prefs.getString("ssid", AP_DEFAULT_SSID);
     apPass = prefs.getString("pass", AP_DEFAULT_PASS);
+    netMode = prefs.getUChar("mode", 0);
+    staSsid = prefs.getString("stassid", "");
+    staPass = prefs.getString("stapass", "");
     prefs.end();
 }

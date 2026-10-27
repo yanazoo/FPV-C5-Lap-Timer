@@ -8,4 +8,5 @@ void saveActive();
 void saveSettings();
 void saveElrs();
 void saveAdminPassword(const String& pw);
-void saveAp(const String& ssid, const String& pass);
+// WiFi mode and both credential sets (applied after a reboot).
+void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP);

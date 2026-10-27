@@ -9,6 +9,7 @@
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
+#include "wifi_mgr.h"
 #include "ws_handler.h"
 
 namespace {
@@ -51,7 +52,7 @@ void bad(AsyncWebServerRequest* req, const char* why) {
 
 void cpRedirect(AsyncWebServerRequest* req) {
     AsyncWebServerResponse* res = req->beginResponse(302);
-    res->addHeader("Location", "http://20.0.0.1/");
+    res->addHeader("Location", "http://" + netIp().toString() + "/");
     res->addHeader("Cache-Control", "no-store");
     req->send(res);
 }
@@ -441,18 +442,36 @@ void registerHttpRoutes() {
         ok(req);
     });
 
-    // ── WiFi AP (applied after a reboot) ───────────────────────────────────
+    // ── WiFi: host / client (applied after a reboot) ───────────────────────
+    // The client network's password is never sent back to the browser.
     server.on("/api/net", HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument d;
-        d["ssid"] = apSsid;
-        d["pass"] = apPass;
+        d["mode"]      = netMode;
+        d["apSsid"]    = apSsid;
+        d["apPass"]    = apPass;
+        d["staSsid"]   = staSsid;
+        d["staPassSet"] = staPass.length() > 0;
+        NetStatus st = netStatus();
+        JsonObject o = d["status"].to<JsonObject>();
+        o["ap"]        = st.ap;
+        o["connected"] = st.connected;
+        o["fallback"]  = st.fallback;
+        o["ip"]        = st.ip.toString();
+        o["rssi"]      = st.rssi;
         sendJson(req, d);
     });
     onJson("/api/net", [](AsyncWebServerRequest* req, JsonDocument& d) {
-        String ssid = d["ssid"] | "", pass = d["pass"] | "";
-        if (ssid.length() < 1 || ssid.length() > 31) { bad(req, "ssid 1..31"); return; }
-        if (pass.length() < 8 || pass.length() > 63) { bad(req, "password 8..63"); return; }
-        saveAp(ssid, pass);
+        uint8_t mode = (int)(d["mode"] | 0) == NET_STA ? NET_STA : NET_AP;
+        String apS = d["apSsid"] | "", apP = d["apPass"] | "";
+        String staS = d["staSsid"] | "", staP = d["staPass"] | "";
+        if (apS.length() < 1 || apS.length() > 31) { bad(req, "AP SSID 1..31"); return; }
+        if (apP.length() < 8 || apP.length() > 63) { bad(req, "AP password 8..63"); return; }
+        if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) { bad(req, "client SSID 1..32"); return; }
+        // Empty client password keeps the stored one (the UI never shows it);
+        // "staPassClear" switches to an open network.
+        if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
+        if (staP.length() && (staP.length() < 8 || staP.length() > 63)) { bad(req, "client password 8..63"); return; }
+        saveNet(mode, apS, apP, staS, staP);
         ok(req);
     });
     server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {

@@ -18,6 +18,7 @@
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
+#include "wifi_mgr.h"
 #include "ws_handler.h"
 
 SemaphoreHandle_t gLock;
@@ -29,14 +30,8 @@ void setup() {
 
     loadAll();
 
-    WiFi.mode(WIFI_AP);
-    WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
-    WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL);
-    Serial.printf("[Web] AP  SSID=%s  IP=%s\n", apSsid.c_str(), AP_IP.toString().c_str());
-    // Wildcard DNS for the captive portal, and mDNS to find elrs-netpack.
-    dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
-    dnsServer.setTTL(30);
-    dnsServer.start(53, "*", AP_IP);
+    netBegin();   // access point, or join a network (AP fallback after 60 s)
+    // mDNS: http://fpv-c5-lt.local in client mode, and to find elrs-netpack.
     if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
 
     if (!LittleFS.begin(true)) Serial.println("[Web] LittleFS failed");
@@ -56,7 +51,7 @@ void setup() {
 }
 
 void loop() {
-    dnsServer.processNextRequest();
+    netLoop();
     ws.cleanupClients();
     raceLoop();
     if (sdPollEnabled && !raceCore.running()) sdCheckHotplug(millis());

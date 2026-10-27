@@ -34,9 +34,16 @@ function applyActiveToSlots(){
   }
 }
 
+// A channel is shown on the race tab only when a pilot with a VTX frequency
+// is assigned to it.
+function slotInUse(p){return p.rosterIdx>=0&&p.freq>0;}
+
 function buildRaceCards(){
   var g=document.getElementById('pilotGrid');g.innerHTML='';
+  var shown=0;
   slots.forEach(p=>{
+    if(!slotInUse(p)){p.el=null;return;}
+    shown++;
     var d=document.createElement('div');
     d.id='rc-'+p.id;d.className='pilot-race-card';
     d.innerHTML=
@@ -74,6 +81,8 @@ function buildRaceCards(){
       body : document.getElementById('lapBody'+p.id)
     };
   });
+  var none=document.getElementById('noPilotsMsg');
+  if(none)none.style.display=shown?'none':'block';
 }
 
 function updateRaceCard(p){
@@ -97,6 +106,7 @@ function updateRaceCard(p){
 
 function addLapRow(p, lapMs, cumMs){
   var e=p.el,tbody=e?e.body:document.getElementById('lapBody'+p.id);
+  if(!tbody)return;   // channel not shown on the race tab
   var isBest=(p.bestLapMs===lapMs&&lapMs>0);
   if(isBest)tbody.querySelectorAll('tr.best-row').forEach(r=>r.classList.remove('best-row'));
   var tr=document.createElement('tr');

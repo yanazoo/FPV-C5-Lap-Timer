@@ -249,6 +249,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     </div>
   </div>
   <div class="pilot-race-grid" id="pilotGrid"></div>
+  <div id="noPilotsMsg" style="display:none;padding:24px;text-align:center;color:var(--muted);font-size:13px">使用中のチャネルがありません。設定タブでパイロットに VTX チャンネルを設定し、Ch に割り当ててください。</div>
 </section>
 
 <!-- ═══════════════════════════ CONFIG ════════════════════════ -->
@@ -410,14 +411,28 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     </div>
   </div>
 
-  <!-- ── WiFi AP ── -->
+  <!-- ── WiFi ── -->
   <div class="global-config-card">
-    <h3 class="global-title">📶 WiFi アクセスポイント</h3>
-    <p class="section-desc">タイマーの SSID とパスワード（8文字以上）。保存すると再起動します。elrs-netpack の XIAO もこの SSID に接続させてください。</p>
+    <h3 class="global-title">📶 WiFi</h3>
+    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く）。クライアントで 60 秒接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
+    <div id="netStatus" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
+    <div class="config-row" style="gap:8px"><label style="width:110px">動作モード</label>
+      <select id="netMode" onchange="onNetMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="0">ホスト（アクセスポイント）</option>
+        <option value="1">クライアント（WiFi に接続）</option>
+      </select></div>
+    <div class="net-sta">
+      <div class="config-row" style="gap:8px"><label style="width:110px">接続先 SSID</label>
+        <input type="text" id="netStaSsid" maxlength="32" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">接続先パスワード</label>
+        <input type="password" id="netStaPass" maxlength="63" autocomplete="new-password" placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+    </div>
+    <p class="section-desc" style="margin-top:6px">ホスト（およびクライアント接続失敗時）のアクセスポイント</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">SSID</label>
       <input type="text" id="netSsid" maxlength="31" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
-      <input type="text" id="netPass" maxlength="63" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+      <input type="text" id="netPass" maxlength="63" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>
 

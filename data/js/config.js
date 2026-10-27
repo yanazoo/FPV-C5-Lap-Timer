@@ -277,20 +277,41 @@ function elrsAnnounce(){
     .then(()=>toast('📣 アナウンスを送信しました')).catch(()=>toast('⚠️ 接続エラー'));
 }
 
-// ── WiFi AP ───────────────────────────────────────────────────────────────
+// ── WiFi (host / client) ──────────────────────────────────────────────────
+function onNetMode(){
+  var sta=document.getElementById('netMode').value==='1';
+  document.querySelectorAll('.net-sta').forEach(e=>e.style.display=sta?'':'none');
+}
 async function loadNetSettings(){
   try{
     var r=await fetch('/api/net');if(!r.ok)return;
     var d=await r.json();
-    document.getElementById('netSsid').value=d.ssid;document.getElementById('netPass').value=d.pass;
+    document.getElementById('netMode').value=String(d.mode);
+    document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
+    document.getElementById('netStaSsid').value=d.staSsid||'';
+    var sp=document.getElementById('netStaPass');sp.value='';
+    sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
+    var st=d.status||{},txt;
+    if(st.connected)txt='クライアント接続中 '+esc(st.ip)+'（'+st.rssi+' dBm）';
+    else if(st.fallback)txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
+    else txt='ホスト（アクセスポイント） '+esc(st.ip);
+    document.getElementById('netStatus').innerHTML='<span>現在</span><b>'+txt+'</b>';
+    onNetMode();
   }catch(e){}
 }
 async function saveNetSettings(){
-  var ssid=document.getElementById('netSsid').value.trim(),pass=document.getElementById('netPass').value;
-  if(pass.length<8){toast('⚠️ パスワードは8文字以上');return;}
-  if(!confirm('WiFi設定を保存して再起動します。新しいSSIDに接続し直してください。よろしいですか？'))return;
+  var d={mode:parseInt(document.getElementById('netMode').value)||0,
+    apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
+    staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value};
+  if(d.apPass.length<8){toast('⚠️ アクセスポイントのパスワードは8文字以上');return;}
+  if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
+  if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
+  var msg=d.mode===1
+    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は http://fpv-c5-lt.local（またはルーターが割り当てた IP）で開いてください。60秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
+    :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
+  if(!confirm(msg))return;
   try{
-    var r=await fetch('/api/net',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ssid,pass})});
+    var r=await fetch('/api/net',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
     if(!r.ok){toast('⚠️ '+((await r.json()).error||'保存エラー'));return;}
     await fetch('/api/reboot',{method:'POST'});
     toast('🔄 再起動します…',4000);

@@ -30,8 +30,9 @@ function onMsg(d){
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
       activeSlotsLocal[pd.slot]=pd.rosterIdx;
-      updateRaceCard(p);pushChart(p.id,p.rssi,p.crossing);
+      pushChart(p.id,p.rssi,p.crossing);
     });
+    buildRaceCards();slots.forEach(p=>updateRaceCard(p));
     return;
   }
   if(d.type==='active_update'){

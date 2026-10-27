@@ -5,6 +5,7 @@
 #include "elrs.h"
 #include "data_model.h"
 #include "msp_v2.h"
+#include "wifi_mgr.h"
 
 namespace {
 
@@ -121,6 +122,11 @@ bool tryConnect(IPAddress ip) {
 // the netpack port (phones refuse at once). The last good address first.
 bool connectAuto() {
     if (!(lastGood == IPAddress()) && tryConnect(lastGood)) return true;
+    if (!netIsAp()) {
+        // Client mode: the netpack is on the same network; it advertises mDNS.
+        IPAddress ip = MDNS.queryHost("elrs-netpack", 1000);
+        return !(ip == IPAddress()) && tryConnect(ip);
+    }
     wifi_sta_list_t sl;
     if (esp_wifi_ap_get_sta_list(&sl) != ESP_OK || sl.num == 0) return false;
     esp_netif_pair_mac_ip_t pairs[ESP_WIFI_MAX_CONN_NUM] = {};
