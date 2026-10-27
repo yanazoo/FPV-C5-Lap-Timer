@@ -1,0 +1,8 @@
+{
+  "name": "timer_core",
+  "version": "1.0.0",
+  "description": "Platform-independent core of the FPV C5 Lap Timer: race logic, ELRS backpack OSD engine (port of vrxc_elrs) and MSP v2 framing",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": { "srcDir": "." }
+}
