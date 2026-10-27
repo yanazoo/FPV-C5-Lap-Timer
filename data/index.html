@@ -197,7 +197,24 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .kv span{color:var(--muted)}
 .rate-row{display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-top:6px}
 .rate-cell{font-size:10px;text-align:center;font-family:monospace;background:var(--sf2);border-radius:5px;padding:3px 0}
-.elrs-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px}
+.elrs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:4px 10px;margin-top:6px}
+/* Phones: nothing may be wider than the screen (iOS zooms the whole page out otherwise) */
+html,body{max-width:100%;overflow-x:clip}
+input,select,button{max-width:100%}
+.elrs-grid label{min-width:0}
+.elrs-grid input,.elrs-grid select{width:100%;min-width:0}
+.config-row>select,.config-row>input{min-width:0}
+.slider-num{flex-wrap:wrap}
+.slider-num input[type="range"]{min-width:0}
+.unit{flex-shrink:1;white-space:normal}
+@media(max-width:520px){
+  .header-inner{width:100%}
+  .tab-bar{width:100%;flex-wrap:wrap}
+  .tab-btn{padding:6px 4px}
+  .rate-row{grid-template-columns:repeat(4,1fr)}
+  .kv{flex-wrap:wrap;gap:2px 8px}
+  .kv b{text-align:right;margin-left:auto}
+}
 .elrs-grid label{font-size:11px;color:var(--muted);display:flex;flex-direction:column;gap:2px}
 .elrs-grid input,.elrs-grid select{background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:4px 6px;font-size:12px}
 .chk{font-size:12px;display:flex;align-items:center;gap:6px;padding:2px 0}
