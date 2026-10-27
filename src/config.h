@@ -11,9 +11,11 @@
 #define C5_DEFAULT_GAIN 30
 
 // ── elrs-netpack, direct UART mode (optional) ──────────────────────────────
-// Replaces the netpack's XIAO: the S3 talks to the ESP-NOW bridge (Wrover)
-// itself. XIAO S3 D6 / GPIO43 (TX) -> Wrover GPIO26 (RX)
-//                 D7 / GPIO44 (RX) <- Wrover GPIO27 (TX)
+// Replaces the netpack's XIAO: the S3 talks to the ESP-NOW bridge itself
+// (elrs-netpack/elrs-espnow-bridge on an ESP32 Wrover-E or a XIAO ESP32-C3).
+// XIAO S3 D6 / GPIO43 (TX) -> Wrover GPIO26 / XIAO C3 D7 GPIO20 (RX)
+//         D7 / GPIO44 (RX) <- Wrover GPIO27 / XIAO C3 D6 GPIO21 (TX)
+// See docs/ELRS_UART_SETUP.md.
 #define ELRS_UART_TX_PIN 43
 #define ELRS_UART_RX_PIN 44
 #define ELRS_UART_BAUD   115200

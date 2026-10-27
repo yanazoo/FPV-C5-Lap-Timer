@@ -30,7 +30,8 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
 - elrs-netpack, option A (default): its XIAO joins this timer's WiFi AP; the
   timer finds it on port 8080 automatically.
-- Option B: the netpack's Wrover bridge wired straight to the S3:
+- Option B: the netpack's ESP-NOW bridge (ESP32 Wrover-E or XIAO ESP32-C3) wired straight to
+  the S3 — see [docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) (Japanese). Wrover-E wiring:
   D6/GPIO43 (TX) → Wrover GPIO26, D7/GPIO44 (RX) ← Wrover GPIO27, GND.
 
 ## Build and flash
