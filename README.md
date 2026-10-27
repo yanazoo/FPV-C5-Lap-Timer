@@ -148,6 +148,9 @@ pio run -e xiao_esp32s3 -t uploadfs     # Web UI（data/）
 
 CI（GitHub Actions）の成果物にも `firmware.bin` / `littlefs.bin` / C5 用バイナリが含まれます。
 
+> [!NOTE]
+> `c5host.h: No such file or directory` になる場合はサブモジュールが未取得です。リポジトリのルートで `git submodule update --init --recursive` を実行してください（ビルド時にも自動で取得を試みます。ZIP ダウンロードではサブモジュールが含まれないため `git clone --recurse-submodules` で取得してください）。
+
 ### 3. elrs-netpack を準備する
 
 `third_party/elrs-netpack` の README に従い、Wrover に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。
