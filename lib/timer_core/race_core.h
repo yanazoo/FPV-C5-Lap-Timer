@@ -3,7 +3,7 @@
 // This is what ESP-NOW-Lap-Timer split between gate_node (cooldown) and
 // web_node (gate_comm.cpp: lap times, holeshot, best lap, pause/resume).
 // With the C5 receiver both live on the XIAO ESP32-S3, so they are one
-// platform-independent class here (host-tested in fpv_c5/test).
+// platform-independent class here (host-tested in test/).
 //
 // All times are milliseconds on one clock (the S3's millis()). Not thread
 // safe: the firmware guards it with its race mutex.

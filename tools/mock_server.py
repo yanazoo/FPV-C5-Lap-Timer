@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Mock of the S3 firmware's HTTP API, for working on the web UI on a PC.
 
-    python3 fpv_c5/tools/mock_server.py [port]      (default 8000)
+    python3 tools/mock_server.py [port]      (default 8000)
 
-Serves fpv_c5/data and answers /api/* from memory. There is no WebSocket:
+Serves data/ and answers /api/* from memory. There is no WebSocket:
 the page keeps retrying it; push messages from the browser console with
 onMsg({...}) (see ws.js for the message types).
 """

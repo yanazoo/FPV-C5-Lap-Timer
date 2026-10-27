@@ -1,0 +1,9 @@
+[submodule "third_party/FPVGateC5MK"]
+	path = third_party/FPVGateC5MK
+	url = https://github.com/yanazoo/FPVGateC5MK.git
+[submodule "third_party/elrs-netpack"]
+	path = third_party/elrs-netpack
+	url = https://github.com/yanazoo/elrs-netpack.git
+[submodule "third_party/vrxc_elrs"]
+	path = third_party/vrxc_elrs
+	url = https://github.com/yanazoo/vrxc_elrs.git

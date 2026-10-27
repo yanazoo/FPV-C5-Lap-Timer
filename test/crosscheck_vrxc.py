@@ -16,7 +16,7 @@ import sys
 import types
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PLUGIN = os.path.join(HERE, "..", "..", "third_party", "vrxc_elrs", "custom_plugins", "vrxc_elrs")
+PLUGIN = os.path.join(HERE, "..", "third_party", "vrxc_elrs", "custom_plugins", "vrxc_elrs")
 
 
 def load_plugin():

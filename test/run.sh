@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # PC tests for the FPV C5 Lap Timer (no hardware needed).
-#   bash fpv_c5/test/run.sh
+#   bash test/run.sh
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 core="$here/../lib/timer_core"
-c5host="$here/../../third_party/FPVGateC5MK/host/c5host"
+c5host="$here/../third_party/FPVGateC5MK/host/c5host"
 out="${TMPDIR:-/tmp}/fpv_c5_test"
 mkdir -p "$out"
 
@@ -28,9 +28,9 @@ echo "== cross-check against vrxc_elrs (Python)"
 python3 "$here/crosscheck_vrxc.py" "$out/test_core"
 
 echo "== check_submodules.py pins the same FPVGate C5MK commit as the submodule"
-root="$here/../.."
+root="$here/.."
 if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
-    want=$(git -C "$root" ls-tree HEAD third_party/FPVGateC5MK | awk '{print $3}')
+    want=$(git -C "$root" ls-files -s third_party/FPVGateC5MK | awk '{print $2}')
     got=$(sed -n 's/^C5MK_COMMIT = "\([0-9a-f]*\)"/\1/p' "$here/../check_submodules.py")
     if [ "$want" != "$got" ]; then
         echo "FAIL: submodule is $want but check_submodules.py pins $got"; exit 1

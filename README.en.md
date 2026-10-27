@@ -2,7 +2,7 @@
 
 🌐 [日本語](README.md) | **English**
 
-An FPV drone lap timer built on ESP-NOW Lap Timer. No transponder on the
+An FPV drone lap timer built on [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer). No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
 gate passes at the RSSI peak, and lap times go to the pilots' goggles through
@@ -36,13 +36,13 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
 ## Build and flash
 
 ```bash
-git clone --recurse-submodules https://github.com/yanazoo/ESP-NOW-Lap-Timer.git
-cd ESP-NOW-Lap-Timer
+git clone --recurse-submodules https://github.com/yanazoo/FPV-C5-Lap-Timer.git
+cd FPV-C5-Lap-Timer
 # C5 receiver (FPVGate C5MK, from the submodule)
 pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5 -t upload
 # S3 timer + web UI
-pio run -d fpv_c5 -e xiao_esp32s3 -t upload
-pio run -d fpv_c5 -e xiao_esp32s3 -t uploadfs
+pio run -e xiao_esp32s3 -t upload
+pio run -e xiao_esp32s3 -t uploadfs
 ```
 
 Then join WiFi `FPV-C5-LT` (password `fpv-c5-lt`), open `http://20.0.0.1`,
@@ -53,20 +53,20 @@ to Ch1–8, enable ELRS OSD and calibrate Enter/Exit in the Calib tab
 
 ## Layout
 
-- `fpv_c5/lib/timer_core/` — platform-independent core: `race_core` (laps,
+- `lib/timer_core/` — platform-independent core: `race_core` (laps,
   holeshot, cooldown, pause, positions, finish), `gate_tracker` (FPVGate's
   pass detection), `osd_engine` (vrxc_elrs port), `msp_v2` (MSP v2 + bind
   phrase UID).
-- `fpv_c5/src/` — Arduino glue: C5 UART task, web server, SD, NVS, OSD transport.
-- `fpv_c5/data/` — web UI.
+- `src/` — Arduino glue: C5 UART task, web server, SD, NVS, OSD transport.
+- `data/` — web UI.
 - `third_party/` — FPVGateC5MK, elrs-netpack and vrxc_elrs as pinned submodules.
 
 ## Tests
 
-`bash fpv_c5/test/run.sh` runs the core unit tests, a simulated C5MK UART →
+`bash test/run.sh` runs the core unit tests, a simulated C5MK UART →
 c5host → gate detection → laps pipeline, and a cross-check that loads the real
 vrxc_elrs Python source and compares bind-phrase UIDs and OSD bytes with the
-firmware's, byte for byte. CI (`.github/workflows/fpv_c5.yml`) runs them and
+firmware's, byte for byte. CI (`.github/workflows/ci.yml`) runs them and
 builds the S3 and C5 firmware.
 
 ## Licences

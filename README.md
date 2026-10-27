@@ -2,7 +2,7 @@
 
 🌐 **日本語** | [English](README.en.md)
 
-ESP-NOW Lap Timer をベースにした、**FPV ドローン用ラップ計測装置**です。
+[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) をベースにした、**FPV ドローン用ラップ計測装置**です。
 機体側のビーコンは不要で、**各パイロットの 5.8GHz VTX 電波そのもの**の RSSI ピークで計測ラインの通過を検出し、ラップタイムを **ELRS バックパック経由でゴーグルの OSD に表示**します。
 
 | 変更点 | ESP-NOW Lap Timer | FPV C5 Lap Timer |
@@ -99,29 +99,29 @@ XIAO ESP32-S3 **Sense** の拡張ボードの SD スロットをそのまま使�
 
 ## リポジトリ構成
 
-本システムは ESP-NOW-Lap-Timer リポジトリの `fpv_c5/` で管理し、構成要素の各リポジトリは **git サブモジュール**としてバージョンを固定しています。
+このリポジトリが S3 のタイマーファームウェア本体です。構成要素の各リポジトリは **git サブモジュール**としてバージョンを固定しています。
 
 ```
-fpv_c5/                       FPV C5 Lap Timer（XIAO ESP32-S3 ファームウェア）
-  platformio.ini
-  src/                        Arduino 側（C5 リンク・Web・SD・NVS・OSD 送信）
-  lib/timer_core/             プラットフォーム非依存のコア（PC でテスト可能）
-    race_core.*               ラップ計算（HS/計測モード・クールダウン・一時停止・順位・完走）
-    gate_tracker.*            ゲート通過検出（FPVGate と同じアルゴリズム＋ピーク値）
-    osd_engine.*              ELRS OSD（vrxc_elrs の移植）
-    msp_v2.*, md5.*           MSP v2 フレーム・バインドフレーズ→UID
-  data/                       Web UI（LittleFS）
-  test/                       PC テスト（run.sh）
-  tools/mock_server.py        Web UI 開発用のモック API サーバー
+platformio.ini                XIAO ESP32-S3 タイマーのビルド設定
+check_submodules.py           ビルド前にサブモジュールを取得（ZIP ダウンロードにも対応）
+src/                          Arduino 側（C5 リンク・WiFi・Web・SD・NVS・OSD 送信）
+lib/timer_core/               プラットフォーム非依存のコア（PC でテスト可能）
+  race_core.*                 ラップ計算（HS/計測モード・クールダウン・一時停止・順位・完走）
+  gate_tracker.*              ゲート通過検出（FPVGate と同じアルゴリズム＋ピーク値）
+  osd_engine.*                ELRS OSD（vrxc_elrs の移植）
+  msp_v2.*, md5.*             MSP v2 フレーム・バインドフレーズ→UID
+data/                         Web UI（LittleFS）
+test/                         PC テスト（run.sh）
+tools/mock_server.py          Web UI 開発用のモック API サーバー
 third_party/                  サブモジュール（変更なしで使用）
   FPVGateC5MK/                C5 ファームウェア（multipilot）と UART ホストライブラリ（host/c5host）
   elrs-netpack/               netpack ファームウェア（XIAO / Wrover）
   vrxc_elrs/                  OSD ロジックの移植元（RotorHazard プラグイン）
-.github/workflows/fpv_c5.yml  CI（テスト＋S3/C5 ファームウェアのビルド）
+.github/workflows/ci.yml      CI（テスト＋S3/C5 ファームウェアのビルド）
 ```
 
 ```bash
-git clone --recurse-submodules https://github.com/yanazoo/ESP-NOW-Lap-Timer.git
+git clone --recurse-submodules https://github.com/yanazoo/FPV-C5-Lap-Timer.git
 # 既に clone 済みなら
 git submodule update --init --recursive
 ```
@@ -130,7 +130,7 @@ git submodule update --init --recursive
 
 ```bash
 cd third_party/FPVGateC5MK && git fetch && git checkout <tag or commit> && cd ../..
-bash fpv_c5/test/run.sh          # テストが通ることを確認
+bash test/run.sh                 # テストが通ることを確認
 git add third_party/FPVGateC5MK && git commit -m "Bump FPVGate C5MK to <version>"
 ```
 
@@ -152,15 +152,14 @@ pio run -e xiaoc5 -t upload --upload-port <C5のポート>
 ### 2. XIAO ESP32-S3 にタイマーを書き込む
 
 ```bash
-cd fpv_c5
-pio run -e xiao_esp32s3 -t upload       # ファームウェア
+pio run -e xiao_esp32s3 -t upload       # ファームウェア（リポジトリのルートで）
 pio run -e xiao_esp32s3 -t uploadfs     # Web UI（data/）
 ```
 
 CI（GitHub Actions）の成果物にも `firmware.bin` / `littlefs.bin` / C5 用バイナリが含まれます。
 
 > [!NOTE]
-> `c5host.h: No such file or directory` になる場合はサブモジュールが未取得です。リポジトリのルートで `git submodule update --init --recursive` を実行してください（ビルド時にも自動で取得を試みます。ZIP ダウンロードではサブモジュールが含まれないため `git clone --recurse-submodules` で取得してください）。
+> `c5host.h: No such file or directory` になる場合はサブモジュールが未取得です。リポジトリのルートで `git submodule update --init --recursive` を実行してください（ビルド時にも自動で取得します。ZIP でダウンロードした場合も、git がインストールされていれば固定バージョンを自動で取得します）。
 
 ### 3. elrs-netpack を準備する
 
@@ -224,14 +223,14 @@ RSSI は C5 のスケール（0〜1023、**16 = 1dB**、ゲイン30でフロア�
 ### PC テスト
 
 ```bash
-bash fpv_c5/test/run.sh
+bash test/run.sh
 ```
 
 - `timer_core` の単体テスト（ラップ計算・OSD の表示と時間制御・MSP）
 - C5MK の UART バイト列を模擬 → `c5host` → ゲート検出 → ラップ計算 の一連の流れ（ピーク時刻の精度、c5host::GateDetector との一致）
 - **vrxc_elrs 本体の Python コードを読み込み**、バインドフレーズ UID と OSD 送信バイト列が**バイト単位で一致**することを確認
 
-Web UI はモックサーバーで実機なしに確認できます：`python3 fpv_c5/tools/mock_server.py` → `http://localhost:8000`
+Web UI はモックサーバーで実機なしに確認できます：`python3 tools/mock_server.py` → `http://localhost:8000`
 
 ---
 

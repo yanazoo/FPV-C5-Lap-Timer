@@ -1,0 +1,73 @@
+name: FPV C5 Lap Timer
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  host-tests:
+    name: Host tests (core, C5 pipeline, vrxc_elrs cross-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: bash test/run.sh
+
+  build-s3:
+    name: Build XIAO ESP32-S3 timer firmware
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-6.1.18-s3-${{ hashFiles('platformio.ini') }}
+      # pioarduino 55.03.x is built for platformio-core 6.1.18; 6.2.x ships an
+      # SCons without SCons.Tool.FortranCommon and the build stops there.
+      - run: pip install "platformio==6.1.18"
+      - name: Firmware
+        run: pio run -e xiao_esp32s3
+      - name: Web UI filesystem (LittleFS)
+        run: pio run -e xiao_esp32s3 -t buildfs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fpv_c5-xiao_esp32s3
+          path: |
+            .pio/build/xiao_esp32s3/bootloader.bin
+            .pio/build/xiao_esp32s3/partitions.bin
+            .pio/build/xiao_esp32s3/firmware.bin
+            .pio/build/xiao_esp32s3/littlefs.bin
+
+  build-c5:
+    name: Build FPVGate C5MK for XIAO ESP32-C5 (submodule)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-6.1.18-c5-${{ hashFiles('third_party/FPVGateC5MK/multipilot/platformio.ini') }}
+      # pioarduino 55.03.x is built for platformio-core 6.1.18; 6.2.x ships an
+      # SCons without SCons.Tool.FortranCommon and the build stops there.
+      - run: pip install "platformio==6.1.18"
+      - run: pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fpvgate_c5mk-xiaoc5
+          path: |
+            third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/bootloader.bin
+            third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/partitions.bin
+            third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/ota_data_initial.bin
+            third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/firmware.bin
