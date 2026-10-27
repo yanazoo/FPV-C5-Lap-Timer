@@ -78,7 +78,10 @@ void linkTask(void*) {
         c5.tick(micros());
         uint32_t now = millis();
         if (now - lastRate >= 1000) {
-            for (int i = 0; i < 8; i++) rates[i] = (uint16_t)counts[i], counts[i] = 0;
+            for (int i = 0; i < 8; i++) {
+                rates[i] = (uint16_t)counts[i];
+                counts[i] = 0;
+            }
             lastRate = now;
         }
         vTaskDelay(1);
