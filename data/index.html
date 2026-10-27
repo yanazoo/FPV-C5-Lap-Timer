@@ -365,7 +365,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <label>接続方式
         <select id="elrs_transport" onchange="onElrsTransport()">
           <option value="0">WiFi（elrs-netpack XIAO, TCP）</option>
-          <option value="1">UART（netpack の Wrover に直結）</option>
+          <option value="1">UART（ESP-NOW ブリッジに直結：Wrover / XIAO C3）</option>
         </select></label>
       <label class="elrs-tcp">netpack アドレス（auto=自動検出）<input type="text" id="elrs_host" maxlength="63" placeholder="auto"></label>
       <label class="elrs-tcp">ポート<input type="number" id="elrs_port" min="1" max="65535"></label>

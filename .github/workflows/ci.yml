@@ -71,3 +71,27 @@ jobs:
             third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/partitions.bin
             third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/ota_data_initial.bin
             third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5/firmware.bin
+
+  build-bridge:
+    name: Build elrs-netpack ESP-NOW bridge (Wrover-E and XIAO ESP32-C3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-6.1.18-bridge-${{ hashFiles('third_party/elrs-netpack/elrs-espnow-bridge/platformio.ini') }}
+      - run: pip install "platformio==6.1.18"
+      - run: pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: elrs-espnow-bridge
+          path: |
+            third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/*/bootloader.bin
+            third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/*/partitions.bin
+            third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/*/firmware.bin

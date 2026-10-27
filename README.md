@@ -87,7 +87,7 @@ XIAO ESP32-S3 **Sense** の拡張ボードの SD スロットをそのまま使�
 
 **A. WiFi 接続（既定・推奨）** — elrs-netpack をそのまま使います。netpack の XIAO を本タイマーの WiFi AP に接続させるだけで、追加配線はありません。
 
-**B. UART 直結** — netpack の XIAO を使わず、ESP-NOW ブリッジ（Wrover）を S3 に直接つなぎます。
+**B. UART 直結** — netpack の XIAO を使わず、ESP-NOW ブリッジ（ESP32 Wrover-E または **XIAO ESP32-C3**）を S3 に直接つなぎます。手順の詳細は **[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md)** を参照してください（下表は Wrover-E の場合）。
 
 | XIAO ESP32-S3（タイマー） | 方向 | ESP32 Wrover-E（elrs-espnow-bridge） |
 |---|---|---|
@@ -166,7 +166,7 @@ CI（GitHub Actions）の成果物にも `firmware.bin` / `littlefs.bin` / C5 �
 `third_party/elrs-netpack` の README に従い、Wrover に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。
 
 - **WiFi 接続の場合**：netpack のキャプティブポータル（`ELRS-Netpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します。タイマーは AP に接続してきた機器から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
-- **UART 直結の場合**：上の配線表 B のとおり Wrover を S3 につなぎ、設定で接続方式を「UART」にします。
+- **UART 直結の場合**：[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（Wrover-E / XIAO ESP32-C3）に書き込み・配線し、設定で接続方式を「UART」にします。
 
 ### 4. 初期設定（Web UI）
 
