@@ -46,6 +46,9 @@ uint32_t Core::elapsed(uint32_t now) const {
 bool Core::pass(int slot, int rosterIdx, uint32_t ts, int rssi, PassResult* out) {
     if (!running_ || slot < 0 || slot >= kSlots) return false;
     SlotState& s = slots_[slot];
+    // A pilot who completed totalLaps is done: flying through the gate to
+    // land must not add laps, best laps or change the placings.
+    if (s.finished) return false;
     // Cooldown on pass (peak) times. Signed difference: an out-of-order or
     // repeated ts is inside the cooldown, never a ~49-day "gap".
     if (s.lastLapTs && (int32_t)(ts - s.lastLapTs) < (int32_t)cooldownMs) return false;

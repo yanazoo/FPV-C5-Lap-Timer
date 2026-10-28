@@ -140,6 +140,7 @@ static void onPass(const C5Pass& p) {
     d["bestLap"]  = r.bestLapMs;
     d["lapCount"] = r.lapCount;
     d["newBest"]  = r.newBest;
+    d["finished"] = r.justFinished;
     d["rssi"]     = p.peak;
     d["ts"]       = r.ts;
     wsJson(d);

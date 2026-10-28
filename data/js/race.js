@@ -236,10 +236,15 @@ function setBtns(running){
   var btnClear=document.getElementById('btnClear');
   if(btnClear)btnClear.disabled=locked||running;
 }
-function checkFinished(p){
+// finished: the firmware's verdict for this lap (it knows the holeshot lap
+// doesn't count). Without it, count laps the same way: the holeshot isn't a lap.
+function checkFinished(p,finished){
   var tot=parseInt(document.getElementById('totalLaps').value)||0;
-  if(!raceRunning||tot===0)return;
-  if(p.lapCount>=tot){
+  if(finished===undefined){
+    var laps=lapMode==='immediate'?p.lapCount:p.lapCount-1;
+    finished=raceRunning&&tot>0&&laps===tot;
+  }
+  if(finished){
     beepSeq([[880,.2,'sine',0],[1320,.2,'sine',220],[1760,.3,'sine',440]]);
     if(voiceEnabled&&announceMode!=='beep'&&announceMode!=='none'){
       var u=new SpeechSynthesisUtterance(getSpokenName(p)+'、フィニッシュ');u.lang='ja-JP';u.rate=speechRate;speechSynthesis.speak(u);
