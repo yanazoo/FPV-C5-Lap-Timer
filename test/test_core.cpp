@@ -272,8 +272,8 @@ void testOsdLapFlow() {
     CHECK(has(texts(parse(cap.bytes)), "8,22:0:11.0"));
     cap.bytes.clear();
     cap.bursts = 0;
-    e.tick(14400);   // the clock tick, and the lap's last refresh (scheduled from this sparse tick schedule)
-    CHECK(cap.bursts <= 2 && has(texts(parse(cap.bytes)), "8,22:0:11.0"));
+    e.tick(14400);   // only two redraws: just the clock tick (14 s) flushes
+    CHECK(cap.bursts == 1);
     cap.bytes.clear();
     e.tick(17000);   // clock tick, then the lap row is cleared at 5 s
     tx = texts(lastBurst(parse(cap.bytes)));
