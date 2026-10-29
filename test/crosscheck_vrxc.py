@@ -4,11 +4,10 @@
 Loads the real plugin source from third_party/vrxc_elrs (msp.py and the
 methods of ELRSBackpack that build packets), runs them without RotorHazard,
 and compares their bytes with the C++ timer_core output printed by
-test_core. Covers bind-phrase UIDs and one full OSD burst built from the
-plugin's own packet builders (SET_SEND_UID, rows, display, reset). Unlike
-the plugin, the firmware writes every row at its full width and doesn't
-start the burst with "clear" (see osd_engine.h), so the rows are composed
-here the same way.
+test_core. Covers bind-phrase UIDs and one full OSD burst
+(SET_SEND_UID, every row at full width, display, reset), plus a race of
+displays (rows added, changed and removed) under packet loss: with HDZero's
+canvas no row that should be up is ever blank.
 
     python3 crosscheck_vrxc.py <path to test_core binary>
 """
@@ -39,7 +38,8 @@ def load_plugin():
     # Pull the packet-building methods out of ELRSBackpack without importing
     # RotorHazard: compile just those function definitions.
     wanted = {"hash_phrase", "center_osd", "send_msp", "_frame", "_send_osd_packet", "set_send_uid",
-              "reset_send_uid", "send_clear_osd", "send_osd_text", "send_clear_osd_row", "send_display_osd"}
+              "reset_send_uid", "send_clear_osd", "send_osd_text", "send_clear_osd_row", "send_display_osd",
+              "_osd_row_bytes"}
     with open(os.path.join(PLUGIN, "elrs_backpack.py"), encoding="utf-8") as f:
         tree = ast.parse(f.read())
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "ELRSBackpack")
@@ -49,7 +49,11 @@ def load_plugin():
         raise SystemExit(f"vrxc_elrs changed: missing {sorted(missing)}")
     import hashlib
     mod = ast.Module(body=funcs, type_ignores=[])
-    fns = {"hashlib": hashlib, "MSPPacket": ns["MSPPacket"], "MSPTypes": ns["MSPTypes"]}
+    consts = {}
+    for n in tree.body:
+        if isinstance(n, ast.Assign) and all(isinstance(t, ast.Name) and t.id.startswith("OSD_") for t in n.targets):
+            exec(compile(ast.Module(body=[n], type_ignores=[]), "elrs_backpack.py", "exec"), consts)
+    fns = {"hashlib": hashlib, "MSPPacket": ns["MSPPacket"], "MSPTypes": ns["MSPTypes"], **consts}
     exec(compile(mod, "elrs_backpack.py", "exec"), fns)
 
     class Backpack:
@@ -59,6 +63,9 @@ def load_plugin():
             self.sent = []
             self._osd_frames = {}
             self._send_uid = None
+            self._osd_shown = {}
+            self._osd_blank = {}
+            self._osd_hard_clear = set()
             self._send_queue = types.SimpleNamespace(put=self.sent.append)
 
     for f in funcs:
@@ -68,6 +75,62 @@ def load_plugin():
 
 def run(binary, *args):
     return subprocess.run([binary, *args], check=True, capture_output=True, text=True).stdout.strip()
+
+
+def lossy_race(Backpack):
+    """Displays over a race with 25 % of OSD packets lost (HDZero canvas)."""
+    import random
+    bp = Backpack()
+    uid = bp.hash_phrase("pilot-a")
+    rng = random.Random(1)
+    canvas = [[" "] * 50 for _ in range(18)]
+    screen = [row[:] for row in canvas]
+
+    def flush():
+        bp.sent.clear()
+        bp.send_display_osd()
+        for pkt in bp.sent:
+            data = bytes(pkt.get_packet())[8:-1]   # $X< flag func(2) size(2) ... crc
+            if rng.random() < 0.25:
+                continue
+            if data[0] == 0x02:
+                for r in canvas:
+                    r[:] = [" "] * 50
+            elif data[0] == 0x03:
+                for i, b in enumerate(data[4:]):
+                    canvas[data[1]][data[2] + i] = chr(b)
+            elif data[0] == 0x04:
+                screen[:] = [r[:] for r in canvas]
+
+    bp.set_send_uid(uid)
+    bp.send_clear_osd(hard=True)
+    bp.send_osd_text(5, 19, "W ARM NOW X")
+    flush()
+    failures = 0
+    best_seen = False
+    for sec in range(1, 40):
+        if sec == 2:
+            bp.send_clear_osd_row(5)
+        bp.send_osd_text(2, 23, f"00:{sec:02d}")
+        if sec == 10:
+            bp.send_osd_text(8, 22, "0:12.3")
+            bp.send_osd_text(12, 0, "BEST: 0:12.3")
+        if sec == 15:
+            bp.send_clear_osd_row(8)
+        flush()
+        text = ["".join(r) for r in screen]
+        # Once a row has been drawn it never blanks while it should be up.
+        best_seen = best_seen or "BEST: 0:12.3" in text[12]
+        if best_seen and "BEST: 0:12.3" not in text[12]:
+            print(f"FAIL lossy race: best lap row blank at {sec} s")
+            failures += 1
+        if sec >= 20 and "0:12.3" in text[8]:
+            print(f"FAIL lossy race: lap row still up at {sec} s")
+            failures += 1
+        if sec >= 6 and "ARM" in text[5]:
+            print(f"FAIL lossy race: ARM NOW still up at {sec} s")
+            failures += 1
+    return failures
 
 
 def main():
@@ -88,14 +151,9 @@ def main():
     bp = Backpack()
     uid = bp.hash_phrase("pilot-a")
     bp.set_send_uid(uid)
-    lines = {}
     for row, col, text in cells:
-        line = lines.setdefault(row, [" "] * 50)
-        for i, ch in enumerate(text[: 50 - col]):
-            line[col + i] = ch
-    for row in sorted(lines):
-        bp._send_osd_packet(bytearray((0x03, row, 0, 0)) + "".join(lines[row]).encode("ascii"))
-    bp._send_osd_packet(bytearray((0x04,)))
+        bp.send_osd_text(row, col, text)
+    bp.send_display_osd()
     bp.reset_send_uid()
     want = b"".join(bytes(p.get_packet()) for p in bp.sent).hex()
     args = ["frame", "pilot-a"]
@@ -105,6 +163,8 @@ def main():
     if want != got:
         print(f"FAIL OSD burst\n  vrxc     {want}\n  firmware {got}")
         failures += 1
+
+    failures += lossy_race(Backpack)
 
     for n in (0, 5, 11, 30, 49, 50, 60):
         if Backpack().center_osd(n) != int(run(binary, "center", str(n))):
