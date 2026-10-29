@@ -29,7 +29,7 @@ state = {
                 "lapResults": "8,-1", "bestLap": "12,0", "totalTime": "3,-1", "results": "10,-1",
                 "raceClock": "2,-1"},
     },
-    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False,
+    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30,
             "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
     "password": "admin",
     "posts": [],   # every POST, for tests
@@ -134,7 +134,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/api/net":
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
-                                staSsid=d.get("staSsid", ""))
+                                staSsid=d.get("staSsid", ""), fallbackSec=d.get("fallbackSec", 30))
             if d.get("staPass"):
                 state["net"]["staPassSet"] = True
             return self.reply({"ok": True})

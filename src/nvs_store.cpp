@@ -1,6 +1,7 @@
 #include <Preferences.h>
 #include "nvs_store.h"
 #include "data_model.h"
+#include "wifi_mgr.h"
 
 PilotRoster  roster[MAX_REGISTERED];
 CalibConfig  rosterCal[MAX_REGISTERED];
@@ -12,6 +13,7 @@ String       adminPassword = "admin";   // public default; changed from the Conf
 String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
 String       staSsid, staPass;
+uint8_t      netFallbackSec = NET_FALLBACK_DEFAULT_S;
 
 static Preferences prefs;
 static const uint32_t kElrsVer = 1;   // bump when ElrsSettings' layout changes
@@ -66,8 +68,10 @@ void saveAdminPassword(const String& pw) {
     prefs.end();
 }
 
-void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP) {
+void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP,
+             uint8_t fallbackSec) {
     netMode = mode;
+    netFallbackSec = fallbackSec;
     apSsid = apS, apPass = apP;
     staSsid = staS, staPass = staP;
     prefs.begin("net", false);
@@ -76,6 +80,7 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
     prefs.putString("pass", apP);
     prefs.putString("stassid", staS);
     prefs.putString("stapass", staP);
+    prefs.putUChar("fbsec", fallbackSec);
     prefs.end();
 }
 
@@ -127,5 +132,7 @@ void loadAll() {
     netMode = prefs.getUChar("mode", 0);
     staSsid = prefs.getString("stassid", "");
     staPass = prefs.getString("stapass", "");
+    netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
+    if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
     prefs.end();
 }

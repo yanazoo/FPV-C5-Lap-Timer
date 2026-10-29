@@ -30,7 +30,7 @@ void setup() {
 
     loadAll();
 
-    netBegin();   // access point, or join a network (AP fallback after 60 s)
+    netBegin();   // access point, or join a network (AP fallback after 15 / 30 / 60 s)
     // mDNS: http://fpv-c5-lt.local in client mode, and to find elrs-netpack.
     if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
 
