@@ -99,8 +99,14 @@ struct Goggles {
                 continue;
             }
             if (!mine || parser.function() != msp::kElrsSetOsd || n < 1) continue;
-            seed = seed * 1103515245u + 12345u;
-            if (dropPct > 0 && (int)((seed >> 16) % 100) < dropPct) continue;
+            // splitmix32: an LCG's lattice correlates packets a fixed burst
+            // length apart, which made the same row drop burst after burst.
+            seed += 0x9E3779B9u;
+            uint32_t z = seed;
+            z = (z ^ (z >> 16)) * 0x85EBCA6Bu;
+            z = (z ^ (z >> 13)) * 0xC2B2AE35u;
+            z ^= z >> 16;
+            if (dropPct > 0 && (int)(z % 100) < dropPct) continue;
             if (p[0] == 0x02) {
                 blank(canvas);
             } else if (p[0] == 0x03 && n >= 4) {
@@ -246,7 +252,7 @@ void testOsdLapFlow() {
     tx = texts(pk);
     CHECK(has(tx, ":w   GO!   x") && has(tx, "2,23:00:00"));
     cap.bytes.clear();
-    e.tick(1400);   // the start burst is repeated once 0.3 s later
+    e.tick(1400);   // the start burst is repeated 0.2 s and 0.4 s later
     CHECK(has(texts(parse(cap.bytes)), ":w   GO!   x"));
     cap.bytes.clear();
     e.tick(1500);   // GO! cleared after 0.5 s: its row is written blank, the clock stays
@@ -482,6 +488,146 @@ void testOsdClearsSurviveLoss() {
     }
 }
 
+// When does each element appear and disappear? One race with every timed
+// element, the goggles' screen sampled every 20 ms. Each element must be up
+// in exactly one stretch, from its event until its due time - not gone early
+// (flicker), not left up late. With packet loss the start and the end may
+// slip by the redraws/refreshes that repair a lost burst.
+struct Span {
+    int first = -1, last = -1, stretches = 0;
+};
+
+struct Timeline {
+    static constexpr int kItems = 11;
+    Span s[kItems];
+};
+
+// Event times (ms).
+constexpr uint32_t kStage = 0, kStart = 3000, kLap = 15000, kDone = 25000, kAnn = 30000, kStop = 40000,
+                   kClear = 60000, kEnd = 63000;
+
+Timeline raceTimeline(Goggles& g, bool finish = true) {
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    e.options().eventName = {0, -1};
+    Timeline tl;
+    struct { int row; const char* text; } items[Timeline::kItems] = {
+        {5, "ARM NOW"}, {0, "CUP"}, {5, "GO!"}, {2, ":"}, {8, "0:12.0"}, {12, "BEST"}, {1, "POSN"},
+        {5, "FINISHED"}, {10, "PLACEMENT"}, {3, "HELLO"}, {5, "LAND NOW"}};
+    bool up[Timeline::kItems] = {};
+    for (uint32_t t = 0; t <= kEnd; t += 20) {
+        if (t == kStage) e.onRaceStage(t, "Cup");
+        if (t == kStart) e.onRaceStart(t, 0);
+        if (t == kLap) e.onLap(t, 0, {1, false, 12000, 12000, 12000, 1});
+        if (t == kDone && finish) e.onPilotDone(t, 0, 1, 22000);
+        if (t == kAnn) e.onAnnounce(t, "hello");
+        if (t == kStop) e.onRaceStop(t);
+        if (t == kClear) e.onLapsClear(t);
+        e.tick(t);
+        g.feed(cap.bytes);
+        cap.bytes.clear();
+        for (int i = 0; i < Timeline::kItems; ++i) {
+            bool now = g.shows(items[i].row, items[i].text);
+            Span& sp = tl.s[i];
+            if (now && !up[i]) ++sp.stretches;
+            if (now) {
+                if (sp.first < 0) sp.first = (int)t;
+                sp.last = (int)t;
+            }
+            up[i] = now;
+        }
+    }
+    return tl;
+}
+
+// Expected [appear, disappear) per element, in item order.
+struct Want { int from, until; };
+const Want kWant[Timeline::kItems] = {
+    {kStage, kStart},               // ARM NOW until GO!
+    {kStage, kStart},               // event name until GO! (start clears the frame)
+    {kStart, kStart + 500},         // GO! for startUptime 0.5 s
+    {kStart, kStop},                // race clock until the stop
+    {kLap, kLap + 5000},            // lap time for resultsUptime 5 s
+    {kLap, kClear},                 // best lap until the laps are cleared
+    {kLap, kDone},                  // position until the pilot finishes
+    {kDone, kDone + 10000},         // FINISHED! for finishUptime 10 s
+    {kDone, kDone + 10000},         // placement with it
+    {kAnn, kAnn + 5000},            // announcement for announceUptime 5 s
+    {-1, -1},                       // LAND NOW!: never - a finished pilot isn't told to land
+};
+
+bool checkTimeline(const Timeline& tl, int slack, const char* what) {
+    static const char* names[Timeline::kItems] = {"ARM NOW", "event", "GO!", "clock", "lap", "best", "posn",
+                                                  "FINISHED", "placement", "announce", "LAND NOW"};
+    bool ok = true;
+    for (int i = 0; i < Timeline::kItems; ++i) {
+        const Span& sp = tl.s[i];
+        int gone = sp.last + 20;   // first sample without it
+        if (kWant[i].from < 0) {
+            if (sp.stretches) printf("%s: %s up %d..%d, want never\n", what, names[i], sp.first, gone), ok = false;
+            continue;
+        }
+        bool good = sp.stretches == 1 && sp.first >= kWant[i].from && sp.first <= kWant[i].from + slack &&
+                    gone >= kWant[i].until && gone <= kWant[i].until + slack;
+        if (!good) {
+            printf("%s: %s up %d..%d in %d stretch(es), want %d..%d\n", what, names[i], sp.first, gone,
+                   sp.stretches, kWant[i].from, kWant[i].until);
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+// A pilot still racing at the stop: LAND NOW! from the stop until the laps
+// are cleared, the clock off at the stop, position and lap up as usual.
+bool checkUnfinished(Goggles& g, int slack, const char* what) {
+    Timeline tl = raceTimeline(g, false);
+    struct { int i; Want w; const char* name; } checks[] = {
+        {10, {kStop, kClear}, "LAND NOW"}, {3, {kStart, kStop}, "clock"}, {6, {kLap, kClear}, "posn"},
+        {4, {kLap, kLap + 5000}, "lap"}, {7, {-1, -1}, "FINISHED"}};
+    bool ok = true;
+    for (auto& c : checks) {
+        const Span& sp = tl.s[c.i];
+        int gone = sp.last + 20;
+        bool good = c.w.from < 0 ? sp.stretches == 0
+                                 : sp.stretches == 1 && sp.first >= c.w.from && sp.first <= c.w.from + slack &&
+                                       gone >= c.w.until && gone <= c.w.until + slack;
+        if (!good) printf("%s: %s up %d..%d in %d stretch(es)\n", what, c.name, sp.first, gone, sp.stretches), ok = false;
+    }
+    return ok;
+}
+
+void testOsdAppearsAndClearsOnTime() {
+    {
+        Goggles a("p"), b("p", true);
+        CHECK(checkUnfinished(a, 20, "unfinished hdzero"));
+        CHECK(checkUnfinished(b, 20, "unfinished scratch"));
+        for (uint32_t seed = 1; seed <= 20; ++seed) {
+            Goggles l("p");
+            l.dropPct = 10;
+            l.seed = seed;
+            CHECK(checkUnfinished(l, 1300, "unfinished lossy"));
+        }
+    }
+    // No loss: every element up and down within one 20 ms sample.
+    Goggles hd("p");
+    CHECK(checkTimeline(raceTimeline(hd), 20, "hdzero"));
+    Goggles scratch("p", true);
+    CHECK(checkTimeline(raceTimeline(scratch), 20, "scratch"));
+    // 10 % loss: a lost burst is repaired by the next refresh or redraw, so
+    // each change lands within 1.3 s (draws are repeated at +0.2/+0.4 s, lap
+    // times also at +0.8/+1.6 s; clears at +0.2 ... +0.8 s).
+    for (uint32_t seed = 1; seed <= 20; ++seed) {
+        Goggles lossy("p");
+        lossy.dropPct = 10;
+        lossy.seed = seed;
+        char what[24];
+        snprintf(what, sizeof what, "loss seed %u", seed);
+        CHECK(checkTimeline(raceTimeline(lossy), 1300, what));
+    }
+}
+
 void testFormat() {
     char b[16];
     osd::Engine::formatTime(1700, b, sizeof b);
@@ -504,6 +650,7 @@ int runTests() {
     testOsdClockAndStop();
     testOsdFinishWithoutResults();
     testOsdClearsSurviveLoss();
+    testOsdAppearsAndClearsOnTime();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

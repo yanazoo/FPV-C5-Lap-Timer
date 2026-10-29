@@ -100,6 +100,7 @@ static uint32_t rowHash(const char* line) {
 void Engine::flush(int r, bool hard, bool clockTick) {
     if (!rcpt_[r].enabled) return;
     bool changed = hard;
+    bool cleared = hard;   // something was taken off the screen
     uint8_t p[msp::kMaxPayload];
     p[0] = 0x01;
     memcpy(p + 1, rcpt_[r].uid, 6);
@@ -118,7 +119,10 @@ void Engine::flush(int r, bool hard, bool clockTick) {
         }
         bool empty = frames_[r].rows[row].n == 0;
         if (empty) {
-            if (shown_[r][row]) blankResends_[r][row] = kBlankResends + 1;
+            if (shown_[r][row]) {
+                blankResends_[r][row] = kBlankResends + 1;
+                cleared = true;
+            }
             shown_[r][row] = false;
             if (blankResends_[r][row] == 0) continue;
             --blankResends_[r][row];
@@ -141,7 +145,8 @@ void Engine::flush(int r, bool hard, bool clockTick) {
     out_.burstDone();
     if (changed) {
         bool pending = refreshLeft_[r] > 0;
-        refreshLeft_[r] = kRefreshRepeats;
+        int want = cleared ? kClearRepeats : kRefreshRepeats;
+        if (refreshLeft_[r] < want) refreshLeft_[r] = (uint8_t)want;
         if (!pending) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);
     }
 }
@@ -183,7 +188,7 @@ void Engine::runAction(uint32_t now, Action& a) {
         if (refreshLeft_[r] == 0) break;
         --refreshLeft_[r];
         flush(r);   // unchanged, so it schedules nothing itself
-        if (refreshLeft_[r] > 0) schedule(now + kRefreshMs, Act::Refresh, r, -1, -1, -1);
+        if (refreshLeft_[r] > 0) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);   // from when it was due
         break;
     case Act::ClearLapRow:
         // A newer lap has already redrawn the row: don't wipe it.

@@ -23,7 +23,8 @@
 // screen is meant to go blank (staging, clearing laps).
 //
 // Every burst that changes what a recipient should see (other than the race
-// clock ticking) is sent again kRefreshRepeats times, kRefreshMs apart. Once
+// clock ticking) is sent again kRefreshRepeats times, kRefreshMs apart, or
+// kClearRepeats times when it takes something off the screen. Once
 // the race clock stops nothing else redraws the screen, so without these a
 // single lost write left LAND NOW!'s clock row, an expired lap time or a
 // cleared FINISHED! up for good.
@@ -46,10 +47,13 @@ constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
 constexpr int kMaxActions = 48;
 constexpr int kRefreshRepeats = 2;   // extra bursts after a change
-// Extra bursts that repeat a row's blanking: as many as the refreshes, so
-// every refresh after a row is cleared writes the blank row again.
-constexpr int kBlankResends = kRefreshRepeats;
-constexpr uint32_t kRefreshMs = 300;
+// Extra bursts after something is taken off the screen (a row emptied, or a
+// full clear). Clears matter as much as draws but nothing else repairs a lost
+// one once the clock stops, and they are rare, so they get more repeats.
+constexpr int kClearRepeats = 4;
+// Bursts that repeat a row's blanking: every refresh after the clear.
+constexpr int kBlankResends = kClearRepeats;
+constexpr uint32_t kRefreshMs = 200;
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
 
