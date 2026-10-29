@@ -289,6 +289,7 @@ async function loadNetSettings(){
     document.getElementById('netMode').value=String(d.mode);
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
     document.getElementById('netStaSsid').value=d.staSsid||'';
+    document.getElementById('netFallback').value=String(d.fallbackSec||30);
     var sp=document.getElementById('netStaPass');sp.value='';
     sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
@@ -302,12 +303,13 @@ async function loadNetSettings(){
 async function saveNetSettings(){
   var d={mode:parseInt(document.getElementById('netMode').value)||0,
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
-    staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value};
+    staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
+    fallbackSec:parseInt(document.getElementById('netFallback').value)||30};
   if(d.apPass.length<8){toast('⚠️ アクセスポイントのパスワードは8文字以上');return;}
   if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
   if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
   var msg=d.mode===1
-    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は http://fpv-c5-lt.local（またはルーターが割り当てた IP）で開いてください。60秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
+    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は http://fpv-c5-lt.local（またはルーターが割り当てた IP）で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
     :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
   if(!confirm(msg))return;
   try{

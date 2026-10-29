@@ -2,8 +2,6 @@
 #include "wifi_mgr.h"
 #include "data_model.h"
 
-static const uint32_t kStaTimeoutMs = 60000;
-
 static bool     apUp = false;
 static bool     staMode = false;     // trying / running as a client
 static bool     staJoined = false;
@@ -33,8 +31,7 @@ void netBegin() {
         WiFi.begin(staSsid.c_str(), staPass.c_str());
         staMode = true;
         staSinceMs = millis();
-        Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %lus)\n", staSsid.c_str(),
-                      (unsigned long)(kStaTimeoutMs / 1000));
+        Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %us)\n", staSsid.c_str(), netFallbackSec);
     } else {
         startAp();
     }
@@ -61,9 +58,9 @@ void netLoop() {
         staSinceMs = now;
         Serial.println("[WiFi] client: link lost, reconnecting");
     }
-    if (now - staSinceMs >= kStaTimeoutMs) {
-        Serial.printf("[WiFi] client: no link to \"%s\" for %lus, starting the access point\n", staSsid.c_str(),
-                      (unsigned long)(kStaTimeoutMs / 1000));
+    if (now - staSinceMs >= netFallbackSec * 1000UL) {
+        Serial.printf("[WiFi] client: no link to \"%s\" for %us, starting the access point\n", staSsid.c_str(),
+                      netFallbackSec);
         fellBack = true;
         startAp();
     }

@@ -451,6 +451,7 @@ void registerHttpRoutes() {
         d["apPass"]    = apPass;
         d["staSsid"]   = staSsid;
         d["staPassSet"] = staPass.length() > 0;
+        d["fallbackSec"] = netFallbackSec;
         NetStatus st = netStatus();
         JsonObject o = d["status"].to<JsonObject>();
         o["ap"]        = st.ap;
@@ -467,11 +468,13 @@ void registerHttpRoutes() {
         if (apS.length() < 1 || apS.length() > 31) { bad(req, "AP SSID 1..31"); return; }
         if (apP.length() < 8 || apP.length() > 63) { bad(req, "AP password 8..63"); return; }
         if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) { bad(req, "client SSID 1..32"); return; }
+        int fbSec = d["fallbackSec"] | (int)netFallbackSec;
+        if (!netFallbackValid(fbSec)) { bad(req, "fallbackSec 15/30/60"); return; }
         // Empty client password keeps the stored one (the UI never shows it);
         // "staPassClear" switches to an open network.
         if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
         if (staP.length() && (staP.length() < 8 || staP.length() > 63)) { bad(req, "client password 8..63"); return; }
-        saveNet(mode, apS, apP, staS, staP);
+        saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec);
         ok(req);
     });
     server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {

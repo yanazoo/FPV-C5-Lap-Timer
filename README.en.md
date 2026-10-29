@@ -85,8 +85,9 @@ pilot completes the total laps don't count.
 
 - **Host** (default): the timer is an access point, `http://20.0.0.1`.
 - **Client**: the timer joins an existing 2.4 GHz router and is reachable at
-  `http://fpv-c5-lt.local`. If it cannot connect for 60 s (at boot, or after
-  losing the link), it falls back to host mode until the next reboot. The
+  `http://fpv-c5-lt.local`. If it cannot connect for the chosen time (15, 30
+  or 60 s, default 30 s; "ホストに切替" in the WiFi card), at boot or after
+  losing the link, it falls back to host mode until the next reboot. The
   router password is stored on the device only and never sent back to the
   browser.
 
