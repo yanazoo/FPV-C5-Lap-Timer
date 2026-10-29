@@ -40,7 +40,11 @@ void Engine::setRecipient(int idx, bool enabled, const uint8_t uid[6]) {
     rcpt_[idx].enabled = enabled;
     if (enabled) memcpy(rcpt_[idx].uid, uid, 6);
     // A different recipient (new pilot in the slot) starts from a blank screen.
-    if (changed) clearFrame(idx);
+    if (changed) {
+        clearFrame(idx);
+        memset(shown_[idx], 0, sizeof shown_[idx]);
+        memset(blankResends_[idx], 0, sizeof blankResends_[idx]);
+    }
 }
 
 bool Engine::isBroadcast(int r) const { return rcpt_[r].enabled; }
@@ -75,25 +79,46 @@ void Engine::sendMsp(uint16_t func, const uint8_t* payload, size_t len) {
     if (n) out_.write(frame, n);
 }
 
-void Engine::flush(int r) {
+void Engine::composeRow(int r, int row, char* line) const {
+    memset(line, ' ', kCols);
+    line[kCols] = '\0';
+    const Row& rw = frames_[r].rows[row];
+    for (int i = 0; i < rw.n; ++i) {
+        int col = rw.cells[i].col;
+        for (const char* c = rw.cells[i].text; *c && col < kCols; ++c, ++col) line[col] = *c;
+    }
+}
+
+void Engine::flush(int r, bool hard) {
     if (!rcpt_[r].enabled) return;
     uint8_t p[msp::kMaxPayload];
     p[0] = 0x01;
     memcpy(p + 1, rcpt_[r].uid, 6);
     sendMsp(msp::kElrsSetSendUid, p, 7);
-    p[0] = 0x02;   // clear
-    sendMsp(msp::kElrsSetOsd, p, 1);
+    if (hard) {
+        p[0] = 0x02;   // clear
+        sendMsp(msp::kElrsSetOsd, p, 1);
+    }
     for (int row = 0; row < kRows; ++row) {
-        const Row& rw = frames_[r].rows[row];
-        for (int i = 0; i < rw.n; ++i) {
-            size_t len = strlen(rw.cells[i].text);
-            p[0] = 0x03;   // write text
-            p[1] = (uint8_t)row;
-            p[2] = (uint8_t)rw.cells[i].col;
-            p[3] = 0;
-            memcpy(p + 4, rw.cells[i].text, len);
-            sendMsp(msp::kElrsSetOsd, p, 4 + len);
+        char line[kCols + 1];
+        composeRow(r, row, line);
+        bool empty = frames_[r].rows[row].n == 0;
+        if (empty) {
+            if (shown_[r][row]) blankResends_[r][row] = kBlankResends + 1;
+            shown_[r][row] = false;
+            if (blankResends_[r][row] == 0) continue;
+            --blankResends_[r][row];
+            if (hard) continue;   // "clear" already blanks it this time
+        } else {
+            shown_[r][row] = true;
+            blankResends_[r][row] = 0;
         }
+        p[0] = 0x03;   // write text: the whole row, so it replaces what was there
+        p[1] = (uint8_t)row;
+        p[2] = 0;
+        p[3] = 0;
+        memcpy(p + 4, line, kCols);
+        sendMsp(msp::kElrsSetOsd, p, 4 + kCols);
     }
     p[0] = 0x04;   // display
     sendMsp(msp::kElrsSetOsd, p, 1);
@@ -122,6 +147,7 @@ void Engine::runAction(uint32_t now, Action& a) {
     int r = a.rcpt;
     switch (a.kind) {
     case Act::ClearRows:
+    case Act::ClearStart:
         for (int8_t row : a.rows) clearRow(r, row);
         flush(r);
         break;
@@ -152,6 +178,7 @@ void Engine::tick(uint32_t now) {
             snprintf(msg, sizeof msg, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
             for (int r = 0; r < kRecipients; ++r) {
                 if (!isBroadcast(r)) continue;
+                clearRow(r, opt_.raceClock.row);   // "100:00" centres one column left
                 setText(r, opt_.raceClock, msg);
                 flush(r);
             }
@@ -190,7 +217,7 @@ void Engine::onRaceStage(uint32_t, const char* eventName) {
         clearFrame(r);
         setText(r, opt_.status, opt_.stageMsg);
         if (ev[0]) setText(r, opt_.eventName, ev);
-        flush(r);
+        flush(r, true);
     }
 }
 
@@ -200,13 +227,25 @@ void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs) {
         clockBase_ = now - elapsedMs;
         lastClockSec_ = elapsedMs / 1000;   // first tick at the next whole second
     }
+    // A pending "GO!" clear from an earlier start must not cut this one short.
+    for (auto& a : actions_)
+        if (a.used && a.kind == Act::ClearStart) a.used = false;
+    char clock[12] = "";
+    if (opt_.showRaceClock) {
+        uint32_t sec = elapsedMs / 1000;
+        snprintf(clock, sizeof clock, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+    }
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;
         if (elapsedMs == 0) clearFrame(r);   // a resumed race keeps its lap rows
         clearRow(r, opt_.status.row);
         setText(r, opt_.status, opt_.startMsg);
+        if (clock[0]) {
+            clearRow(r, opt_.raceClock.row);
+            setText(r, opt_.raceClock, clock);
+        }
         flush(r);
-        schedule(now + opt_.startUptimeDs * 100u, Act::ClearRows, r, opt_.status.row, -1, -1);
+        schedule(now + opt_.startUptimeDs * 100u, Act::ClearStart, r, opt_.status.row, -1, -1);
     }
 }
 
@@ -287,7 +326,7 @@ void Engine::onRaceStop(uint32_t) {
     clockRunning_ = false;
     // A pending "GO!" clear would wipe LAND NOW! off the status row.
     for (auto& a : actions_)
-        if (a.used && a.kind == Act::ClearRows && a.rows[0] == opt_.status.row && a.rows[1] < 0) a.used = false;
+        if (a.used && a.kind == Act::ClearStart) a.used = false;
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;
         if (hadClock) clearRow(r, opt_.raceClock.row);
@@ -334,7 +373,7 @@ void Engine::clearAll() {
     for (int r = 0; r < kRecipients; ++r) {
         if (!rcpt_[r].enabled) continue;
         clearFrame(r);
-        flush(r);
+        flush(r, true);
     }
 }
 

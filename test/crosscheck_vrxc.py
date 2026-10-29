@@ -4,8 +4,11 @@
 Loads the real plugin source from third_party/vrxc_elrs (msp.py and the
 methods of ELRSBackpack that build packets), runs them without RotorHazard,
 and compares their bytes with the C++ timer_core output printed by
-test_core. Covers bind-phrase UIDs and one full OSD burst
-(SET_SEND_UID, clear, rows, display, reset).
+test_core. Covers bind-phrase UIDs and one full OSD burst built from the
+plugin's own packet builders (SET_SEND_UID, rows, display, reset). Unlike
+the plugin, the firmware writes every row at its full width and doesn't
+start the burst with "clear" (see osd_engine.h), so the rows are composed
+here the same way.
 
     python3 crosscheck_vrxc.py <path to test_core binary>
 """
@@ -85,10 +88,14 @@ def main():
     bp = Backpack()
     uid = bp.hash_phrase("pilot-a")
     bp.set_send_uid(uid)
-    bp.send_clear_osd()
+    lines = {}
     for row, col, text in cells:
-        bp.send_osd_text(row, col, text)
-    bp.send_display_osd()
+        line = lines.setdefault(row, [" "] * 50)
+        for i, ch in enumerate(text[: 50 - col]):
+            line[col + i] = ch
+    for row in sorted(lines):
+        bp._send_osd_packet(bytearray((0x03, row, 0, 0)) + "".join(lines[row]).encode("ascii"))
+    bp._send_osd_packet(bytearray((0x04,)))
     bp.reset_send_uid()
     want = b"".join(bytes(p.get_packet()) for p in bp.sent).hex()
     args = ["frame", "pilot-a"]

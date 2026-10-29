@@ -106,7 +106,7 @@ function onMsg(d){
     // Firmware is authoritative for best lap (it knows the HS exclusion).
     if(d.bestLap!==undefined)p.bestLapMs=d.bestLap;
     else if(!_isHS&&lapMs>0&&(!p.bestLapMs||lapMs<p.bestLapMs))p.bestLapMs=lapMs;
-    updateRaceCard(p);addLapRow(p,lapMs,_cum);checkFinished(p);
+    updateRaceCard(p);addLapRow(p,lapMs,_cum);checkFinished(p,d.finished);
     // Always give immediate, reliable audio feedback for the crossing —
     // independent of TTS, which can be dropped by the browser. Best lap gets
     // the fanfare; every other lap gets the standard lap tone.

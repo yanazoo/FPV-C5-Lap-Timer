@@ -48,15 +48,71 @@ std::vector<Packet> parse(const std::vector<uint8_t>& bytes) {
     return out;
 }
 
-// Text of all 0x03 writes in a capture, "row,col:text" each.
+// Text of all 0x03 writes in a capture, "row,col:text" each. The engine
+// writes whole rows; col/text are the row with its padding trimmed, and rows
+// written blank (to erase them) are left out.
 std::vector<std::string> texts(const std::vector<Packet>& pk) {
     std::vector<std::string> out;
-    for (auto& p : pk)
-        if (p.func == msp::kElrsSetOsd && p.payload.size() >= 4 && p.payload[0] == 0x03)
-            out.push_back(std::to_string(p.payload[1]) + "," + std::to_string(p.payload[2]) + ":" +
-                          std::string(p.payload.begin() + 4, p.payload.end()));
+    for (auto& p : pk) {
+        if (p.func != msp::kElrsSetOsd || p.payload.size() < 4 || p.payload[0] != 0x03) continue;
+        std::string t(p.payload.begin() + 4, p.payload.end());
+        size_t a = t.find_first_not_of(' ');
+        if (a == std::string::npos) continue;
+        size_t b = t.find_last_not_of(' ');
+        out.push_back(std::to_string(p.payload[1]) + "," + std::to_string(p.payload[2] + a) + ":" +
+                      t.substr(a, b - a + 1));
+    }
     return out;
 }
+
+// Goggles at the end of the ESP-NOW hop. HDZero keeps a canvas that "clear"
+// blanks and "display" shows (hdzero-goggle src/core/elrs.c handle_osd);
+// scratch=true models goggles that show only what was written since the
+// previous display. dropPct > 0 loses that share of OSD packets on the way
+// (pseudo-random, seeded).
+struct Goggles {
+    uint8_t uid[6];
+    bool scratch = false;
+    int dropPct = 0;
+    uint32_t seed = 1;
+    bool mine = false;
+    char canvas[osd::kRows][osd::kCols + 1];
+    char screen[osd::kRows][osd::kCols + 1];
+    msp::Parser parser;
+
+    Goggles(const char* phrase, bool scratchModel = false) : scratch(scratchModel) {
+        msp::bindPhraseUid(phrase, uid);
+        blank(canvas);
+        blank(screen);
+    }
+    static void blank(char (&c)[osd::kRows][osd::kCols + 1]) {
+        for (auto& row : c) memset(row, ' ', osd::kCols), row[osd::kCols] = '\0';
+    }
+    void feed(const std::vector<uint8_t>& bytes) {
+        for (uint8_t b : bytes) {
+            if (!parser.feed(b)) continue;
+            const uint8_t* p = parser.payload();
+            size_t n = parser.size();
+            if (parser.function() == msp::kElrsSetSendUid) {
+                mine = n == 7 && p[0] == 1 && memcmp(p + 1, uid, 6) == 0;
+                if (n == 1) mine = false;
+                continue;
+            }
+            if (!mine || parser.function() != msp::kElrsSetOsd || n < 1) continue;
+            seed = seed * 1103515245u + 12345u;
+            if (dropPct > 0 && (int)((seed >> 16) % 100) < dropPct) continue;
+            if (p[0] == 0x02) {
+                blank(canvas);
+            } else if (p[0] == 0x03 && n >= 4) {
+                for (size_t i = 4; i < n && p[2] + (i - 4) < (size_t)osd::kCols; ++i) canvas[p[1]][p[2] + i - 4] = (char)p[i];
+            } else if (p[0] == 0x04) {
+                memcpy(screen, canvas, sizeof screen);
+                if (scratch) blank(canvas);
+            }
+        }
+    }
+    bool shows(int row, const char* text) const { return strstr(screen[row], text) != nullptr; }
+};
 
 // Packets of the last recipient burst (from its SET_SEND_UID with a UID).
 std::vector<Packet> lastBurst(const std::vector<Packet>& pk) {
@@ -146,8 +202,8 @@ void testRaceImmediatePauseFinish() {
     CHECK(c.elapsed(10000) == 6000);
     CHECK(c.pass(1, 3, 13000, 700, &r));
     CHECK(r.lapMs == 4000 && r.totalMs == 9000 && r.justFinished);
-    CHECK(c.pass(1, 3, 20000, 700, &r));
-    CHECK(!r.justFinished && r.laps == 3);
+    CHECK(!c.pass(1, 3, 20000, 700, &r));   // finished: later passes don't count
+    CHECK(c.laps(1) == 2 && c.lapCount() == 2);
     // Peak before the race start gives 0, not a wrapped time.
     c.start(50000);
     CHECK(c.pass(2, 0, 49990, 700, &r));
@@ -176,7 +232,8 @@ void testOsdLapFlow() {
 
     e.onRaceStage(0, "Kanto Cup");
     auto pk = parse(cap.bytes);
-    CHECK(pk.size() == 6);   // uid, clear, 2 texts, display, reset
+    CHECK(pk.size() == 6);   // uid, clear (staging blanks the screen), 2 rows, display, reset
+    CHECK(pk[1].func == msp::kElrsSetOsd && pk[1].payload[0] == 0x02);
     CHECK(pk[0].func == msp::kElrsSetSendUid && pk[0].payload.size() == 7 && memcmp(&pk[0].payload[1], uid, 6) == 0);
     auto tx = texts(pk);
     CHECK(has(tx, ":w ARM NOW x") && has(tx, "0,21:KANTO CUP"));
@@ -184,12 +241,16 @@ void testOsdLapFlow() {
 
     cap.bytes.clear();
     e.onRaceStart(1000, 0);
-    CHECK(has(texts(parse(cap.bytes)), ":w   GO!   x"));
+    pk = parse(cap.bytes);
+    for (auto& p : pk) CHECK(!(p.func == msp::kElrsSetOsd && p.payload[0] == 0x02));   // no clear mid-race
+    tx = texts(pk);
+    CHECK(has(tx, ":w   GO!   x") && has(tx, "2,23:00:00"));
     cap.bytes.clear();
     e.tick(1400);
     CHECK(cap.bytes.empty());
-    e.tick(1500);   // GO! cleared after 0.5 s
-    CHECK(!cap.bytes.empty() && texts(parse(cap.bytes)).empty());
+    e.tick(1500);   // GO! cleared after 0.5 s: its row is written blank, the clock stays
+    tx = texts(parse(cap.bytes));
+    CHECK(!has(tx, "GO!") && has(tx, "2,23:00:00"));
     cap.bytes.clear();
     e.tick(2000);   // race clock, first second
     CHECK(has(texts(parse(cap.bytes)), "2,23:00:01"));
@@ -250,7 +311,7 @@ void testOsdRdAndJapanese() {
     e.setRecipient(osd::kRd, true, rd);
     e.onRaceStage(0, "大会 2026");
     CHECK(cap.bursts == 2);
-    CHECK(has(texts(parse(cap.bytes)), " 2026"));   // non-ASCII dropped
+    CHECK(has(texts(parse(cap.bytes)), ":2026"));   // non-ASCII dropped
     cap.bytes.clear();
     e.onRaceStop(1000);
     auto tx = texts(parse(cap.bytes));
@@ -268,6 +329,124 @@ void testOsdRdAndJapanese() {
     e.onLap(4000, 2, {0, true, 0, 0, 0, 1});
     e.onPosition(2, 0, 1);
     CHECK(cap.bursts == 1);
+}
+
+// What the pilot sees over a race, sampled every 20 ms.
+struct Watch {
+    int lapShownAt = -1, lapGoneAt = -1, flickers = 0;
+};
+
+Watch watchRace(Goggles& g, bool withRd) {
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    if (withRd) {
+        uint8_t rd[6];
+        msp::bindPhraseUid("rd", rd);
+        e.setRecipient(osd::kRd, true, rd);
+    }
+    Watch w;
+    bool bestSeen = false, posSeen = false, clockSeen = false;
+    auto step = [&](uint32_t now) {
+        g.feed(cap.bytes);
+        cap.bytes.clear();
+        bool lap = g.shows(8, "0:12.3");
+        if (lap && w.lapShownAt < 0) w.lapShownAt = (int)now;
+        if (!lap && w.lapShownAt >= 0 && w.lapGoneAt < 0) w.lapGoneAt = (int)now;
+        // Once up, these rows stay up for the whole race.
+        if (bestSeen && !g.shows(12, "BEST: 0:12.3")) ++w.flickers;
+        if (posSeen && !g.shows(1, "POSN: 1 | LAP: 1")) ++w.flickers;
+        if (clockSeen && !g.shows(2, ":")) ++w.flickers;
+        bestSeen |= g.shows(12, "BEST: 0:12.3");
+        posSeen |= g.shows(1, "POSN: 1 | LAP: 1");
+        clockSeen |= g.shows(2, "00:0");
+    };
+    e.onRaceStage(0, "");
+    step(0);
+    e.onRaceStart(3000, 0);
+    for (uint32_t t = 3000; t <= 30000; t += 20) {
+        if (t == 15300) e.onLap(t, 0, {1, false, 12300, 12300, 12300, 1});
+        e.tick(t);
+        step(t);
+    }
+    return w;
+}
+
+void testOsdWhatThePilotSees() {
+    // Lap time up at the lap, down 5 s later (results uptime); best, position
+    // and clock never blink.
+    Goggles hd("pilot-a");
+    Watch w = watchRace(hd, true);
+    CHECK(w.lapShownAt == 15300);
+    CHECK(w.lapGoneAt >= 20300 && w.lapGoneAt <= 20320);
+    CHECK(w.flickers == 0);
+
+    // Goggles that render each display from scratch see the same.
+    Goggles scratch("pilot-a", true);
+    w = watchRace(scratch, false);
+    CHECK(w.lapShownAt == 15300 && w.lapGoneAt >= 20300 && w.lapGoneAt <= 20320 && w.flickers == 0);
+
+    // Lossy ESP-NOW hop (15 % of packets lost): a lost write leaves the old
+    // row up, so nothing blanks; the lap time still appears (first burst or
+    // one of the two redraws) and goes within a second of its time.
+    for (uint32_t n = 1; n <= 20; ++n) {
+        Goggles lossy("pilot-a");
+        lossy.dropPct = 15;
+        lossy.seed = n;
+        w = watchRace(lossy, true);
+        CHECK(w.flickers == 0);
+        if (!(w.lapShownAt >= 15300 && w.lapShownAt <= 16100 && w.lapGoneAt >= 20300 && w.lapGoneAt <= 21400)) printf("seed %u: shown %d gone %d\n", n, w.lapShownAt, w.lapGoneAt);
+        CHECK(w.lapShownAt >= 15300 && w.lapShownAt <= 16100);
+        CHECK(w.lapGoneAt >= 20300 && w.lapGoneAt <= 21400);
+    }
+}
+
+void testOsdClockAndStop() {
+    Capture cap;
+    osd::Engine e(cap);
+    Goggles g("p");
+    e.setRecipient(0, true, g.uid);
+    e.onRaceStage(0, "");
+    e.onRaceStart(1000, 0);
+    for (uint32_t t = 1000; t <= 62000; t += 20) e.tick(t);
+    g.feed(cap.bytes);
+    cap.bytes.clear();
+    CHECK(g.shows(2, "01:01"));
+    e.onRaceStop(62500);
+    g.feed(cap.bytes);
+    cap.bytes.clear();
+    CHECK(g.shows(5, "LAND NOW!") && !g.shows(2, ":"));
+    // Resume: GO! for 0.5 s, the clock continues from the paused time.
+    e.onRaceStart(70000, 61500);
+    g.feed(cap.bytes);
+    cap.bytes.clear();
+    CHECK(g.shows(5, "GO!") && g.shows(2, "01:01"));
+    for (uint32_t t = 70000; t <= 71000; t += 20) e.tick(t);
+    g.feed(cap.bytes);
+    CHECK(!g.shows(5, "GO!") && !g.shows(5, "LAND") && g.shows(2, "01:02"));
+    // A second start within 0.5 s keeps its GO! for the full time.
+    cap.bytes.clear();
+    e.onRaceStop(71100);
+    e.onRaceStart(71300, 62000);
+    e.tick(71500);   // the first start's clear time
+    g.feed(cap.bytes);
+    CHECK(g.shows(5, "GO!"));
+}
+
+void testOsdFinishWithoutResults() {
+    Capture cap;
+    osd::Engine e(cap);
+    Goggles g("p");
+    e.setRecipient(0, true, g.uid);
+    e.options().resultsMode = false;
+    e.onRaceStage(0, "");
+    e.onRaceStart(0, 0);
+    e.onLap(5000, 0, {1, false, 5000, 5000, 5000, 1});
+    e.onPilotDone(5000, 0, 1, 5000);
+    e.onRaceStop(6000);   // must not drop FINISHED!'s own clear
+    for (uint32_t t = 6000; t <= 16000; t += 20) e.tick(t);
+    g.feed(cap.bytes);
+    CHECK(!g.shows(5, "FINISHED"));
 }
 
 void testFormat() {
@@ -288,6 +467,9 @@ int runTests() {
     testPositions();
     testOsdLapFlow();
     testOsdRdAndJapanese();
+    testOsdWhatThePilotSees();
+    testOsdClockAndStop();
+    testOsdFinishWithoutResults();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

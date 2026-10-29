@@ -97,9 +97,11 @@ bool sdSaveRace() {
     f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names
     f.println("Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms");
     int perSlot[MAX_ACTIVE] = {0};
+    // Holeshot mode: the first pass is the holeshot, lap 0 (as on the race tab).
+    int first = raceCore.lapMode == race::LapMode::Holeshot ? 0 : 1;
     for (int i = 0; i < raceCore.lapCount(); i++) {
         const race::Lap& l = raceCore.lap(i);
-        int lapNo = (l.slot >= 0 && l.slot < MAX_ACTIVE) ? ++perSlot[l.slot] : 0;
+        int lapNo = (l.slot >= 0 && l.slot < MAX_ACTIVE) ? first + perSlot[l.slot]++ : 0;
         bool known = rosterValid(l.rosterIdx);
         f.printf("%d,%s,%u,%d,%lu,%d,%lu\n", l.slot, known ? cell(roster[l.rosterIdx].name).c_str() : "---",
                  known ? roster[l.rosterIdx].freqMhz : 0, lapNo, (unsigned long)l.lapMs, l.rssi,

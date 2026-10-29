@@ -5,12 +5,22 @@
 // What carries over, so goggles show the same thing as under RotorHazard:
 //   * per-pilot UID from the ELRS bind phrase (callsign if none)
 //   * the OSD frame model: every DISPLAY resends the recipient's whole
-//     screen (clear, every row, display), because goggles render each
-//     DISPLAY from scratch and a single-row update would wipe the others
+//     screen, so goggles that render each DISPLAY from scratch still show
+//     every row
 //   * ARM NOW / GO! / race clock / LAP + position / lap time / best lap /
 //     total time / FINISHED! + placement / LAND NOW! and their timings
 //   * lap rows redrawn twice 0.8 s apart so one lost packet can't blank them
 //   * an optional race-director recipient that gets the broadcast messages
+//
+// What differs: a burst never starts with the OSD "clear" command. HDZero
+// keeps a canvas that only "clear" blanks; with clear first, any write lost
+// on the ESP-NOW hop between clear and display shows a screen with that row
+// missing, and the next second's burst brings it back, so rows vanished and
+// flickered. Instead each row is written at its full width (spaces included)
+// and a row that became empty is overwritten with spaces, then resent blank
+// on the next bursts too. A lost write now leaves the previous text up for
+// a second instead of blanking it. "clear" is only sent when the whole
+// screen is meant to go blank (staging, clearing laps).
 //
 // Gevent greenlets with sleeps become timed actions run from tick(). One
 // task owns the Engine; nothing here is thread safe.
@@ -29,6 +39,7 @@ constexpr int kCols = 50;         // vrxc_elrs centres on 50 columns
 constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
 constexpr int kMaxActions = 48;
+constexpr int kBlankResends = 2;     // extra bursts that repeat a row's blanking
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
 
@@ -132,7 +143,7 @@ private:
         bool enabled;
         uint8_t uid[6];
     };
-    enum class Act : uint8_t { ClearRows, LapRedraw, ClearLapRow };
+    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow };
     struct Action {
         bool used;
         uint32_t due;
@@ -156,6 +167,10 @@ private:
     SlotLap lap_[kPilots] = {};
     bool finished_[kPilots] = {};
     char lastPos_[kPilots][kTextMax + 1] = {};
+    // What each recipient's goggles were last sent per row, for overwriting
+    // rows that became empty: how many more bursts resend it as spaces.
+    bool shown_[kRecipients][kRows] = {};
+    uint8_t blankResends_[kRecipients][kRows] = {};
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;
     uint32_t lastClockSec_ = 0;
@@ -164,8 +179,10 @@ private:
     void clearFrame(int r);
     void clearRow(int r, int row);
     void setText(int r, Pos pos, const char* text);
-    // Sends the recipient's whole frame wrapped in SET_SEND_UID.
-    void flush(int r);
+    // Sends the recipient's whole frame wrapped in SET_SEND_UID. hard: start
+    // with "clear" (only when the screen is meant to go blank).
+    void flush(int r, bool hard = false);
+    void composeRow(int r, int row, char* line) const;
     void sendMsp(uint16_t func, const uint8_t* payload, size_t len);
 
     bool isBroadcast(int r) const;

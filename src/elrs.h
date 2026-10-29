@@ -3,7 +3,8 @@
 // An osd::Engine (lib/timer_core) runs in its own task and sends MSP to
 //   * TCP: the elrs-netpack XIAO (elrs-xiao-webui, port 8080), which joins
 //     this timer's WiFi AP, exactly as RotorHazard + vrxc_elrs would, or
-//   * UART: the elrs-netpack ESP-NOW bridge (Wrover) wired to the S3.
+//   * UART: the elrs-netpack ESP-NOW bridge (Wrover-E / XIAO ESP32-C3)
+//     wired to the S3.
 // Race code posts events with the elrs*() calls below; they never block.
 #pragma once
 #include <Arduino.h>
