@@ -46,6 +46,7 @@ void applyGateConfig() {
 void raceBegin() { applyGateConfig(); }
 
 static void wsJson(JsonDocument& d) {
+    if (!ws.count()) return;   // nobody watching: skip the serialisation
     String s;
     serializeJson(d, s);
     wsText(s);
@@ -121,12 +122,16 @@ static void onPass(const C5Pass& p) {
     race::PassResult r;
     int ri;
     int positions[MAX_ACTIVE], laps[MAX_ACTIVE];
+    char name[sizeof roster[0].name], yomi[sizeof roster[0].yomi];
     {
         Guard g;
         ri = activePilots[p.slot];
         if (!rosterValid(ri)) return;   // nobody in this slot
         if (!raceCore.pass(p.slot, ri, p.tsMs, p.peak, &r)) return;
         for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = raceCore.position(s), laps[s] = raceCore.laps(s);
+        // Copied under the lock: the web task may edit or delete the pilot meanwhile.
+        strlcpy(name, roster[ri].name, sizeof name);
+        strlcpy(yomi, roster[ri].yomi, sizeof yomi);
     }
     Serial.printf("[Race] slot %d pass  lap=%lu  lapMs=%lu  peak=%u\n", p.slot, (unsigned long)r.lapCount,
                   (unsigned long)r.lapMs, p.peak);
@@ -134,8 +139,8 @@ static void onPass(const C5Pass& p) {
     JsonDocument d;
     d["type"]     = "lap";
     d["pilot"]    = p.slot;
-    d["name"]     = activeName(p.slot);
-    d["yomi"]     = roster[ri].yomi;
+    d["name"]     = name;
+    d["yomi"]     = yomi;
     d["lapTime"]  = r.lapMs;
     d["bestLap"]  = r.bestLapMs;
     d["lapCount"] = r.lapCount;

@@ -16,6 +16,40 @@ String       staSsid, staPass;
 uint8_t      netFallbackSec = NET_FALLBACK_DEFAULT_S;
 
 static Preferences prefs;
+
+template <size_t N> static void terminate(char (&s)[N]) { s[N - 1] = '\0'; }
+
+static void sanitizePos(osd::Pos& p, osd::Pos dflt) {
+    if (p.row < 0 || p.row >= osd::kRows || p.col >= osd::kCols) p = dflt;
+}
+
+// Settings read back as raw bytes: every string terminated, every value in
+// the range the web API would accept.
+static void sanitizeElrs(ElrsSettings& e) {
+    const ElrsSettings d;
+    e.transport = e.transport == 1 ? 1 : 0;
+    terminate(e.host);
+    if (!e.host[0]) strlcpy(e.host, "auto", sizeof e.host);
+    if (!e.port) e.port = ELRS_TCP_PORT;
+    terminate(e.rdBind);
+    terminate(e.eventName);
+    osd::Options& o = e.opt;
+    terminate(o.stageMsg);
+    terminate(o.startMsg);
+    terminate(o.pilotDoneMsg);
+    terminate(o.raceStopMsg);
+    for (uint16_t* u : {&o.startUptimeDs, &o.finishUptimeDs, &o.resultsUptimeDs, &o.announceUptimeDs})
+        *u = constrain(*u, (uint16_t)1, (uint16_t)600);
+    sanitizePos(o.eventName, d.opt.eventName);
+    sanitizePos(o.announcement, d.opt.announcement);
+    sanitizePos(o.status, d.opt.status);
+    sanitizePos(o.currentLap, d.opt.currentLap);
+    sanitizePos(o.lapResults, d.opt.lapResults);
+    sanitizePos(o.bestLap, d.opt.bestLap);
+    sanitizePos(o.totalTime, d.opt.totalTime);
+    sanitizePos(o.raceClock, d.opt.raceClock);
+    if (o.results.row < 0 || o.results.row + 1 >= osd::kRows || o.results.col >= osd::kCols) o.results = d.opt.results;
+}
 static const uint32_t kElrsVer = 1;   // bump when ElrsSettings' layout changes
 
 static void putPilot(int i) {
@@ -114,6 +148,12 @@ void loadAll() {
     Settings st;
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
     prefs.end();
+    // Raw bytes from flash: keep them in the ranges the API enforces.
+    settings.lapMode    = settings.lapMode == 1 ? 1 : 0;
+    settings.cooldownMs = constrain(settings.cooldownMs, 500u, 30000u);
+    settings.sdLogMode  = settings.sdLogMode <= 2 ? settings.sdLogMode : 0;
+    settings.totalLaps  = settings.totalLaps <= 99 ? settings.totalLaps : 0;
+    settings.gain       = settings.gain <= 89 ? settings.gain : C5_DEFAULT_GAIN;
 
     prefs.begin("elrs", true);
     if (prefs.getUInt("ver", 0) == kElrsVer) {
@@ -121,6 +161,7 @@ void loadAll() {
         if (prefs.getBytes("cfg", &e, sizeof e) == sizeof e) elrsCfg = e;
     }
     prefs.end();
+    sanitizeElrs(elrsCfg);
 
     prefs.begin("auth", true);
     adminPassword = prefs.getString("pw", "admin");
