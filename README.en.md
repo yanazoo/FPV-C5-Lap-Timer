@@ -69,6 +69,18 @@ to Ch1–8, enable ELRS OSD and calibrate Enter/Exit in the Calib tab
 (C5 scale 0..1023, 16 counts per dB). The race tab shows only the assigned
 channels.
 
+After `git pull`, run `git submodule update --init --recursive` and flash the
+S3 (`upload` and `uploadfs`) and, for the UART link, the ESP-NOW bridge again.
+
+### Goggle OSD
+
+Every second the timer resends each pilot's whole screen, every row at its
+full width. The OSD "clear" command is only sent at ARM NOW and when laps are
+cleared, so a packet lost on the ESP-NOW hop leaves the previous text up
+instead of blanking the row. The lap time stays up for 5 s after the pass
+(redrawn twice, 0.8 s apart); the race clock starts at GO!. Passes after a
+pilot completes the total laps don't count.
+
 ### WiFi modes (Settings → 📶 WiFi)
 
 - **Host** (default): the timer is an access point, `http://20.0.0.1`.
