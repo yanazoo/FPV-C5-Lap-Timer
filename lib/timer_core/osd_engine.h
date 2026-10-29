@@ -45,8 +45,10 @@ constexpr int kCols = 50;         // vrxc_elrs centres on 50 columns
 constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
 constexpr int kMaxActions = 48;
-constexpr int kBlankResends = 2;     // extra bursts that repeat a row's blanking
-constexpr int kRefreshRepeats = 2;   // extra bursts after a change
+constexpr int kRefreshRepeats = 3;   // extra bursts after a change
+// Extra bursts that repeat a row's blanking: as many as the refreshes, so
+// every refresh after a row is cleared writes the blank row again.
+constexpr int kBlankResends = kRefreshRepeats;
 constexpr uint32_t kRefreshMs = 300;
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
