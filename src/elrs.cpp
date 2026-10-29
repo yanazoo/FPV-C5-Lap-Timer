@@ -198,7 +198,7 @@ void handle(const Event& e, uint32_t now) {
     case Ev::Stage:     engine.onRaceStage(now, e.text); break;
     case Ev::Start:     engine.onRaceStart(now, e.value); break;
     case Ev::Lap:       engine.onLap(now, e.slot, e.lap); break;
-    case Ev::Position:  engine.onPosition(e.slot, e.laps, e.position); break;
+    case Ev::Position:  engine.onPosition(now, e.slot, e.laps, e.position); break;
     case Ev::Done:      engine.onPilotDone(now, e.slot, e.position, e.value); break;
     case Ev::Stop:      engine.onRaceStop(now); break;
     case Ev::Clear:     engine.onLapsClear(now); break;

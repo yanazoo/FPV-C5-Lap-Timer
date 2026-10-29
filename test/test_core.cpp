@@ -246,8 +246,9 @@ void testOsdLapFlow() {
     tx = texts(pk);
     CHECK(has(tx, ":w   GO!   x") && has(tx, "2,23:00:00"));
     cap.bytes.clear();
-    e.tick(1400);
-    CHECK(cap.bytes.empty());
+    e.tick(1400);   // the start burst is repeated once 0.3 s later
+    CHECK(has(texts(parse(cap.bytes)), ":w   GO!   x"));
+    cap.bytes.clear();
     e.tick(1500);   // GO! cleared after 0.5 s: its row is written blank, the clock stays
     tx = texts(parse(cap.bytes));
     CHECK(!has(tx, "GO!") && has(tx, "2,23:00:00"));
@@ -327,7 +328,7 @@ void testOsdRdAndJapanese() {
     e.onLapsClear(3000);
     cap.bursts = 0;
     e.onLap(4000, 2, {0, true, 0, 0, 0, 1});
-    e.onPosition(2, 0, 1);
+    e.onPosition(4000, 2, 0, 1);
     CHECK(cap.bursts == 1);
 }
 
@@ -449,6 +450,38 @@ void testOsdFinishWithoutResults() {
     CHECK(!g.shows(5, "FINISHED"));
 }
 
+// After the race clock stops nothing redraws the screen, so a lost write
+// used to leave rows up for good: the clock after LAND NOW!, the lap time
+// after its 5 s, FINISHED! after its 10 s. Refresh bursts repair that.
+void testOsdClearsSurviveLoss() {
+    for (uint32_t seed = 1; seed <= 30; ++seed) {
+        Capture cap;
+        osd::Engine e(cap);
+        Goggles g("p");
+        g.dropPct = 15;
+        g.seed = seed;
+        e.setRecipient(0, true, g.uid);
+        e.onRaceStage(0, "");
+        e.onRaceStart(1000, 0);
+        uint32_t t = 1000;
+        auto run = [&](uint32_t until) {
+            for (; t <= until; t += 20) e.tick(t);
+            g.feed(cap.bytes);
+            cap.bytes.clear();
+        };
+        run(10000);
+        e.onLap(10000, 0, {1, false, 9000, 9000, 9000, 1});
+        e.onPilotDone(10000, 0, 1, 9000);
+        run(12000);
+        e.onRaceStop(12000);
+        run(25000);   // lap row (5 s) and FINISHED! (10 s) have expired
+        bool ok = !g.shows(2, ":") && !g.shows(8, "0:09.0") && !g.shows(5, "FINISHED") && g.shows(12, "BEST");
+        if (!ok) printf("seed %u: clock %d lap %d finished %d best %d\n", seed, g.shows(2, ":"), g.shows(8, "0:09.0"),
+                        g.shows(5, "FINISHED"), g.shows(12, "BEST"));
+        CHECK(ok);
+    }
+}
+
 void testFormat() {
     char b[16];
     osd::Engine::formatTime(1700, b, sizeof b);
@@ -470,6 +503,7 @@ int runTests() {
     testOsdWhatThePilotSees();
     testOsdClockAndStop();
     testOsdFinishWithoutResults();
+    testOsdClearsSurviveLoss();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

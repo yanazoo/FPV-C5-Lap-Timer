@@ -44,6 +44,8 @@ void Engine::setRecipient(int idx, bool enabled, const uint8_t uid[6]) {
         clearFrame(idx);
         memset(shown_[idx], 0, sizeof shown_[idx]);
         memset(blankResends_[idx], 0, sizeof blankResends_[idx]);
+        memset(sentHash_[idx], 0, sizeof sentHash_[idx]);
+        refreshLeft_[idx] = 0;
     }
 }
 
@@ -89,8 +91,15 @@ void Engine::composeRow(int r, int row, char* line) const {
     }
 }
 
-void Engine::flush(int r, bool hard) {
+static uint32_t rowHash(const char* line) {
+    uint32_t h = 2166136261u;   // FNV-1a
+    for (; *line; ++line) h = (h ^ (uint8_t)*line) * 16777619u;
+    return h;
+}
+
+void Engine::flush(int r, bool hard, bool clockTick) {
     if (!rcpt_[r].enabled) return;
+    bool changed = hard;
     uint8_t p[msp::kMaxPayload];
     p[0] = 0x01;
     memcpy(p + 1, rcpt_[r].uid, 6);
@@ -102,6 +111,11 @@ void Engine::flush(int r, bool hard) {
     for (int row = 0; row < kRows; ++row) {
         char line[kCols + 1];
         composeRow(r, row, line);
+        uint32_t h = rowHash(line);
+        if (h != sentHash_[r][row]) {
+            sentHash_[r][row] = h;
+            if (!(clockTick && row == opt_.raceClock.row)) changed = true;
+        }
         bool empty = frames_[r].rows[row].n == 0;
         if (empty) {
             if (shown_[r][row]) blankResends_[r][row] = kBlankResends + 1;
@@ -125,6 +139,11 @@ void Engine::flush(int r, bool hard) {
     p[0] = 0x00;   // back to the bind-phrase UID
     sendMsp(msp::kElrsSetSendUid, p, 1);
     out_.burstDone();
+    if (changed) {
+        bool pending = refreshLeft_[r] > 0;
+        refreshLeft_[r] = kRefreshRepeats;
+        if (!pending) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);
+    }
 }
 
 // ── timed actions ──────────────────────────────────────────────────────────
@@ -160,6 +179,12 @@ void Engine::runAction(uint32_t now, Action& a) {
             schedule(now + kLapRepeatMs, Act::LapRedraw, r, -1, -1, -1, a.token, (uint8_t)(a.repeat + 1));
         break;
     }
+    case Act::Refresh:
+        if (refreshLeft_[r] == 0) break;
+        --refreshLeft_[r];
+        flush(r);   // unchanged, so it schedules nothing itself
+        if (refreshLeft_[r] > 0) schedule(now + kRefreshMs, Act::Refresh, r, -1, -1, -1);
+        break;
     case Act::ClearLapRow:
         // A newer lap has already redrawn the row: don't wipe it.
         if (lap_[r].token != a.token) break;
@@ -170,6 +195,7 @@ void Engine::runAction(uint32_t now, Action& a) {
 }
 
 void Engine::tick(uint32_t now) {
+    now_ = now;
     if (clockRunning_) {
         uint32_t sec = (now - clockBase_) / 1000;
         if (sec != lastClockSec_) {
@@ -180,7 +206,7 @@ void Engine::tick(uint32_t now) {
                 if (!isBroadcast(r)) continue;
                 clearRow(r, opt_.raceClock.row);   // "100:00" centres one column left
                 setText(r, opt_.raceClock, msg);
-                flush(r);
+                flush(r, false, true);
             }
         }
     }
@@ -190,7 +216,9 @@ void Engine::tick(uint32_t now) {
         for (auto& a : actions_)
             if (a.used && (int32_t)(now - a.due) >= 0 && (!next || (int32_t)(a.due - next->due) < 0)) next = &a;
         if (!next) break;
+        now_ = next->due;   // refreshes scheduled from here count from when it was due
         runAction(now, *next);
+        now_ = now;
     }
 }
 
@@ -201,9 +229,11 @@ void Engine::posMessage(int laps, int position, char* buf, size_t cap) const {
     else snprintf(buf, cap, "LAP: %d", laps);
 }
 
-void Engine::onRaceStage(uint32_t, const char* eventName) {
+void Engine::onRaceStage(uint32_t now, const char* eventName) {
+    now_ = now;
     // Fresh race: drop pending clears and every per-pilot cache.
     for (auto& a : actions_) a.used = false;
+    memset(refreshLeft_, 0, sizeof refreshLeft_);
     for (int s = 0; s < kPilots; ++s) {
         lap_[s].token++;
         finished_[s] = false;
@@ -222,6 +252,7 @@ void Engine::onRaceStage(uint32_t, const char* eventName) {
 }
 
 void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs) {
+    now_ = now;
     if (opt_.showRaceClock) {
         clockRunning_ = true;
         clockBase_ = now - elapsedMs;
@@ -271,9 +302,10 @@ void Engine::drawLap(int slot, bool clearFirst) {
 }
 
 void Engine::onLap(uint32_t now, int slot, const LapInfo& lap) {
+    now_ = now;
     if (slot < 0 || slot >= kPilots || !rcpt_[slot].enabled || finished_[slot]) return;
     if (lap.holeshot || lap.laps <= 0) {   // RotorHazard: holeshot is lap 0, position only
-        onPosition(slot, 0, lap.position);
+        onPosition(now, slot, 0, lap.position);
         return;
     }
     SlotLap& sl = lap_[slot];
@@ -288,7 +320,8 @@ void Engine::onLap(uint32_t now, int slot, const LapInfo& lap) {
     schedule(now + uptime, Act::ClearLapRow, slot, -1, -1, -1, sl.token);
 }
 
-void Engine::onPosition(int slot, int laps, int position) {
+void Engine::onPosition(uint32_t now, int slot, int laps, int position) {
+    now_ = now;
     if (slot < 0 || slot >= kPilots || !rcpt_[slot].enabled || finished_[slot]) return;
     char msg[kTextMax + 1];
     posMessage(laps, position, msg, sizeof msg);
@@ -300,6 +333,7 @@ void Engine::onPosition(int slot, int laps, int position) {
 }
 
 void Engine::onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs) {
+    now_ = now;
     if (slot < 0 || slot >= kPilots || !rcpt_[slot].enabled) return;
     finished_[slot] = true;
     clearRow(slot, opt_.currentLap.row);
@@ -321,7 +355,8 @@ void Engine::onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs)
     schedule(now + opt_.finishUptimeDs * 100u, Act::ClearRows, slot, opt_.status.row, r1, r2);
 }
 
-void Engine::onRaceStop(uint32_t) {
+void Engine::onRaceStop(uint32_t now) {
+    now_ = now;
     bool hadClock = clockRunning_;
     clockRunning_ = false;
     // A pending "GO!" clear would wipe LAND NOW! off the status row.
@@ -335,8 +370,10 @@ void Engine::onRaceStop(uint32_t) {
     }
 }
 
-void Engine::onLapsClear(uint32_t) {
+void Engine::onLapsClear(uint32_t now) {
+    now_ = now;
     for (auto& a : actions_) a.used = false;
+    memset(refreshLeft_, 0, sizeof refreshLeft_);
     for (int s = 0; s < kPilots; ++s) {
         lap_[s].token++;
         finished_[s] = false;
@@ -347,6 +384,7 @@ void Engine::onLapsClear(uint32_t) {
 }
 
 void Engine::onAnnounce(uint32_t now, const char* text) {
+    now_ = now;
     char msg[kTextMax + 1];
     sanitize(text, msg, sizeof msg, true);
     if (!msg[0]) return;
@@ -359,6 +397,7 @@ void Engine::onAnnounce(uint32_t now, const char* text) {
 }
 
 void Engine::test(uint32_t now, int idx) {
+    now_ = now;
     for (int r = 0; r < kRecipients; ++r) {
         if (!rcpt_[r].enabled || (idx >= 0 && r != idx)) continue;
         Pos a = {5, -1}, b = {7, -1};
