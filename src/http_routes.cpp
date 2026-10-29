@@ -425,11 +425,6 @@ void registerHttpRoutes() {
     });
 
     // ── Auth (soft: protects against accidental changes, not attacks) ──────
-    server.on("/api/auth/password", HTTP_GET, [](AsyncWebServerRequest* req) {
-        JsonDocument d;
-        d["password"] = adminPassword;
-        sendJson(req, d);
-    });
     onJson("/api/auth/login", [](AsyncWebServerRequest* req, JsonDocument& d) {
         if (adminPassword == (d["password"] | "")) ok(req);
         else req->send(401, "application/json", R"({"ok":false,"error":"bad password"})");

@@ -97,8 +97,6 @@ class Handler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
-        if p == "/api/auth/password":
-            return self.reply({"password": state["password"]})
         return self.reply({"error": "not found"}, 404)
 
     def do_POST(self):
@@ -140,6 +138,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/api/elrs":
             state["elrs"].update(d)
+            return self.reply({"ok": True})
+        if p == "/api/auth/password":
+            state["password"] = d.get("password", state["password"])
             return self.reply({"ok": True})
         if p == "/api/auth/login":
             ok = d.get("password") == state["password"]

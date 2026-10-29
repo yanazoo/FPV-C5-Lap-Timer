@@ -210,12 +210,15 @@ void handle(const Event& e, uint32_t now) {
 void elrsTask(void*) {
     refreshConfig();
     for (;;) {
-        uint32_t now = millis();
-        serviceTransport(now);
+        serviceTransport(millis());
+        // Sleep until an event arrives (a lap goes out at once) or 20 ms
+        // pass (race clock, delayed clears, transport).
         Event e;
-        while (xQueueReceive(evQ, &e, 0) == pdTRUE) handle(e, millis());
+        if (xQueueReceive(evQ, &e, pdMS_TO_TICKS(20)) == pdTRUE) {
+            do handle(e, millis());
+            while (xQueueReceive(evQ, &e, 0) == pdTRUE);
+        }
         engine.tick(millis());
-        vTaskDelay(pdMS_TO_TICKS(20));
     }
 }
 

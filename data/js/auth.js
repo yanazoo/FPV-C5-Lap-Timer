@@ -63,14 +63,10 @@ function applyAuthState(){
   });
 }
 
-// Primitive password management: the field shows the current password and
-// whatever it contains becomes the password on save. Load on first Config view.
-async function loadPasswordField(){
-  var f=document.getElementById('pwField');if(!f)return;
-  try{
-    var r=await fetch('/api/auth/password');
-    if(r.ok){var j=await r.json();f.value=j.password||'';}
-  }catch(e){}
+// Password change: the current password is never sent to the browser (any
+// device on the timer's WiFi could read it), so the field starts empty.
+function loadPasswordField(){
+  var f=document.getElementById('pwField');if(f)f.value='';
 }
 async function savePassword(){
   var f=document.getElementById('pwField');if(!f)return;
@@ -79,7 +75,7 @@ async function savePassword(){
   try{
     var r=await fetch('/api/auth/password',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({password:v})});
-    if(r.ok)toast('✅ パスワードを保存しました');
+    if(r.ok){f.value='';toast('✅ パスワードを保存しました');}
     else toast('⚠️ 保存エラー');
   }catch(e){toast('⚠️ 通信エラー');}
 }

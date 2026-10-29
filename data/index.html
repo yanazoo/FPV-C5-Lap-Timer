@@ -462,9 +462,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 管理者パスワード ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔒 管理者パスワード</h3>
-    <p class="section-desc">レース以外のタブ（設定・キャリブ・SD）とレース制御ボタンは、このパスワードでログインした端末からのみ操作できます。下の欄に入力されている値がそのままパスワードです。</p>
+    <p class="section-desc">レース以外のタブ（設定・キャリブ・SD）とレース制御ボタンは、このパスワードでログインした端末からのみ操作できます。変更するときは新しいパスワードを入力して保存してください（現在のパスワードは表示されません）。</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
-      <input type="text" id="pwField" maxlength="32" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+      <input type="password" id="pwField" maxlength="32" autocomplete="new-password" placeholder="新しいパスワード" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
       <button onclick="savePassword()" class="btn-success">保存</button></div>
   </div>
 </section>
