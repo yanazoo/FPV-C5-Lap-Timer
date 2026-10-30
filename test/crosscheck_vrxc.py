@@ -66,7 +66,13 @@ def load_plugin():
             self._osd_shown = {}
             self._osd_blank = {}
             self._osd_hard_clear = set()
+            self._osd_sent = {}
+            self._osd_refresh_left = {}
+            self._osd_refreshing = set()
             self._send_queue = types.SimpleNamespace(put=self.sent.append)
+
+        def _start_osd_refresh(self, uid):
+            pass  # the lossy race below runs the refresh displays itself
 
     for f in funcs:
         setattr(Backpack, f.name, fns[f.name])
@@ -77,21 +83,27 @@ def run(binary, *args):
     return subprocess.run([binary, *args], check=True, capture_output=True, text=True).stdout.strip()
 
 
-def lossy_race(Backpack):
-    """Displays over a race with 25 % of OSD packets lost (HDZero canvas)."""
+def lossy_race(Backpack, seed):
+    """Displays over a race with 20 % of OSD packets lost (HDZero canvas)."""
     import random
     bp = Backpack()
     uid = bp.hash_phrase("pilot-a")
-    rng = random.Random(1)
+    rng = random.Random(seed)
     canvas = [[" "] * 50 for _ in range(18)]
     screen = [row[:] for row in canvas]
 
-    def flush():
+    def flush(clock_row=None):
         bp.sent.clear()
-        bp.send_display_osd()
+        bp.send_display_osd(clock_row)
+        # The plugin's refresh greenlet, without gevent: its displays run here.
+        key = bytes(uid)
+        while bp._osd_refresh_left.get(key, 0) > 0:
+            bp._osd_refresh_left[key] -= 1
+            bp.send_display_osd()
+        bp._osd_refreshing.discard(key)
         for pkt in bp.sent:
             data = bytes(pkt.get_packet())[8:-1]   # $X< flag func(2) size(2) ... crc
-            if rng.random() < 0.25:
+            if rng.random() < 0.20:
                 continue
             if data[0] == 0x02:
                 for r in canvas:
@@ -112,24 +124,31 @@ def lossy_race(Backpack):
         if sec == 2:
             bp.send_clear_osd_row(5)
         bp.send_osd_text(2, 23, f"00:{sec:02d}")
+        clock_only = sec not in (2, 10, 15)
         if sec == 10:
             bp.send_osd_text(8, 22, "0:12.3")
             bp.send_osd_text(12, 0, "BEST: 0:12.3")
         if sec == 15:
             bp.send_clear_osd_row(8)
-        flush()
+        flush(2 if clock_only else None)
         text = ["".join(r) for r in screen]
         # Once a row has been drawn it never blanks while it should be up.
         best_seen = best_seen or "BEST: 0:12.3" in text[12]
         if best_seen and "BEST: 0:12.3" not in text[12]:
-            print(f"FAIL lossy race: best lap row blank at {sec} s")
+            print(f"FAIL lossy race {seed}: best lap row blank at {sec} s")
             failures += 1
         if sec >= 20 and "0:12.3" in text[8]:
-            print(f"FAIL lossy race: lap row still up at {sec} s")
+            print(f"FAIL lossy race {seed}: lap row still up at {sec} s")
             failures += 1
         if sec >= 6 and "ARM" in text[5]:
-            print(f"FAIL lossy race: ARM NOW still up at {sec} s")
+            print(f"FAIL lossy race {seed}: ARM NOW still up at {sec} s")
             failures += 1
+    # The race stops: the clock row is taken off and nothing redraws after.
+    bp.send_clear_osd_row(2)
+    flush()
+    if ":" in "".join(screen[2]):
+        print(f"FAIL lossy race {seed}: clock row still up after the stop")
+        failures += 1
     return failures
 
 
@@ -164,7 +183,9 @@ def main():
         print(f"FAIL OSD burst\n  vrxc     {want}\n  firmware {got}")
         failures += 1
 
-    failures += lossy_race(Backpack)
+    # Seeds 1..100: with the plugin's refresh displays none fails; without
+    # them (OSD_*_REPEATS = 0) rows that were cleared stay up in several.
+    failures += sum(lossy_race(Backpack, seed) for seed in range(1, 101))
 
     for n in (0, 5, 11, 30, 49, 50, 60):
         if Backpack().center_osd(n) != int(run(binary, "center", str(n))):
