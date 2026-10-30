@@ -22,6 +22,13 @@
 // a second instead of blanking it. "clear" is only sent when the whole
 // screen is meant to go blank (staging, clearing laps).
 //
+// Every burst that changes what a recipient should see (other than the race
+// clock ticking) is sent again kRefreshRepeats times, kRefreshMs apart, or
+// kClearRepeats times when it takes something off the screen. Once
+// the race clock stops nothing else redraws the screen, so without these a
+// single lost write left LAND NOW!'s clock row, an expired lap time or a
+// cleared FINISHED! up for good.
+//
 // Gevent greenlets with sleeps become timed actions run from tick(). One
 // task owns the Engine; nothing here is thread safe.
 #pragma once
@@ -39,7 +46,14 @@ constexpr int kCols = 50;         // vrxc_elrs centres on 50 columns
 constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
 constexpr int kMaxActions = 48;
-constexpr int kBlankResends = 2;     // extra bursts that repeat a row's blanking
+constexpr int kRefreshRepeats = 2;   // extra bursts after a change
+// Extra bursts after something is taken off the screen (a row emptied, or a
+// full clear). Clears matter as much as draws but nothing else repairs a lost
+// one once the clock stops, and they are rare, so they get more repeats.
+constexpr int kClearRepeats = 4;
+// Bursts that repeat a row's blanking: every refresh after the clear.
+constexpr int kBlankResends = kClearRepeats;
+constexpr uint32_t kRefreshMs = 200;
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
 
@@ -108,7 +122,7 @@ public:
     void onRaceStart(uint32_t now, uint32_t elapsedMs);
     void onLap(uint32_t now, int slot, const LapInfo& lap);
     // Another pilot's position/lap count changed (vrxc_elrs update_pos).
-    void onPosition(int slot, int laps, int position);
+    void onPosition(uint32_t now, int slot, int laps, int position);
     void onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs);
     void onRaceStop(uint32_t now);
     void onLapsClear(uint32_t now);
@@ -143,7 +157,7 @@ private:
         bool enabled;
         uint8_t uid[6];
     };
-    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow };
+    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow, Refresh };
     struct Action {
         bool used;
         uint32_t due;
@@ -171,6 +185,11 @@ private:
     // rows that became empty: how many more bursts resend it as spaces.
     bool shown_[kRecipients][kRows] = {};
     uint8_t blankResends_[kRecipients][kRows] = {};
+    // Hash of each row as last sent, to tell a change from a redraw, and the
+    // refresh bursts still to come per recipient.
+    uint32_t sentHash_[kRecipients][kRows] = {};
+    uint8_t refreshLeft_[kRecipients] = {};
+    uint32_t now_ = 0;   // time of the event being handled
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;
     uint32_t lastClockSec_ = 0;
@@ -181,7 +200,8 @@ private:
     void setText(int r, Pos pos, const char* text);
     // Sends the recipient's whole frame wrapped in SET_SEND_UID. hard: start
     // with "clear" (only when the screen is meant to go blank).
-    void flush(int r, bool hard = false);
+    // clockTick: only the race clock moved (no refresh bursts for that).
+    void flush(int r, bool hard = false, bool clockTick = false);
     void composeRow(int r, int row, char* line) const;
     void sendMsp(uint16_t func, const uint8_t* payload, size_t len);
 
