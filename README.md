@@ -3,14 +3,17 @@
 🌐 **日本語** | [English](README.en.md)
 
 [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) をベースにした、**FPV ドローン用ラップ計測装置**です。
-機体側のビーコンは不要で、**各パイロットの 5.8GHz VTX 電波そのもの**の RSSI ピークで計測ラインの通過を検出し、ラップタイムを **ELRS バックパック経由でゴーグルの OSD に表示**します。
+機体側のビーコンは不要で、**各パイロットの 5.8GHz VTX 電波そのもの**の RSSI ピークで計測ラインの通過を検出し、ラップタイムを **ESP-NOW ブリッジ → ELRS バックパック経由で HDZero ゴーグルの OSD に表示**します。
+
+> [!IMPORTANT]
+> **ゴーグル OSD は HDZero ゴーグル（ELRS バックパック搭載）のみ対応**しています。それ以外のゴーグルでは OSD は表示されません（ラップ計測・Web UI・読み上げは使えます）。
 
 | 変更点 | ESP-NOW Lap Timer | FPV C5 Lap Timer |
 |---|---|---|
 | ゲート受信機 | ESP32-WROVER-E（ESP-NOW ビーコンの RSSI） | **XIAO ESP32-C5 + [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**（5GHz VTX の RSSI、1パイロット約1kHz） |
 | 機体側 | XIAO ESP32-C3/C6 ビーコンが必要 | **不要**（VTX の周波数でパイロットを識別） |
 | 通過判定 | ゲートノード | **XIAO ESP32-S3**（C5 の生 RSSI からピーク検出） |
-| ゴーグル表示 | なし | **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs) の OSD ロジックを S3 に移植**し、**[elrs-netpack](https://github.com/yanazoo/elrs-netpack)** 経由で送信 |
+| ゴーグル表示 | なし | **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs) の OSD ロジックを S3 に移植**し、**[elrs-netpack](https://github.com/yanazoo/elrs-netpack) の ESP-NOW ブリッジ**経由で **HDZero ゴーグル**へ送信 |
 | Web UI / TTS / SD 記録 | あり | あり（VTX 周波数・C5 スケール・OSD 設定に対応） |
 
 ---
@@ -31,8 +34,8 @@
                                         └─────┬────────────────────┘
                                               │ MSP v2
                           ┌───────────────────┴───────────────────┐
-                          │ A. WiFi (TCP 8080)                    │ B. UART 115200bps
-                          ▼                                       │    (direct)
+                          │ B. WiFi (TCP 8080)                    │ A. UART 115200bps
+                          ▼                                       │    (direct, 推奨)
               elrs-netpack XIAO (TCP->UART)                       │
                           │ UART                                  │
                           ▼                                       ▼
@@ -40,7 +43,7 @@
                     ESP32 Wrover-E または XIAO ESP32-C3
                                     │ ESP-NOW (2.4GHz ch1)
                                     ▼
-                     各パイロットのゴーグル（ELRS バックパック）
+                     各パイロットの HDZero ゴーグル（ELRS バックパック）
                      → ARM NOW / GO! / LAP・順位 / ラップタイム / BEST / FINISHED!
 ```
 
@@ -66,9 +69,10 @@
 |---|---|
 | Seeed Studio **XIAO ESP32-C5** ＋ 5.8GHz 対応アンテナ | ゲート受信機（FPVGate C5MK） |
 | Seeed Studio **XIAO ESP32-S3**（SD を使う場合は **Sense**） | タイマー本体（本ファームウェア） |
-| **elrs-netpack** の ESP-NOW ブリッジ（ESP32 Wrover-E または XIAO ESP32-C3）<br>＋ WiFi 接続の場合は netpack の XIAO ESP32-S3 | ゴーグルへの OSD 送信（UART 直結ならブリッジのみ） |
+| **ESP-NOW ブリッジ**（elrs-netpack の elrs-espnow-bridge：XIAO ESP32-C3 または ESP32 Wrover-E） | ゴーグルへの OSD 送信（S3 と UART で直結） |
+| （WiFi 接続にする場合のみ）elrs-netpack の XIAO ESP32-S3 | タイマーの WiFi からブリッジへの中継 |
 | 5V 電源（モバイルバッテリー等） | C5 と S3 |
-| ELRS バックパック対応ゴーグル（HDZero 等） | OSD 表示 |
+| **HDZero ゴーグル**（ELRS バックパック搭載） | OSD 表示（**HDZero のみ対応**） |
 
 ### 配線：XIAO ESP32-S3（タイマー）⇔ XIAO ESP32-C5（受信機）
 
@@ -86,17 +90,17 @@
 
 XIAO ESP32-S3 **Sense** の拡張ボードの SD スロットをそのまま使います（CS=GPIO21, SCK=GPIO7, MISO=GPIO8, MOSI=GPIO9）。通常の XIAO ESP32-S3 の場合は同じピンに SD モジュールを配線してください。ピンは `src/config.h` で変更できます。
 
-### elrs-netpack の接続方法（どちらか）
+### ゴーグル OSD の接続方法
 
-**A. WiFi 接続（既定）** — elrs-netpack 一式（netpack の XIAO ＋ ESP-NOW ブリッジ）をそのまま使います。netpack の XIAO を本タイマーの WiFi（ホストモードなら AP、クライアントモードなら同じルーター）に接続させるだけで、タイマーとの追加配線はありません。
-
-**B. UART 直結** — netpack の XIAO を使わず、ESP-NOW ブリッジ（ESP32 Wrover-E または **XIAO ESP32-C3**）を S3 に直接つなぎます。WiFi の設定は不要です。手順の詳細は **[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md)** を参照してください。
+**A. UART 直結（推奨・基本の構成）** — ESP-NOW ブリッジ（**XIAO ESP32-C3** または ESP32 Wrover-E）を S3 に直接つなぎます。netpack の XIAO も WiFi の設定も不要で、部品が少なく遅延も最小です。手順の詳細は **[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md)** を参照してください。
 
 | XIAO ESP32-S3（タイマー） | 方向 | XIAO ESP32-C3 | ESP32 Wrover-E |
 |---|---|---|---|
 | D6 / GPIO43（TX） | → | D7 / GPIO20（RX） | GPIO26（RX） |
 | D7 / GPIO44（RX） | ← | D6 / GPIO21（TX） | GPIO27（TX） |
 | GND | — | GND | GND |
+
+**B. WiFi 接続（次の手段）** — ブリッジを S3 の近くに置けない場合などに、elrs-netpack 一式（netpack の XIAO ＋ ESP-NOW ブリッジ）を使います。netpack の XIAO を本タイマーの WiFi（ホストモードなら AP、クライアントモードなら同じルーター）に接続させます。タイマーとの配線はありません。
 
 電源ピン同士はつながず、GND のみ共通にします。
 
@@ -176,10 +180,10 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 > [!NOTE]
 > `c5host.h: No such file or directory` になる場合はサブモジュールが未取得です。リポジトリのルートで `git submodule update --init --recursive` を実行してください（ビルド時にも自動で取得します。ZIP でダウンロードした場合も、git がインストールされていれば固定バージョンを自動で取得します）。
 
-### 3. elrs-netpack を準備する
+### 3. ESP-NOW ブリッジ（elrs-netpack）を準備する
 
+- **UART 直結の場合（推奨）**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（XIAO ESP32-C3 / Wrover-E）に書き込み・配線し、設定で接続方式を「UART」にします。
 - **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ESP-NOW ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-Netpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
-- **UART 直結の場合**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（Wrover-E / XIAO ESP32-C3）に書き込み・配線し、設定で接続方式を「UART」にします。
 
 ### 4. 初期設定（Web UI）
 
@@ -189,7 +193,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 4. **設定 → C5 受信機**：状態が `SCAN` になっていることを確認（`OFFLINE` なら配線・電源を確認）
 5. **設定 → パイロット情報 → ＋追加**：名前・よみかた・**VTX チャンネル**（例 R1 5658）・**ELRS バインドフレーズ**（空欄ならパイロット名）・OSD 有無
 6. 各パイロットを **Ch1〜Ch8** に割り当て（C5 の測定スロット。同じ周波数を2人に割り当てると警告が出ます）。レースタブには割り当て済みの Ch だけが表示されます
-7. **設定 → 🥽 ELRS OSD**：「ELRS OSD を有効にする」をオン、接続方式（WiFi / UART）を選んで保存 → 「🥽 OSDテスト」でゴーグルに `OSD TEST` が出ることを確認
+7. **設定 → 🥽 ELRS OSD**：「ELRS OSD を有効にする」をオン、接続方式（UART 直結なら「UART」、WiFi 接続なら「WiFi」）を選んで保存 → 「🥽 OSDテスト」で HDZero ゴーグルに `OSD TEST` が出ることを確認
 
 ### 5. キャリブレーション
 
@@ -222,7 +226,7 @@ RSSI は C5 のスケール（0〜1023、**16 = 1dB**、ゲイン30でフロア�
 | 10–11 | `PLACEMENT: 1` / `TOTAL TIME: 1:02.4` | 完走から10秒 |
 | 12 | `BEST: 0:10.9` | 最初のラップ以降、常時 |
 
-本ファームウェアは毎回その宛先の**全行を、行の幅いっぱい（空白込み）で送り直します**。画面全体の消去コマンドは、ARM NOW とクリアのときだけ送ります。ESP-NOW でパケットが 1 つ落ちても、その行は直前の表示のまま残るため、消えたりちらついたりしません（HDZero は描画内容を保持し、消去コマンドでのみ空白になります）。行・列・メッセージ・表示時間は「設定 → 🥽 ELRS OSD → メッセージ・表示時間・表示位置」で変更できます。OSD は英数字のみ表示されます（日本語のパイロット名はバインドフレーズの既定値としてのみ使われます）。
+本ファームウェアは毎回その宛先の**全行を、行の幅いっぱい（空白込み）で送り直します**。画面全体の消去コマンドは、ARM NOW とクリアのときだけ送ります。ESP-NOW でパケットが 1 つ落ちても、その行は直前の表示のまま残るため、消えたりちらついたりしません（HDZero は描画内容を保持し、消去コマンドでのみ空白になります）。対応ゴーグルは **HDZero のみ**です。行・列・メッセージ・表示時間は「設定 → 🥽 ELRS OSD → メッセージ・表示時間・表示位置」で変更できます。OSD は英数字のみ表示されます（日本語のパイロット名はバインドフレーズの既定値としてのみ使われます）。
 
 ---
 
@@ -266,8 +270,8 @@ PC 上のテストと CI ビルドは通っていますが、初回は以下を�
 - [ ] C5 を 5V 給電で起動し、設定画面の C5 状態が `SCAN`、各 Ch のレートが約 1000/s
 - [ ] VTX をオンにすると、そのチャンネルの RSSI だけが数百カウント上がる
 - [ ] キャリブ後、1回の通過が1ラップとして記録される（クールダウン既定 3秒）
-- [ ] WiFi 接続の場合：netpack の XIAO がタイマーの WiFi に接続し、設定画面（C5 受信機欄）に「ELRS netpack 接続中」と表示される
 - [ ] UART 直結の場合：ブリッジの USB シリアル（115200bps）に `[boot] ready` が表示される
+- [ ] WiFi 接続の場合：netpack の XIAO がタイマーの WiFi に接続し、設定画面（C5 受信機欄）に「ELRS netpack 接続中」と表示される
 - [ ] 「OSDテスト」でゴーグルに `OSD TEST` が表示される
 - [ ] レースで ARM NOW → GO! → ラップタイム → (総周回数設定時) FINISHED! が表示される
 - [ ] ラップタイムが通過から約 5 秒表示されて消え、その間に順位・クロック・BEST が消えたりちらついたりしない
