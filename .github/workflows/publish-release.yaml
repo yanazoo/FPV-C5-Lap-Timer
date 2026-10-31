@@ -1,0 +1,93 @@
+name: Publish Release
+
+# Pushing a release branch (vX.Y.Z) builds every firmware and publishes a
+# GitHub Release: tag = branch name, title = first heading of
+# docs/releases/<tag>.md, body = that file, assets = the build outputs.
+# Does nothing if the release already exists or the notes file is missing.
+on:
+  push:
+    branches:
+      - "v[0-9]*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish the release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Release parameters
+        id: params
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="docs/releases/${TAG}.md"
+          if [ ! -f "$NOTES" ]; then
+            echo "No release notes at $NOTES - nothing to publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists - nothing to publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          {
+            echo "skip=false"
+            echo "tag=$TAG"
+            echo "title=$(head -n 1 "$NOTES" | sed 's/^#[[:space:]]*//')"
+            echo "notes=$NOTES"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Host tests
+        if: steps.params.outputs.skip == 'false'
+        run: bash test/run.sh
+
+      - uses: actions/setup-python@v5
+        if: steps.params.outputs.skip == 'false'
+        with:
+          python-version: "3.12"
+
+      # pioarduino 55.03.x is built for platformio-core 6.1.18 (see ci.yml).
+      - name: Build firmware
+        if: steps.params.outputs.skip == 'false'
+        run: |
+          pip install "platformio==6.1.18"
+          pio run -e xiao_esp32s3
+          pio run -e xiao_esp32s3 -t buildfs
+          pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
+          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3
+
+      - name: Package
+        if: steps.params.outputs.skip == 'false'
+        run: |
+          TAG="${{ steps.params.outputs.tag }}"
+          mkdir -p dist
+          pack() {   # pack <zip name> <build dir> <files...>
+            local name="$1" dir="$2"; shift 2
+            (cd "$dir" && zip -j "$GITHUB_WORKSPACE/dist/$name" "$@")
+          }
+          pack "fpv-c5-lap-timer-${TAG}-xiao_esp32s3.zip" .pio/build/xiao_esp32s3 \
+            bootloader.bin partitions.bin firmware.bin littlefs.bin
+          pack "fpvgate-c5mk-${TAG}-xiaoc5.zip" third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5 \
+            bootloader.bin partitions.bin ota_data_initial.bin firmware.bin
+          for env in esp32dev xiao_esp32c3; do
+            pack "elrs-espnow-bridge-${TAG}-${env}.zip" \
+              third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/$env \
+              bootloader.bin partitions.bin firmware.bin
+          done
+          ls -l dist
+
+      - name: Create release
+        if: steps.params.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip \
+            --target "${{ github.sha }}" \
+            --title "${{ steps.params.outputs.title }}" \
+            --notes-file "${{ steps.params.outputs.notes }}"
