@@ -182,7 +182,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 
 ### 3. ESP-NOW ブリッジ（elrs-netpack）を準備する
 
-- **UART 直結の場合（推奨）**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（XIAO ESP32-C3 / Wrover-E）に書き込み・配線し、設定で接続方式を「UART」にします。
+- **UART 直結の場合（推奨）**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（XIAO ESP32-C3 / Wrover-E）に書き込み・配線し、設定の接続方式は初期値の「UART」のままで使えます。
 - **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ESP-NOW ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-Netpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
 
 ### 4. 初期設定（Web UI）
@@ -193,7 +193,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 4. **設定 → C5 受信機**：状態が `SCAN` になっていることを確認（`OFFLINE` なら配線・電源を確認）
 5. **設定 → パイロット情報 → ＋追加**：名前・よみかた・**VTX チャンネル**（例 R1 5658）・**ELRS バインドフレーズ**（空欄ならパイロット名）・OSD 有無
 6. 各パイロットを **Ch1〜Ch8** に割り当て（C5 の測定スロット。同じ周波数を2人に割り当てると警告が出ます）。レースタブには割り当て済みの Ch だけが表示されます
-7. **設定 → 🥽 ELRS OSD**：「ELRS OSD を有効にする」をオン、接続方式（UART 直結なら「UART」、WiFi 接続なら「WiFi」）を選んで保存 → 「🥽 OSDテスト」で HDZero ゴーグルに `OSD TEST` が出ることを確認
+7. **設定 → 🥽 ELRS OSD**：「ELRS OSD を有効にする」をオン、接続方式（UART 直結なら「UART」＝初期値、WiFi 接続なら「WiFi」）を選んで保存 → 「🥽 OSDテスト」で HDZero ゴーグルに `OSD TEST` が出ることを確認
 
 ### 5. キャリブレーション
 

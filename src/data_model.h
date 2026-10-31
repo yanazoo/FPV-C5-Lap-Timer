@@ -33,7 +33,7 @@ struct Settings {
 
 struct ElrsSettings {
     bool     enabled   = false;
-    uint8_t  transport = 0;       // 0 TCP (elrs-netpack XIAO), 1 UART (netpack Wrover direct)
+    uint8_t  transport = 1;       // 1 UART straight to the ESP-NOW bridge (default), 0 TCP (elrs-netpack XIAO)
     char     host[64]  = "auto";  // "auto" = find the netpack among AP clients
     uint16_t port      = ELRS_TCP_PORT;
     char     rdBind[33] = "";     // race director's goggles (optional)
