@@ -83,7 +83,7 @@ TX と RX は**交差**させます（タイマーの TX → ブリッジの RX�
    - 「OSD」にチェックを入れ、Ch1〜8 のどれかに割り当てます。
 2. **ELRS OSD**
    - 「ELRS OSD を有効にする」をオン
-   - 接続方式：**「UART（ESP-NOW ブリッジに直結：Wrover / XIAO C3）」**
+   - 接続方式：**「UART（ESP-NOW ブリッジに直結：XIAO C3 / Wrover）推奨」**（初期値）
    - 「保存」
 3. **「🥽 OSDテスト」** を押し、ゴーグルに `OSD TEST` / `FPV C5 LAP TIMER` が 5 秒間表示されれば完了です。
 

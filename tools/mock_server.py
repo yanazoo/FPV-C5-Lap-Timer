@@ -20,7 +20,7 @@ state = {
     "active": [-1] * 8,
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30},
     "elrs": {
-        "enabled": False, "transport": 0, "host": "auto", "port": 8080, "rdBind": "", "eventName": "",
+        "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
         "resultsMode": True, "stageMsg": "w ARM NOW x", "startMsg": "w   GO!   x",
         "pilotDoneMsg": "w FINISHED! x", "raceStopMsg": "w  LAND NOW!  x", "startUptime": 5,
