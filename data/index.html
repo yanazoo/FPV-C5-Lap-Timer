@@ -178,8 +178,23 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 #authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
 
 @media(max-width:900px){.calib-grid{grid-template-columns:1fr 1fr}}
-/* Race cards: 4 across on PCs and phones held sideways, 2 across in portrait
-   (and in landscape windows too narrow for 4). */
+/* Race cards: 8 across on wide PC windows, 4 across on phones held sideways
+   and smaller windows, 2 across in portrait (and in landscape windows too
+   narrow for 4). */
+@media(min-width:1200px){
+  main,.header-inner{max-width:1600px}
+  .pilot-race-grid{grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+  /* Narrow cards: compact text so lap times and totals fit. */
+  .pilot-race-grid .pilot-card-header{padding:6px 7px;font-size:12px;gap:4px;flex-wrap:wrap}
+  .pilot-race-grid .p-freq{margin-left:0}
+  .pilot-race-grid .rssi-mini-bar,.pilot-race-grid .pilot-best-row{padding:3px 6px}
+  .pilot-race-grid .pilot-best-row{flex-wrap:wrap;gap:2px 6px}
+  .pilot-race-grid .pilot-best{font-size:13px}
+  .pilot-race-grid .pilot-delta{font-size:10px}
+  .pilot-race-grid .lapTable{font-size:10px}
+  .pilot-race-grid .lapTable tbody td{padding:3px 2px}
+  .pilot-race-grid .lapTable tbody td.lap-time{font-size:12px}
+}
 @media(orientation:portrait) and (max-width:900px),(max-width:600px){.pilot-race-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){
   .header-inner{flex-direction:column;gap:6px;align-items:flex-start}
