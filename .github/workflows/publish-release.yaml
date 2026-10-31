@@ -3,7 +3,8 @@ name: Publish Release
 # Pushing a release branch (vX.Y.Z) builds every firmware and publishes a
 # GitHub Release: tag = branch name, title = first heading of
 # docs/releases/<tag>.md, body = that file, assets = the build outputs.
-# Does nothing if the release already exists or the notes file is missing.
+# If the release already exists, only its title and notes are updated from
+# the file (no rebuild). Does nothing if the notes file is missing.
 on:
   push:
     branches:
@@ -32,14 +33,16 @@ jobs:
             echo "No release notes at $NOTES - nothing to publish"
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          TITLE="$(head -n 1 "$NOTES" | sed 's/^#[[:space:]]*//')"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists - nothing to publish"
+            echo "Release $TAG exists - updating its title and notes only"
+            gh release edit "$TAG" --title "$TITLE" --notes-file "$NOTES"
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           {
             echo "skip=false"
             echo "tag=$TAG"
-            echo "title=$(head -n 1 "$NOTES" | sed 's/^#[[:space:]]*//')"
+            echo "title=$TITLE"
             echo "notes=$NOTES"
           } >> "$GITHUB_OUTPUT"
 
