@@ -5,18 +5,25 @@
 An FPV drone lap timer built on [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer). No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
-gate passes at the RSSI peak, and lap times go to the pilots' goggles through
-**[elrs-netpack](https://github.com/yanazoo/elrs-netpack)** using a firmware
-port of **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs)**'s OSD logic.
+gate passes at the RSSI peak, and lap times go to the pilots' **HDZero**
+goggles through the ESP-NOW bridge of
+**[elrs-netpack](https://github.com/yanazoo/elrs-netpack)** and the goggles'
+ELRS backpack, using a firmware port of
+**[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs)**'s OSD logic.
+
+> [!IMPORTANT]
+> **The goggle OSD works with HDZero goggles (with an ELRS backpack) only.**
+> Other goggles show no OSD; lap timing, the web UI and voice announcements
+> still work.
 
 ```
 VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this firmware)
                                                     gate detection, laps, Web UI, SD,
                                                     ELRS OSD (vrxc_elrs port)
-                                                        │ MSP v2: A. WiFi TCP 8080 via the
-                                                        │ netpack XIAO, or B. UART 115200 direct
+                                                        │ MSP v2: A. UART 115200 direct (recommended),
+                                                        │ or B. WiFi TCP 8080 via the netpack XIAO
                                                         ▼
-                    ESP-NOW bridge (ESP32 Wrover-E or XIAO ESP32-C3) ─ESP-NOW ch1─▶ goggles
+               ESP-NOW bridge (XIAO ESP32-C3 or ESP32 Wrover-E) ─ESP-NOW ch1─▶ HDZero goggles
 ```
 
 ## Wiring
@@ -29,12 +36,9 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
 | GND | — | GND |
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
-- elrs-netpack, option A (default, WiFi): the netpack XIAO joins the same
-  WiFi as the timer (its AP in host mode, or the same router in client mode);
-  the timer finds it on port 8080 automatically (`auto` scans AP clients, or
-  looks up `elrs-netpack.local` in client mode).
-- Option B (UART): no netpack XIAO and no WiFi setup; the ESP-NOW bridge
-  (`elrs-espnow-bridge`) is wired straight to the S3 — see
+- Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
+  (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
+  straight to the S3 over UART; no netpack XIAO and no WiFi setup — see
   [docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) (Japanese). Connect GND only, not the power pins.
 
   | XIAO ESP32-S3 | | XIAO ESP32-C3 (`xiao_esp32c3`) | ESP32 Wrover-E (`esp32dev`) |
@@ -42,6 +46,12 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
   | D6 / GPIO43 (TX) | → | D7 / GPIO20 (RX) | GPIO26 (RX) |
   | D7 / GPIO44 (RX) | ← | D6 / GPIO21 (TX) | GPIO27 (TX) |
   | GND | — | GND | GND |
+
+- Option B (the next choice, WiFi): the full elrs-netpack (netpack XIAO +
+  ESP-NOW bridge); the netpack XIAO joins the same WiFi as the timer (its AP
+  in host mode, or the same router in client mode) and the timer finds it on
+  port 8080 automatically (`auto` scans AP clients, or looks up
+  `elrs-netpack.local` in client mode).
 
 ## Build and flash
 
@@ -65,7 +75,8 @@ CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 Then join WiFi `FPV-C5-LT` (password `fpv-c5-lt`), open `http://20.0.0.1`,
 log in (`admin`), **change the WiFi (host AP) and admin passwords** in
 Settings (the defaults are public), add pilots with their VTX channel and ELRS bind phrase, assign them
-to Ch1–8, enable ELRS OSD and calibrate Enter/Exit in the Calib tab
+to Ch1–8, enable ELRS OSD (connection: UART for the direct bridge, WiFi for
+the netpack XIAO) and calibrate Enter/Exit in the Calib tab
 (C5 scale 0..1023, 16 counts per dB). The race tab shows only the assigned
 channels.
 

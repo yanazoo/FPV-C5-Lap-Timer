@@ -1,6 +1,8 @@
 # ELRS OSD — UART 接続のセットアップ
 
-FPV C5 Lap Timer（XIAO ESP32-S3）から、elrs-netpack の **ESP-NOW ブリッジ**を UART で直接つなぎ、ゴーグルの ELRS バックパックへラップタイムを表示する手順です。
+FPV C5 Lap Timer（XIAO ESP32-S3）から、elrs-netpack の **ESP-NOW ブリッジ**を UART で直接つなぎ、**HDZero ゴーグル**の ELRS バックパックへラップタイムを表示する手順です。ゴーグル OSD の**基本（推奨）の構成**です。
+
+> ゴーグル OSD は **HDZero ゴーグルのみ対応**しています。
 
 WiFi 接続（netpack の XIAO を経由する方式）と違い、**netpack の XIAO も WiFi 設定も不要**です。ブリッジには次のどちらかを使います。
 
