@@ -177,10 +177,13 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 #authHint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;display:none}
 #authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
 
-@media(max-width:900px){.pilot-race-grid{grid-template-columns:1fr 1fr}.calib-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.calib-grid{grid-template-columns:1fr 1fr}}
+/* Race cards: 4 across on PCs and phones held sideways, 2 across in portrait
+   (and in landscape windows too narrow for 4). */
+@media(orientation:portrait) and (max-width:900px),(max-width:600px){.pilot-race-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){
   .header-inner{flex-direction:column;gap:6px;align-items:flex-start}
-  .pilot-race-grid{grid-template-columns:1fr 1fr}.calib-grid{grid-template-columns:1fr 1fr}
+  .calib-grid{grid-template-columns:1fr 1fr}
   #timer{font-size:32px}
 }
 /* FPV C5 additions */
