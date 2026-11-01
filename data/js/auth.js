@@ -29,14 +29,27 @@ async function submitLogin(){
       body:JSON.stringify({password:v})});
     if(r.ok){
       isAuthed=true;sessionStorage.setItem('authed','1');
+      if(pw)pw.blur();   // close the keyboard before the modal goes
       closeLoginModal();applyAuthState();
+      // Go to the tab that asked for the login; from the header button,
+      // stay on the tab that is open (e.g. the race tab).
       var t=pendingTab;pendingTab=null;
-      switchTab(t||'config');
+      if(t)switchTab(t);
       toast('🔓 ログインしました');
+      tuckBrowserBars();
     }else{
       if(err){err.style.display='block';err.textContent='パスワードが違います';}
     }
   }catch(e){if(err){err.style.display='block';err.textContent='通信エラー';}}
+}
+
+// After the login keyboard closes, mobile Safari (landscape) shows its
+// address and tab bars again and only hides them when the page scrolls.
+// Nudge the page down a pixel so they collapse as they do before logging in.
+function tuckBrowserBars(){
+  setTimeout(function(){
+    if(window.scrollY<1)window.scrollTo(0,1);
+  },350);
 }
 
 function logout(){
