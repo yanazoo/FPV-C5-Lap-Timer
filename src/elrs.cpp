@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <esp_netif.h>
 #include <esp_wifi.h>
+#include <lwip/sockets.h>
 #include "elrs.h"
 #include "data_model.h"
 #include "msp_v2.h"
@@ -107,6 +108,14 @@ void disconnect() {
 bool tryConnect(IPAddress ip) {
     if (!client.connect(ip, port, 400)) return false;
     client.setNoDelay(true);
+    // TCP keepalive (5 s idle, 3 probes 2 s apart): if the netpack reboots
+    // or drops off WiFi between races, notice within ~11 s and reconnect,
+    // instead of holding a dead connection until the next OSD write.
+    int fd = client.fd(), on = 1, idle = 5, intvl = 2, cnt = 3;
+    setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof on);
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof idle);
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof intvl);
+    setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof cnt);
     lastGood = ip;
     char peer[40];
     snprintf(peer, sizeof peer, "%s:%u", ip.toString().c_str(), port);
