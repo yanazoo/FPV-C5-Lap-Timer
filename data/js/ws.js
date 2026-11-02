@@ -81,8 +81,8 @@ function onMsg(d){
     if(d.name&&d.name!=='---')p.name=d.name;
     // Enter/exit cues — audio is tab-independent during a race or calibration.
     if(raceRunning||activeTab==='calib'){
-      if(!prevCrossing&&p.crossing){ensureAudio();sfx.enter();}
-      if(prevCrossing&&!p.crossing){ensureAudio();sfx.exit();}
+      if(!prevCrossing&&p.crossing){ensureAudio();sfx.enter(s);}
+      if(prevCrossing&&!p.crossing){ensureAudio();sfx.exit(s);}
     }
     // Per-tab DOM work: only touch the widgets of the visible tab. The hot
     // RSSI path (up to 80 msgs/s with 8 slots) skips everything off-screen.
@@ -99,7 +99,7 @@ function onMsg(d){
     var s=d.pilot;if(s<0||s>=N)return;
     var p=slots[s];
     if(d.name&&d.name!=='---')p.name=d.name;
-    ensureAudio();sfx.enter();
+    ensureAudio();sfx.enter(s);
     if(lapMode==='holeshot')speak(getSpokenName(p)+(announceMode==='lap_laptime'?'、ホールショット':''));
     updateRaceCard(p);
     return;
