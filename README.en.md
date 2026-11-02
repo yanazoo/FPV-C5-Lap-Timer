@@ -26,6 +26,27 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
                ESP-NOW bridge (XIAO ESP32-C3 or ESP32 Wrover-E) ─ESP-NOW ch1─▶ HDZero goggles
 ```
 
+## Screenshots (web UI)
+
+The web UI in a phone or PC browser, shown here with sample pilots and laps.
+
+**Race (PC)**: one card per assigned channel (8 per row on a PC, 4 on a phone
+in landscape, 2 in portrait), each with RSSI, best lap, lap times and totals.
+The header lamps show the C5 receiver and OSD links (green: connected, red:
+not connected).
+
+![Race tab (PC)](docs/images/race-pc.png)
+
+| Race (phone, portrait) | Settings (C5 receiver, pilots) |
+|---|---|
+| <img src="docs/images/race-phone.png" alt="Race tab (phone)" width="320"> | <img src="docs/images/settings-pc.png" alt="Settings tab" width="480"> |
+
+**Calibration**: each pilot's RSSI trace with the Enter (green dashed) and
+Exit (red dashed) thresholds. Set them so a gate pass rises above Enter and
+falls back below Exit.
+
+![Calibration tab](docs/images/calib-pc.png)
+
 ## Wiring
 
 | XIAO ESP32-S3 | | XIAO ESP32-C5 |
@@ -71,6 +92,16 @@ Add `--upload-port COMx` if the wrong port is picked; if the port is not
 found, hold BOOT while pressing RESET and retry. Prebuilt binaries are in the
 CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 `elrs-espnow-bridge`.
+
+Defaults on first boot:
+
+| Setting | Default |
+|---|---|
+| WiFi (host mode) SSID | `FPV-C5-LT` |
+| WiFi (host mode) password | `fpv-c5-lt` |
+| Web UI | `http://20.0.0.1` (client mode: `http://fpv-c5-lt.local`) |
+| Admin password (login) | `admin` |
+| netpack XIAO setup AP (WiFi link only) | SSID `ELRS-Netpack-Setup`, password `elrs-netpack`, `http://192.168.4.1` |
 
 Then join WiFi `FPV-C5-LT` (password `fpv-c5-lt`), open `http://20.0.0.1`,
 log in (`admin`), **change the WiFi (host AP) and admin passwords** in

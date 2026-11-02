@@ -16,6 +16,22 @@
 | ゴーグル表示 | なし | **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs) の OSD ロジックを S3 に移植**し、**[elrs-netpack](https://github.com/yanazoo/elrs-netpack) の ESP-NOW ブリッジ**経由で **HDZero ゴーグル**へ送信 |
 | Web UI / TTS / SD 記録 | あり | あり（VTX 周波数・C5 スケール・OSD 設定に対応） |
 
+## 画面イメージ（Web UI）
+
+ブラウザ（スマホ・PC）で開く画面です。下の画像は、サンプルのパイロットとラップを入れて表示したものです。
+
+**レース（PC）**：割り当てたチャンネルのカードが並びます（PC は 8 列、スマホ横向きは 4 列、縦向きは 2 列）。各カードに RSSI、ベストラップ、ラップタイムと累計が出ます。ヘッダーのランプは、C5 受信機と OSD の接続状態です（緑：接続、赤：未接続）。
+
+![レース画面（PC）](docs/images/race-pc.png)
+
+| レース（スマホ縦向き） | 設定（C5 受信機・パイロット情報） |
+|---|---|
+| <img src="docs/images/race-phone.png" alt="レース画面（スマホ）" width="320"> | <img src="docs/images/settings-pc.png" alt="設定画面" width="480"> |
+
+**キャリブレーション**：パイロットごとの RSSI 波形と Enter（緑の点線）／Exit（赤の点線）の閾値です。ゲートを通過した山が、Enter を超えて Exit より下に戻るように調整します。
+
+![キャリブレーション画面](docs/images/calib-pc.png)
+
 ---
 
 ## システム構成
@@ -186,6 +202,16 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 - **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ESP-NOW ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-Netpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
 
 ### 4. 初期設定（Web UI）
+
+工場出荷時（初回起動時）の設定値です。
+
+| 項目 | 初期値 |
+|---|---|
+| WiFi（ホストモード）の SSID | `FPV-C5-LT` |
+| WiFi（ホストモード）のパスワード | `fpv-c5-lt` |
+| Web UI の URL | `http://20.0.0.1`（クライアントモードでは `http://fpv-c5-lt.local`） |
+| 管理者パスワード（ログイン） | `admin` |
+| netpack XIAO の設定用 AP（WiFi 接続で使う場合） | SSID `ELRS-Netpack-Setup` / パスワード `elrs-netpack` / `http://192.168.4.1` |
 
 1. スマホ / PC で WiFi `FPV-C5-LT`（パスワード `fpv-c5-lt`）に接続 → `http://20.0.0.1`
 2. 右上の「ログイン」（既定パスワード `admin`）
