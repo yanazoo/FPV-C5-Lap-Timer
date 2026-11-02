@@ -203,11 +203,11 @@ function applyLap(d,quiet){
   updateRaceCard(p);addLapRow(p,lapMs,_cum,quiet);
   if(quiet)return;
   checkFinished(p,d.finished);
-  // Always give immediate, reliable audio feedback for the crossing —
-  // independent of TTS, which can be dropped by the browser. Best lap gets
-  // the fanfare; every other lap gets the standard lap tone.
+  // A lap is recorded as the pilot leaves the gate, so the gate exit tone
+  // (RotorHazard style) already marks it; a lap tone on top drowned that
+  // tone out. Only a new best lap gets its own fanfare.
   ensureAudio();
-  if(d.newBest)sfx.best();else sfx.lap();
+  if(d.newBest)sfx.best();
   // Voice announcement is additive on top of the beep.
   speak(buildSpeech(p,p.lapCount,lapMs));
 }

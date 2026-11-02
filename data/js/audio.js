@@ -82,8 +82,6 @@ function crossBeep(wave,ms,slot,fade){
 function beepSeq(notes){notes.forEach(n=>setTimeout(()=>beep(n[0],n[1],n[2]),n[3]||0));}
 
 var sfx={
-  // Leader tone — lower & warmer
-  lap:  ()=>beepSeq([[600,.09,'triangle',0],[900,.13,'triangle',90]]),
   // Winner tone — fuller, deeper fanfare
   best: ()=>beepSeq([
     [600,.06,'triangle',0],  [900,.09,'triangle',60],
@@ -202,7 +200,7 @@ function buildSpeech(p,lapCount,lapMs){
   return spokenName+'、'+tStr;
 }
 function testVoice(){
-  ensureAudio();sfx.lap();
+  ensureAudio();sfx.exit(0);
   if(voiceEnabled&&announceMode!=='beep'&&announceMode!=='none'){
     var u=new SpeechSynthesisUtterance('テスト、1分23秒4');u.lang='ja-JP';u.rate=speechRate;
     var voices=speechSynthesis.getVoices();
