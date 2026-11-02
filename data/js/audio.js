@@ -78,7 +78,7 @@ var sfx={
   exit:  (slot)=>{rhBeep(35,chTone(slot),BEEP_VOL,'sawtooth',0.02);rhBeepAt(70,35,chTone(slot),BEEP_VOL,'sawtooth');}
 };
 
-var speechQ=[],speechBusy=false,speechWarmedUp=false,speechWarming=false,lastSpeechStart=0;
+var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0;
 
 // iOS Safari often fails to fire onend / reports speaking inconsistently
 // and rapid speak() calls can drop the second utterance. Poll frequently
@@ -114,18 +114,15 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
 // unambiguous user gesture) so unlock is tied to "press Start to begin".
 // On iOS Safari a silent primer may not be enough; if that happens the
 // user can fall back to the audible voice toggle (toggleVoice).
-function warmUpSpeech(){
-  if(speechWarmedUp||speechWarming||typeof speechSynthesis==='undefined')return;
-  try{
-    if(speechSynthesis.paused)speechSynthesis.resume();
-    speechWarming=true;
-    var u=new SpeechSynthesisUtterance('​');
-    u.volume=0;u.lang='ja-JP';u.rate=speechRate;
-    u.onstart=()=>{speechWarmedUp=true;speechWarming=false;};
-    u.onend=()=>{speechWarmedUp=true;speechWarming=false;};
-    u.onerror=()=>{speechWarming=false;};
-    speechSynthesis.speak(u);
-  }catch(e){speechWarming=false;}
+// Say "スタート" when Start is pressed. iOS Safari only lets speech start
+// from a user gesture; the lap calls come later from WebSocket messages, so
+// this first utterance (inside the button press) also unlocks speech for
+// the race. It used to be a silent, empty utterance, but some engines
+// ignore volume 0 and read the empty text out as a short noise.
+function announceStart(){
+  if(typeof speechSynthesis==='undefined')return;
+  speechWarmedUp=true;
+  speak('スタート');
 }
 
 // Voice-only. Callers play the lap/crossing beep themselves, so an audio
