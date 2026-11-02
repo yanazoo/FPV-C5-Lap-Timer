@@ -203,12 +203,9 @@ function applyLap(d,quiet){
   updateRaceCard(p);addLapRow(p,lapMs,_cum,quiet);
   if(quiet)return;
   checkFinished(p,d.finished);
-  // A lap is recorded as the pilot leaves the gate, so the gate exit tone
-  // (RotorHazard style) already marks it; a lap tone on top drowned that
-  // tone out. Only a new best lap gets its own fanfare.
-  ensureAudio();
-  if(d.newBest)sfx.best();
-  // Voice announcement is additive on top of the beep.
+  // No lap tone: a lap is recorded as the pilot leaves the gate, so the
+  // gate exit tone (RotorHazard style) marks it, and the voice calls it.
+  // A best-lap fanfare (the same "piro" notes) is gone too.
   speak(buildSpeech(p,p.lapCount,lapMs));
 }
 

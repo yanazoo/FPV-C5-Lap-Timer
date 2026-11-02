@@ -82,12 +82,6 @@ function crossBeep(wave,ms,slot,fade){
 function beepSeq(notes){notes.forEach(n=>setTimeout(()=>beep(n[0],n[1],n[2]),n[3]||0));}
 
 var sfx={
-  // Winner tone — fuller, deeper fanfare
-  best: ()=>beepSeq([
-    [600,.06,'triangle',0],  [900,.09,'triangle',60],
-    [600,.06,'triangle',150],[900,.09,'triangle',210],
-    [600,.06,'triangle',300],[900,.14,'triangle',360]
-  ]),
   // Staging beeps + deeper start horn
   count: ()=>beepSeq([
     [392,.12,'triangle',0],
