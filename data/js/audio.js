@@ -110,15 +110,29 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
   speechSynthesis.onvoiceschanged=function(){cachedJaVoice=null;};
 }
 
-// Say "レディ" when Start is pressed (the countdown follows). iOS Safari
-// only lets speech start from a user gesture; the lap calls come later from WebSocket messages, so
-// this first utterance (inside the button press) also unlocks speech for
-// the race. It used to be a silent, empty utterance, but some engines
-// ignore volume 0 and read the empty text out as a short noise.
-function announceStart(){
-  if(typeof speechSynthesis==='undefined')return;
+// Say "レディ" when Start is pressed, then call `then` (the countdown) once
+// it has been said. iOS Safari only lets speech start from a user gesture;
+// the lap calls come later from WebSocket messages, so this first utterance
+// (inside the button press) also unlocks speech for the race.
+// With voice off (or beeps only) `then` runs at once. iOS often never fires
+// onend, so the end is also taken from speechSynthesis.speaking going false,
+// and after 2.5 s at the latest the countdown starts anyway.
+function announceStart(then){
+  var go=then||function(){};
+  if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
   speechWarmedUp=true;
-  speak('レディ');
+  var done=false,started=performance.now(),poll=null,cap=null;
+  function finish(){if(done)return;done=true;clearInterval(poll);clearTimeout(cap);go();}
+  try{
+    var u=new SpeechSynthesisUtterance('レディ');
+    u.lang='ja-JP';u.rate=speechRate;
+    var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
+    u.onend=finish;u.onerror=finish;
+    if(speechSynthesis.paused)speechSynthesis.resume();
+    speechSynthesis.speak(u);
+  }catch(e){finish();return;}
+  poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
+  cap=setTimeout(finish,2500);
 }
 
 // Voice-only. Callers play the lap/crossing beep themselves, so an audio
