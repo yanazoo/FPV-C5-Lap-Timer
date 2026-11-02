@@ -60,8 +60,13 @@ var sfx={
     [0,1000,2000].forEach(at=>rhBeepAt(at,100,440,TONE_VOL,'triangle'));
     rhBeepAt(3000,700,880,TONE_VOL,'triangle',0.25);
   },
-  // Race over (RotorHazard plays the start tone again when the race ends).
-  stop: ()=>rhBeep(700,880,TONE_VOL,'triangle',0.25),
+  // Stop: the countdown's 440 Hz falling an octave, A4 -> E4 -> A3
+  // (triangle, 90 ms each, 150 ms apart; the last one rings out).
+  stop: ()=>{
+    rhBeepAt(0,90,440,TONE_VOL,'triangle',0.06);
+    rhBeepAt(150,90,330,TONE_VOL,'triangle',0.06);
+    rhBeepAt(300,90,220,TONE_VOL,'triangle',1);
+  },
   // A pilot finishes: RotorHazard's winner tone (square 1200 / 1800 Hz x3).
   finish: ()=>{
     [[0,50,1200],[50,75,1800],[125,50,1200],[175,75,1800],[250,50,1200],[300,100,1800]]
