@@ -110,19 +110,15 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
   speechSynthesis.onvoiceschanged=function(){cachedJaVoice=null;};
 }
 
-// Silent TTS warm-up. Called explicitly from the Start button (an
-// unambiguous user gesture) so unlock is tied to "press Start to begin".
-// On iOS Safari a silent primer may not be enough; if that happens the
-// user can fall back to the audible voice toggle (toggleVoice).
-// Say "スタート" when Start is pressed. iOS Safari only lets speech start
-// from a user gesture; the lap calls come later from WebSocket messages, so
+// Say "レディ" when Start is pressed (the countdown follows). iOS Safari
+// only lets speech start from a user gesture; the lap calls come later from WebSocket messages, so
 // this first utterance (inside the button press) also unlocks speech for
 // the race. It used to be a silent, empty utterance, but some engines
 // ignore volume 0 and read the empty text out as a short noise.
 function announceStart(){
   if(typeof speechSynthesis==='undefined')return;
   speechWarmedUp=true;
-  speak('スタート');
+  speak('レディ');
 }
 
 // Voice-only. Callers play the lap/crossing beep themselves, so an audio
