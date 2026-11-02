@@ -27,7 +27,7 @@ function freqLabel(mhz){
 
 const slots = Array.from({length:N}, (_,i) => ({
   id:i, name:'---', yomi:'', rosterIdx:-1, freq:0, rssi:0, crossing:false,
-  lapCount:0, bestLapMs:0, lapTimes:[], cumulative:0,
+  lapCount:0, bestLapMs:0, lapTimes:[], cumulative:0, rows:[], lastTs:0,
   enterRssi:DEF_ENTER, exitRssi:DEF_EXIT, rssiSignal:false
 }));
 
@@ -41,6 +41,7 @@ var activeSlotsLocal = Array(N).fill(-1);
 
 var raceRunning=false, raceStartPerf=0, timerH=null, countdownH=null;
 var raceStarted=false, timerFrozenMs=0;
+var lapEpoch=0;   // bumped by Start and Clear: a lap list fetched before is stale
 var voiceEnabled = localStorage.getItem('voice')!=='0';
 var announceMode = localStorage.getItem('announce')||'lap_laptime';
 var speechRate   = parseFloat(localStorage.getItem('srate')||'1.1');

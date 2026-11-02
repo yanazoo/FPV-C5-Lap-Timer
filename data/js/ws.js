@@ -20,12 +20,10 @@ function onMsg(d){
     if(raceRunning)resumeTimer();
     else if(d.racePaused)timerEl.textContent=fmtTimer(timerFrozenMs);
     if(d.sdPresent!==undefined)updateSdSection(d.sdPresent);
-    if(d.totalLaps!==undefined){var tl=document.getElementById('totalLaps');if(tl&&document.activeElement!==tl)tl.value=d.totalLaps;}
+    applySettings(d);
     (d.pilots||[]).forEach(pd=>{
       var p=slots[pd.slot];if(!p)return;
       p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;
-      if(pd.lapCount)p.lapCount=pd.lapCount;
-      if(pd.bestLap)p.bestLapMs=pd.bestLap;
       p.rssi=pd.rssi||0;p.crossing=pd.crossing||false;
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
@@ -33,6 +31,22 @@ function onMsg(d){
       pushChart(p.id,p.rssi,p.crossing);
     });
     buildRaceCards();slots.forEach(p=>updateRaceCard(p));
+    syncLaps();
+    return;
+  }
+  if(d.type==='settings'){applySettings(d);return;}
+  if(d.type==='calib'){
+    // Thresholds saved on some browser (this one included).
+    var rd=rosterById[d.id];if(rd){rd.enter=d.enter;rd.exit=d.exit;}
+    slots.forEach(p=>{if(p.rosterIdx===d.id){p.enterRssi=d.enter;p.exitRssi=d.exit;
+      if(!editing('pane-calib'))syncCalibSliders(p.id,d.enter,d.exit);}});
+    if(!editing('pane-config')&&typeof renderRoster==='function'&&editingRosterId===null)renderRoster();
+    return;
+  }
+  if(d.type==='config_changed'){
+    // Another browser saved these settings: reload the forms (not mid-edit).
+    if(d.what==='elrs'&&typeof loadElrsSettings==='function'&&!editing('pane-config'))loadElrsSettings();
+    if(d.what==='net'&&typeof loadNetSettings==='function'&&!editing('pane-config'))loadNetSettings();
     return;
   }
   if(d.type==='active_update'){
@@ -91,32 +105,12 @@ function onMsg(d){
     return;
   }
   if(d.type==='lap'){
-    var s=d.pilot;if(s<0||s>=N)return;
-    var p=slots[s];
-    if(d.name&&d.name!=='---')p.name=d.name;
-    if(d.yomi!==undefined)p.yomi=d.yomi;
-    p.lapCount=d.lapCount!==undefined?d.lapCount:p.lapCount+1;
-    var lapMs=d.lapTime||0;
-    // Defense in depth: never let an implausible lap time (corrupted ts /
-    // unsigned-wrap from any source) poison the cumulative or best display.
-    if(lapMs<0||lapMs>3600000)lapMs=0;
-    p.lapTimes.push(lapMs);
-    var _isHS=(lapMode==='holeshot'&&p.lapCount===1);
-    var _cum;if(_isHS){_cum=lapMs;}else{p.cumulative+=lapMs;_cum=p.cumulative;}
-    // Firmware is authoritative for best lap (it knows the HS exclusion).
-    if(d.bestLap!==undefined)p.bestLapMs=d.bestLap;
-    else if(!_isHS&&lapMs>0&&(!p.bestLapMs||lapMs<p.bestLapMs))p.bestLapMs=lapMs;
-    updateRaceCard(p);addLapRow(p,lapMs,_cum);checkFinished(p,d.finished);
-    // Always give immediate, reliable audio feedback for the crossing —
-    // independent of TTS, which can be dropped by the browser. Best lap gets
-    // the fanfare; every other lap gets the standard lap tone.
-    ensureAudio();
-    if(d.newBest)sfx.best();else sfx.lap();
-    // Voice announcement is additive on top of the beep.
-    speak(buildSpeech(p,p.lapCount,lapMs));
+    if(lapQueue){lapQueue.push(d);return;}   // the lap list is being fetched
+    applyLap(d,false);
     return;
   }
-  if(d.type==='race_stage'){return;}
+  if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
+  if(d.type==='race_clear'){onRaceClear();return;}
   if(d.type==='race_start'){onRaceStart();return;}
   if(d.type==='race_resume'){onRaceResume();return;}
   if(d.type==='race_stop'){onRaceStop();return;}
@@ -166,48 +160,91 @@ async function loadAll(){
   buildRaceCards();buildCalibCards();
   slots.forEach(p=>syncCalibSliders(p.id,p.enterRssi,p.exitRssi));
 
+  // The timer's settings are the same for every browser: take them from it.
   try{
     var rg=await fetch('/api/settings');
-    if(rg.ok){var st0=await rg.json();var g=document.getElementById('gainInput');if(g)g.value=st0.gain;
-      var tl=document.getElementById('totalLaps');if(tl)tl.value=st0.totalLaps;}
+    if(rg.ok)applySettings(await rg.json());
   }catch(e){}
 
   var am=document.getElementById('announceMode');if(am)am.value=announceMode;
   var sr=document.getElementById('speechRate');if(sr)sr.value=speechRate;
   var srN=document.getElementById('speechRateN');if(srN)srN.value=speechRate;
-  var lms=document.getElementById('lapModeSelect');if(lms)lms.value=lapMode;
-  var sdm=document.getElementById('sdLogModeSelect');if(sdm)sdm.value=sdLogMode;
-  var cdEl=document.getElementById('cooldownInput');if(cdEl)cdEl.value=(cooldownMs/1000).toFixed(1);
   refreshVoiceBtns();
   slots.forEach(p=>updateRaceCard(p));
+}
 
-  // Settings sync policy (multi-client safe):
-  //  • If a race is in progress, ADOPT the web node's live settings so a
-  //    second device joining mid-race can never clobber lapMode/cooldown
-  //    (changing cooldown mid-race would alter lap detection).
-  //  • If idle, restore THIS device's saved preferences to the web node so
-  //    they survive a web-node reboot.
-  try{
-    var racing=false;
-    var rst=await fetch('/api/status');
-    if(rst.ok){var stt=await rst.json();racing=!!stt.raceRunning||((stt.lapCount||0)>0);}
-    if(racing){
-      var rget=await fetch('/api/settings');
-      if(rget.ok){
-        var st=await rget.json();
-        if(st.lapMode!==undefined){lapMode=st.lapMode===1?'immediate':'holeshot';localStorage.setItem('lapMode',lapMode);}
-        if(st.cooldownMs!==undefined){cooldownMs=st.cooldownMs;localStorage.setItem('cooldownMs',cooldownMs);}
-        if(st.sdLogMode!==undefined){sdLogMode=st.sdLogMode===2?'off':(st.sdLogMode===1?'rotate':'always');localStorage.setItem('sdLogMode',sdLogMode);}
-        var lms2=document.getElementById('lapModeSelect');if(lms2)lms2.value=lapMode;
-        var sdm2=document.getElementById('sdLogModeSelect');if(sdm2)sdm2.value=sdLogMode;
-        var cd2=document.getElementById('cooldownInput');if(cd2)cd2.value=(cooldownMs/1000).toFixed(1);
-      }
-    }else if(isAuthed){
-      // Only the admin should be pushing settings back to the web node.
-      await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({lapMode:lapMode==='immediate'?1:0,cooldownMs:cooldownMs,sdLogMode:sdLogModeInt(sdLogMode)})});
-    }
-  }catch(e){}
+// ── Keeping every browser the same ──────────────────────────────────────
+// The timer is the one source of truth: laps, race state and settings come
+// from it (init, lap, race_*, settings), so all browsers show the same
+// thing, including one opened or reconnected in the middle of a race.
+
+var lapQueue=null;   // laps that arrive while the lap list is being fetched
+
+// One lap, live (sound and voice) or replayed from the lap list (quiet).
+function applyLap(d,quiet){
+  var s=d.pilot;if(s<0||s>=N)return;
+  var p=slots[s];
+  if(d.ts){if(p.lastTs&&d.ts<=p.lastTs)return;p.lastTs=d.ts;}   // already shown
+  if(d.name&&d.name!=='---')p.name=d.name;
+  if(d.yomi!==undefined)p.yomi=d.yomi;
+  p.lapCount=d.lapCount!==undefined?d.lapCount:p.lapCount+1;
+  var lapMs=d.lapTime||0;
+  // Defense in depth: never let an implausible lap time (corrupted ts /
+  // unsigned-wrap from any source) poison the cumulative or best display.
+  if(lapMs<0||lapMs>3600000)lapMs=0;
+  p.lapTimes.push(lapMs);
+  var _isHS=(lapMode==='holeshot'&&p.lapCount===1);
+  var _cum;if(_isHS){_cum=lapMs;}else{p.cumulative+=lapMs;_cum=p.cumulative;}
+  // Firmware is authoritative for best lap (it knows the HS exclusion).
+  if(d.bestLap!==undefined)p.bestLapMs=d.bestLap;
+  else if(!_isHS&&lapMs>0&&(!p.bestLapMs||lapMs<p.bestLapMs))p.bestLapMs=lapMs;
+  updateRaceCard(p);addLapRow(p,lapMs,_cum,quiet);
+  if(quiet)return;
+  checkFinished(p,d.finished);
+  // Always give immediate, reliable audio feedback for the crossing —
+  // independent of TTS, which can be dropped by the browser. Best lap gets
+  // the fanfare; every other lap gets the standard lap tone.
+  ensureAudio();
+  if(d.newBest)sfx.best();else sfx.lap();
+  // Voice announcement is additive on top of the beep.
+  speak(buildSpeech(p,p.lapCount,lapMs));
+}
+
+// Take the race's laps from the timer and redraw them (after connecting or
+// reconnecting, which may be mid-race or after laps this browser missed).
+async function syncLaps(){
+  if(lapQueue)return;
+  lapQueue=[];
+  var epoch=lapEpoch,list=null;
+  try{var r=await fetch('/api/laps');if(r.ok)list=await r.json();}catch(e){}
+  var q=lapQueue;lapQueue=null;
+  if(list&&epoch===lapEpoch){   // no Start / Clear meanwhile
+    resetLaps();
+    var n={};
+    list.forEach(l=>{n[l.slot]=(n[l.slot]||0)+1;
+      applyLap({pilot:l.slot,lapTime:l.lapTime,lapCount:n[l.slot],ts:l.ts},true);});
+  }
+  q.forEach(d=>applyLap(d,false));
+  if(!list)setTimeout(syncLaps,2000);
+}
+
+function setField(id,v){var e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;}
+// Is the user typing in this pane? (then don't overwrite the form)
+function editing(paneId){
+  var a=document.activeElement,p=document.getElementById(paneId);
+  return !!(a&&p&&p.contains(a)&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName));
+}
+// Race settings from the timer (init, /api/settings, or a settings broadcast).
+function applySettings(st){
+  if(st.lapMode!==undefined){lapMode=st.lapMode===1?'immediate':'holeshot';localStorage.setItem('lapMode',lapMode);}
+  if(st.cooldownMs!==undefined){cooldownMs=st.cooldownMs;localStorage.setItem('cooldownMs',cooldownMs);}
+  if(st.sdLogMode!==undefined){sdLogMode=st.sdLogMode===2?'off':(st.sdLogMode===1?'rotate':'always');localStorage.setItem('sdLogMode',sdLogMode);}
+  setField('lapModeSelect',lapMode);
+  setField('sdLogModeSelect',sdLogMode);
+  setField('cooldownInput',(cooldownMs/1000).toFixed(1));
+  if(st.totalLaps!==undefined)setField('totalLaps',st.totalLaps);
+  if(st.gain!==undefined)setField('gainInput',st.gain);
+  slots.forEach(p=>updateRaceCard(p));
 }
 
 // App init

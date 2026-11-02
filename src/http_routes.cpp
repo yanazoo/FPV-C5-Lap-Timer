@@ -198,15 +198,20 @@ void registerHttpRoutes() {
 
     onJson("/api/calib", [](AsyncWebServerRequest* req, JsonDocument& doc) {
         int id = doc["id"] | -1;
+        int en, ex;
         {
             Guard g;
             if (!rosterValid(id)) { bad(req, "bad id"); return; }
             rosterCal[id].enterRssi = constrain((int)(doc["enter"] | rosterCal[id].enterRssi), 0, 1023);
             rosterCal[id].exitRssi  = constrain((int)(doc["exit"] | rosterCal[id].exitRssi), 0, 1023);
+            en = rosterCal[id].enterRssi, ex = rosterCal[id].exitRssi;
             saveRosterPilot(id);
         }
         applyGateConfig();
         ok(req);
+        char b[72];   // the new thresholds on every browser
+        snprintf(b, sizeof b, R"({"type":"calib","id":%d,"enter":%d,"exit":%d})", id, en, ex);
+        wsText(b);
     });
 
     // ── Race ───────────────────────────────────────────────────────────────
@@ -276,6 +281,7 @@ void registerHttpRoutes() {
         }
         applyGateConfig();
         ok(req);
+        wsSettings();   // every browser shows the same settings
     });
 
     // ── C5 receiver ────────────────────────────────────────────────────────
@@ -375,6 +381,7 @@ void registerHttpRoutes() {
         if (reconnect) elrsReconnect();
         else elrsConfigChanged();
         ok(req);
+        wsText(R"({"type":"config_changed","what":"elrs"})");
     });
 
     onJson("/api/elrs/test", [](AsyncWebServerRequest* req, JsonDocument& d) {
@@ -471,6 +478,7 @@ void registerHttpRoutes() {
         if (staP.length() && (staP.length() < 8 || staP.length() > 63)) { bad(req, "client password 8..63"); return; }
         saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec);
         ok(req);
+        wsText(R"({"type":"config_changed","what":"net"})");
     });
     server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);

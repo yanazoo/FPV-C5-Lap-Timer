@@ -34,6 +34,27 @@ static void addSlots(JsonArray pa, bool withRace) {
     }
 }
 
+// Race settings, as in GET /api/settings (call under the lock).
+static void addSettings(JsonDocument& d) {
+    d["lapMode"]    = settings.lapMode;
+    d["cooldownMs"] = settings.cooldownMs;
+    d["sdLogMode"]  = settings.sdLogMode;
+    d["totalLaps"]  = settings.totalLaps;
+    d["gain"]       = settings.gain;
+}
+
+void wsSettings() {
+    JsonDocument d;
+    d["type"] = "settings";
+    {
+        Guard g;
+        addSettings(d);
+    }
+    String s;
+    serializeJson(d, s);
+    wsText(s);
+}
+
 void wsActiveUpdate() {
     JsonDocument d;
     d["type"] = "active_update";
@@ -60,7 +81,7 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
         // (running: keeps counting; paused: frozen at the pause point).
         doc["raceElapsedMs"] = raceCore.elapsed(now);
         doc["sdPresent"]     = sdPresent;
-        doc["totalLaps"]     = settings.totalLaps;
+        addSettings(doc);
         addSlots(doc["pilots"].to<JsonArray>(), true);
     }
     String msg;
