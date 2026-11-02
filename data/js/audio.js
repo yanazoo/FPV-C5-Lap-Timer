@@ -62,6 +62,23 @@ function beep(freq,dur,type,vol){
   layer(freq/2,'sine',0.45,0);   // sub-octave -> depth/body
   layer(freq*2,'sine',0.10,0);   // soft harmonic -> presence
 }
+// Gate enter / exit tones, as RotorHazard's synthetic crossing beeps
+// (play_beep): a raw oscillator at the channel's own pitch, full level for
+// a few ms, then an exponential fade to silence over `fade` seconds; that
+// fade is the ringing tail. Ch1 440 Hz (A4) up in semitones to Ch8 659 Hz (E5).
+var CH_TONES=[440,466.2,493.9,523.3,554.4,587.3,622.3,659.3];
+function crossBeep(wave,ms,slot,fade){
+  if(!actx)return;
+  if(actx.state==='suspended'){try{actx.resume();}catch(e){}}
+  var f=CH_TONES[slot]||CH_TONES[0],v=0.3;
+  var t=actx.currentTime,end=t+ms/1000;
+  var o=actx.createOscillator(),g=actx.createGain();
+  o.type=wave;o.frequency.value=f;
+  g.gain.setValueAtTime(v,t);g.gain.setValueAtTime(v,end);
+  g.gain.exponentialRampToValueAtTime(0.00001,end+fade);
+  o.connect(g);g.connect(actx.destination);
+  o.start(t);o.stop(end+fade+0.02);
+}
 function beepSeq(notes){notes.forEach(n=>setTimeout(()=>beep(n[0],n[1],n[2]),n[3]||0));}
 
 var sfx={
@@ -80,8 +97,10 @@ var sfx={
     [392,.12,'triangle',2000],
     [523,.8, 'triangle',3000]
   ]),
-  enter: ()=>beep(523,.22,'triangle'),
-  exit:  ()=>beep(740,.09,'triangle')
+  // Gate crossing (RotorHazard style, pitch per channel):
+  // enter: square 25 ms, 1 s tail; exit: sawtooth 35 ms twice, 70 ms apart.
+  enter: (slot)=>crossBeep('square',25,slot,1),
+  exit:  (slot)=>{crossBeep('sawtooth',35,slot,0.02);setTimeout(()=>crossBeep('sawtooth',35,slot,1),70);}
 };
 
 var speechQ=[],speechBusy=false,speechWarmedUp=false,speechWarming=false,lastSpeechStart=0;
