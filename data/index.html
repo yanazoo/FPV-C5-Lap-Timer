@@ -58,7 +58,7 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 /* ── Pilot race grid ── */
 .pilot-race-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .pilot-race-card{background:var(--sf);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
-.pilot-card-header{display:flex;align-items:center;gap:6px;padding:7px 10px;font-weight:700;font-size:13px}
+.pilot-card-header{position:relative;display:flex;align-items:center;gap:6px;padding:7px 10px;font-weight:700;font-size:13px}
 .pilot-card-header.p0{background:var(--p0-bg);border-bottom:2px solid var(--p0);color:var(--p0)}
 .pilot-card-header.p1{background:var(--p1-bg);border-bottom:2px solid var(--p1);color:var(--p1)}
 .pilot-card-header.p2{background:var(--p2-bg);border-bottom:2px solid var(--p2);color:var(--p2)}
@@ -69,7 +69,9 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .pilot-card-header.p7{background:var(--p7-bg);border-bottom:2px solid var(--p7);color:var(--p7)}
 .p-name{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .p-lapcount{font-size:11px;font-weight:normal;color:var(--muted);white-space:nowrap}
-.crossing-badge{font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 6px;border-radius:3px;background:#333;color:var(--muted);display:none}
+/* Floats over the right end of the header (frequency / lap count) while the
+   pilot is in the gate, so it never squeezes the pilot's name. */
+.crossing-badge{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;letter-spacing:.5px;padding:3px 7px;border-radius:3px;background:#333;color:var(--muted);display:none;box-shadow:0 0 0 2px var(--sf)}
 .crossing-badge.active{display:inline-block;background:currentColor;color:#000}
 .rssi-mini-bar{display:flex;align-items:center;gap:5px;padding:3px 8px;background:var(--sf2)}
 .rssi-mini-label{font-size:9px;color:var(--muted);width:26px}
