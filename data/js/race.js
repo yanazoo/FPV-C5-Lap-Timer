@@ -83,6 +83,8 @@ function buildRaceCards(){
   });
   var none=document.getElementById('noPilotsMsg');
   if(none)none.style.display=shown?'none':'block';
+  // Rebuilding the cards (another browser assigned pilots) keeps the laps.
+  slots.forEach(p=>renderLapRows(p));
 }
 
 function updateRaceCard(p){
@@ -104,21 +106,56 @@ function updateRaceCard(p){
   }
 }
 
-function addLapRow(p, lapMs, cumMs){
+function lapRowEl(r,isBest){
+  var tr=document.createElement('tr');
+  if(isBest)tr.className='best-row';
+  tr.innerHTML='<td>'+r.label+'</td><td class="lap-time">'+fmt(r.lapMs)+'</td><td>'+fmt(r.cum)+'</td>';
+  return tr;
+}
+function showDelta(p,lapMs){
+  var e=p.el,delta=e?e.delta:document.getElementById('rcDelta'+p.id);
+  if(!delta)return;
+  if(p.bestLapMs&&lapMs){var d=lapMs-p.bestLapMs;if(d===0){delta.textContent='★ BEST';delta.className='pilot-delta faster';}else{delta.textContent=fmtDelta(d);delta.className='pilot-delta '+(d<0?'faster':'slower');}}
+  else{delta.textContent='';delta.className='pilot-delta';}
+}
+// Redraw a card's lap table from the slot's lap history (p.rows).
+function renderLapRows(p){
+  var e=p.el,tbody=e?e.body:document.getElementById('lapBody'+p.id);
+  if(!tbody)return;
+  tbody.innerHTML='';
+  var bestDone=false;
+  for(var i=p.rows.length-1;i>=0;i--){
+    var r=p.rows[i];
+    var isBest=!bestDone&&r.lapMs>0&&r.lapMs===p.bestLapMs&&r.label!=='HS';
+    if(isBest)bestDone=true;
+    tbody.appendChild(lapRowEl(r,isBest));
+  }
+  var last=p.rows[p.rows.length-1];
+  showDelta(p,last?last.lapMs:0);
+}
+function addLapRow(p, lapMs, cumMs, quiet){
+  var r={label:lapMode==='immediate'?p.lapCount:(p.lapCount===1?'HS':(p.lapCount-1)),lapMs:lapMs,cum:cumMs};
+  p.rows.push(r);
   var e=p.el,tbody=e?e.body:document.getElementById('lapBody'+p.id);
   if(!tbody)return;   // channel not shown on the race tab
   var isBest=(p.bestLapMs===lapMs&&lapMs>0);
   if(isBest)tbody.querySelectorAll('tr.best-row').forEach(r=>r.classList.remove('best-row'));
-  var tr=document.createElement('tr');
-  if(isBest)tr.className='best-row';
-  var _lap=lapMode==='immediate'?p.lapCount:(p.lapCount===1?'HS':(p.lapCount-1));
-  tr.innerHTML='<td>'+_lap+'</td><td class="lap-time">'+fmt(lapMs)+'</td><td>'+fmt(cumMs)+'</td>';
-  tbody.insertBefore(tr,tbody.firstChild);
-  var delta=e?e.delta:document.getElementById('rcDelta'+p.id);
-  if(p.bestLapMs&&lapMs){var d=lapMs-p.bestLapMs;if(d===0){delta.textContent='★ BEST';delta.className='pilot-delta faster';}else{delta.textContent=fmtDelta(d);delta.className='pilot-delta '+(d<0?'faster':'slower');}}
+  tbody.insertBefore(lapRowEl(r,isBest),tbody.firstChild);
+  showDelta(p,lapMs);
+  if(quiet)return;
   var card=e?e.card:document.getElementById('rc-'+p.id);
   card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
   card.addEventListener('animationend',()=>card.classList.remove('flash'),{once:true});
+}
+// Forget every lap on this browser (a new race, or Clear from any browser).
+function resetLaps(){
+  slots.forEach(p=>{
+    p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;p.rows=[];p.lastTs=0;
+    var e=p.el;
+    var b=e?e.body:document.getElementById('lapBody'+p.id);if(b)b.innerHTML='';
+    var d=e?e.delta:document.getElementById('rcDelta'+p.id);if(d)d.textContent='';
+    updateRaceCard(p);
+  });
 }
 
 // ── Race state transitions ──────────────────────────────────────────────
@@ -133,12 +170,7 @@ function clearStopWatchdog(){if(stopWatchdog){clearTimeout(stopWatchdog);stopWat
 function onRaceStart(){
   raceStartApplied=raceStartSeq;clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer();
-  slots.forEach(p=>{
-    p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;
-    var e=p.el;
-    if(e){e.body.innerHTML='';e.delta.textContent='';}
-    updateRaceCard(p);
-  });
+  lapEpoch++;resetLaps();
 }
 function onRaceResume(){
   clearStartWatchdog();
@@ -165,18 +197,10 @@ function startRace(){
       .catch(e=>{btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ 再開 通信エラー');});
     return;
   }
-  sfx.count();
-  // Countdown start = RotorHazard "stage": ARM NOW on the goggles.
+  // Countdown start = RotorHazard "stage": ARM NOW on the goggles. The
+  // firmware passes it on to every browser, which show the countdown too.
+  showCountdown();
   fetch('/api/race/stage',{method:'POST'}).catch(()=>{});
-  var cdStart=performance.now();
-  timerEl.classList.remove('running');
-  timerEl.textContent='3.00';
-  if(countdownH)clearInterval(countdownH);
-  countdownH=setInterval(()=>{
-    var rem=Math.max(0,3000-(performance.now()-cdStart));
-    timerEl.textContent=(rem/1000).toFixed(2);
-    if(rem===0){clearInterval(countdownH);countdownH=null;}
-  },50);
   setTimeout(async()=>{
     raceStartSeq++;var mySeq=raceStartSeq;   // claim this start cycle
     try{
@@ -187,6 +211,23 @@ function startRace(){
     }
     catch(e){btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ スタート 通信エラー');}
   },3300);
+}
+// 3-2-1 before the start; on the browser that pressed Start and, through
+// race_stage, on every other one.
+function showCountdown(){
+  if(countdownH)return;   // already counting down
+  ensureAudio();sfx.count();
+  ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+  var cdStart=performance.now();
+  timerEl.classList.remove('running');
+  timerEl.textContent='3.00';
+  countdownH=setInterval(()=>{
+    var rem=Math.max(0,3000-(performance.now()-cdStart));
+    timerEl.textContent=(rem/1000).toFixed(2);
+    if(rem===0){clearInterval(countdownH);countdownH=null;
+      // No start followed (the presser's request failed): give the buttons back.
+      setTimeout(()=>{if(!raceRunning&&!countdownH)setBtns(raceRunning);},2500);}
+  },50);
 }
 function stopRace(){
   ensureAudio();beepSeq([[880,.2,'sine',0],[440,.2,'sine',220],[220,.3,'sine',440]]);
@@ -212,16 +253,14 @@ async function clearAllLaps(){
       else toast('⚠️ SD保存エラー');
     }catch(e){toast('⚠️ SD保存 接続エラー');}
   }
+  onRaceClear();
+}
+// Clear from any browser (race_clear) or this one.
+function onRaceClear(){
   stopTimer();
   timerFrozenMs=0;
   timerEl.textContent='00:00';
-  slots.forEach(p=>{
-    p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;
-    var e=p.el;
-    var b=e?e.body:document.getElementById('lapBody'+p.id);if(b)b.innerHTML='';
-    var d=e?e.delta:document.getElementById('rcDelta'+p.id);if(d)d.textContent='';
-    updateRaceCard(p);
-  });
+  lapEpoch++;resetLaps();
   // Clear ends the race; next Start is a fresh race.
   raceStarted=false;
   setBtns(false);

@@ -113,6 +113,10 @@ String raceClear() {
         raceCore.clear();
     }
     elrsLapsClear();
+    // Clear on one browser clears every browser.
+    JsonDocument d;
+    d["type"] = "race_clear";
+    wsJson(d);
     char resp[80];
     snprintf(resp, sizeof resp, R"({"ok":true,"saved":%s,"reason":"%s"})", saved ? "true" : "false", reason);
     return String(resp);
