@@ -197,7 +197,12 @@ function startRace(){
       .catch(e=>{btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ 再開 通信エラー');});
     return;
   }
-  announceStart();
+  // "レディ" first; the countdown starts once it has been said.
+  announceStart(beginCountdown);
+}
+function beginCountdown(){
+  var btnStart=document.getElementById('btnStart');
+  var btnClear=document.getElementById('btnClear');
   // Countdown start = RotorHazard "stage": ARM NOW on the goggles. The
   // firmware passes it on to every browser, which show the countdown too.
   showCountdown();
