@@ -19,7 +19,9 @@
   --p6-bg:rgba(86,212,221,.12);--p7-bg:rgba(240,136,62,.12);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--tx);min-height:100vh;display:flex;flex-direction:column;font-size:14px}
+/* One pixel taller than the screen, so the page can always scroll and
+   mobile Safari can tuck its toolbars away (also after the login keyboard). */
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;background:var(--bg);color:var(--tx);min-height:calc(100vh + 1px);display:flex;flex-direction:column;font-size:14px}
 header{position:sticky;top:0;z-index:200;background:var(--sf);border-bottom:1px solid var(--bd);padding:8px 16px}
 .header-inner{display:flex;align-items:center;justify-content:space-between;max-width:1200px;margin:0 auto}
 .logo{display:flex;align-items:center;gap:8px}
@@ -168,7 +170,8 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .modal-box{background:var(--sf);border:1px solid var(--accent);border-radius:10px;padding:18px;width:100%;max-width:320px}
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
 .modal-box p{color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5}
-.modal-box input[type=password]{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px 12px;font-size:14px}
+/* 16px: smaller text makes iOS zoom the page in when the field is focused */
+.modal-box input[type=password]{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px 12px;font-size:16px}
 .modal-box input[type=password]:focus{outline:none;border-color:var(--accent)}
 .modal-err{color:var(--err);font-size:11px;margin-top:6px;display:none}
 .modal-actions{display:flex;gap:6px;margin-top:12px}
@@ -177,10 +180,30 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 #authHint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;display:none}
 #authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
 
-@media(max-width:900px){.pilot-race-grid{grid-template-columns:1fr 1fr}.calib-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.calib-grid{grid-template-columns:1fr 1fr}}
+/* Race cards: 8 across on wide PC windows, 4 across on phones held sideways
+   and smaller windows, 2 across in portrait (and in landscape windows too
+   narrow for 4). */
+@media(min-width:1200px){
+  main,.header-inner{max-width:1600px}
+  /* Eighth-width cards, centred: fewer than eight pilots sit in the middle. */
+  .pilot-race-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+  .pilot-race-grid>.pilot-race-card{flex:0 0 calc((100% - 42px) / 8);min-width:0}
+  /* Narrow cards: compact text so lap times and totals fit. */
+  .pilot-race-grid .pilot-card-header{padding:6px 7px;font-size:12px;gap:4px;flex-wrap:wrap}
+  .pilot-race-grid .p-freq{margin-left:0}
+  .pilot-race-grid .rssi-mini-bar,.pilot-race-grid .pilot-best-row{padding:3px 6px}
+  .pilot-race-grid .pilot-best-row{flex-wrap:wrap;gap:2px 6px}
+  .pilot-race-grid .pilot-best{font-size:13px}
+  .pilot-race-grid .pilot-delta{font-size:10px}
+  .pilot-race-grid .lapTable{font-size:10px}
+  .pilot-race-grid .lapTable tbody td{padding:3px 2px}
+  .pilot-race-grid .lapTable tbody td.lap-time{font-size:12px}
+}
+@media(orientation:portrait) and (max-width:900px),(max-width:600px){.pilot-race-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){
   .header-inner{flex-direction:column;gap:6px;align-items:flex-start}
-  .pilot-race-grid{grid-template-columns:1fr 1fr}.calib-grid{grid-template-columns:1fr 1fr}
+  .calib-grid{grid-template-columns:1fr 1fr}
   #timer{font-size:32px}
 }
 /* FPV C5 additions */
