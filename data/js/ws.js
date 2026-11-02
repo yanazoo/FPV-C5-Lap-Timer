@@ -122,7 +122,9 @@ function updateHeaderStatus(){
   var el=document.getElementById('c5Badge');if(!el||!c5Status)return;
   var c=c5Status,e=c.elrs||{};
   var ok=c.online&&c.scanning;
-  el.textContent='C5 '+(ok?'●':'○')+(e.enabled?'  OSD '+(e.connected?'●':'○'):'');
+  // One lamp per link: green when connected, red when not.
+  function lamp(name,on){return '<span class="st '+(on?'ok':'ng')+'">'+name+'<i>●</i></span>';}
+  el.innerHTML=lamp('C5',ok)+(e.enabled?lamp('OSD',!!e.connected):'');
   el.className='c5-badge '+(ok&&(!e.enabled||e.connected)?'ok':'ng');
   el.title='C5: '+(c.online?c.state:'OFFLINE')+(e.enabled?' / ELRS: '+(e.connected?e.peer:'未接続'):'');
 }

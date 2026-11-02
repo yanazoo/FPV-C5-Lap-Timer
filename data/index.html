@@ -208,7 +208,12 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 }
 /* FPV C5 additions */
 .c5-badge{font-size:11px;font-family:monospace;padding:2px 7px;border-radius:10px;border:1px solid var(--bd);white-space:nowrap}
-.c5-badge.ok{color:var(--ok);border-color:var(--ok)}.c5-badge.ng{color:var(--err);border-color:var(--err)}
+.c5-badge{color:var(--muted);display:inline-flex;gap:8px;align-items:center}
+.c5-badge.ok{border-color:var(--ok)}.c5-badge.ng{border-color:var(--err)}
+/* Each link has its own lamp: green = connected, red = not connected. */
+.st{display:inline-flex;gap:3px;align-items:center}
+.st i{font-style:normal;font-size:12px;line-height:1}
+.st.ok i{color:var(--ok)}.st.ng i{color:var(--err)}
 .p-freq{font-size:10px;font-family:monospace;color:var(--muted);margin-left:6px}
 .warn-badge{font-size:10px;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:1px 6px}
 .osd-badge{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:1px 6px}
@@ -251,7 +256,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="logo">
       <h1>FPV C5 Lap Timer</h1>
       <span id="wsDot" class="ws-dot disconnected"></span>
-      <span id="c5Badge" class="c5-badge ng" title="C5 受信機 / ELRS netpack">C5 ○</span>
+      <span id="c5Badge" class="c5-badge ng" title="C5 受信機 / ELRS netpack"><span class="st ng">C5<i>●</i></span></span>
     </div>
     <span id="statusMsg"></span>
     <nav class="tab-bar">
