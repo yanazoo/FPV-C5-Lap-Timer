@@ -29,70 +29,48 @@ function ensureAudio(){
     if(!document.hidden&&actx&&actx.state==='suspended')actx.resume();
   });
 })();
-// Layered voice: fundamental + chorus-detuned twin + sub-octave (body) +
-// soft upper harmonic (presence), routed through a lowpass for warmth and
-// a click-free attack / smooth exponential release. Same signature as before
-// so existing call sites get the deeper, richer tone automatically.
-function beep(freq,dur,type,vol){
+// RotorHazard's synthetic tones (its play_beep): a raw oscillator at full
+// level for `ms`, then an exponential fade to silence over `fade` seconds
+// (RotorHazard's default 1 s); that fade is the ringing tail.
+// Volumes keep RotorHazard's balance: race tones (tone_volume 1.0) are
+// twice the indicator beeps (indicator_beep_volume 0.5).
+var TONE_VOL=0.6, BEEP_VOL=0.3;
+function rhBeep(ms,freq,vol,wave,fade){
   if(!actx)return;
   if(actx.state==='suspended'){try{actx.resume();}catch(e){}}
-  type=type||'sine';
-  vol=(vol===undefined?0.4:vol);
-  var t=actx.currentTime;
-  var g=actx.createGain();
-  var lp=actx.createBiquadFilter();
-  lp.type='lowpass';
-  lp.frequency.value=Math.min(6000,freq*6+700);
-  lp.Q.value=0.7;
-  g.connect(lp);lp.connect(actx.destination);
-  var atk=Math.min(0.012,dur*0.3);
-  g.gain.setValueAtTime(0.0001,t);
-  g.gain.exponentialRampToValueAtTime(vol,t+atk);
-  g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
-  function layer(f,wave,lvl,detune){
-    var o=actx.createOscillator(),og=actx.createGain();
-    o.type=wave;o.frequency.value=f;
-    if(detune)o.detune.value=detune;
-    og.gain.value=lvl;
-    o.connect(og);og.connect(g);
-    o.start(t);o.stop(t+dur+0.03);
-  }
-  layer(freq,type,0.42,0);       // fundamental
-  layer(freq,type,0.20,7);       // detuned twin -> thickness
-  layer(freq/2,'sine',0.45,0);   // sub-octave -> depth/body
-  layer(freq*2,'sine',0.10,0);   // soft harmonic -> presence
-}
-// Gate enter / exit tones, as RotorHazard's synthetic crossing beeps
-// (play_beep): a raw oscillator at the channel's own pitch, full level for
-// a few ms, then an exponential fade to silence over `fade` seconds; that
-// fade is the ringing tail. Ch1 440 Hz (A4) up in semitones to Ch8 659 Hz (E5).
-var CH_TONES=[440,466.2,493.9,523.3,554.4,587.3,622.3,659.3];
-function crossBeep(wave,ms,slot,fade){
-  if(!actx)return;
-  if(actx.state==='suspended'){try{actx.resume();}catch(e){}}
-  var f=CH_TONES[slot]||CH_TONES[0],v=0.3;
+  if(fade==null)fade=1;
   var t=actx.currentTime,end=t+ms/1000;
   var o=actx.createOscillator(),g=actx.createGain();
-  o.type=wave;o.frequency.value=f;
-  g.gain.setValueAtTime(v,t);g.gain.setValueAtTime(v,end);
+  o.type=wave;o.frequency.value=freq;
+  g.gain.setValueAtTime(vol,t);g.gain.setValueAtTime(vol,end);
   g.gain.exponentialRampToValueAtTime(0.00001,end+fade);
   o.connect(g);g.connect(actx.destination);
   o.start(t);o.stop(end+fade+0.02);
 }
-function beepSeq(notes){notes.forEach(n=>setTimeout(()=>beep(n[0],n[1],n[2]),n[3]||0));}
+function rhBeepAt(at,ms,freq,vol,wave,fade){setTimeout(()=>rhBeep(ms,freq,vol,wave,fade),at);}
+// Gate crossing pitch per channel: Ch1 440 Hz (A4) up in semitones to Ch8 659 Hz (E5).
+var CH_TONES=[440,466.2,493.9,523.3,554.4,587.3,622.3,659.3];
+function chTone(slot){return CH_TONES[slot]||CH_TONES[0];}
 
 var sfx={
-  // Staging beeps + deeper start horn
-  count: ()=>beepSeq([
-    [392,.12,'triangle',0],
-    [392,.12,'triangle',1000],
-    [392,.12,'triangle',2000],
-    [523,.8, 'triangle',3000]
-  ]),
-  // Gate crossing (RotorHazard style, pitch per channel):
+  // All as RotorHazard's synthetic tones.
+  // Countdown: staging tone (triangle 440 Hz, 100 ms) each second, then the
+  // start tone (triangle 880 Hz, 700 ms, 0.25 s fade) at go.
+  count: ()=>{
+    [0,1000,2000].forEach(at=>rhBeepAt(at,100,440,TONE_VOL,'triangle'));
+    rhBeepAt(3000,700,880,TONE_VOL,'triangle',0.25);
+  },
+  // Race over (RotorHazard plays the start tone again when the race ends).
+  stop: ()=>rhBeep(700,880,TONE_VOL,'triangle',0.25),
+  // A pilot finishes: RotorHazard's winner tone (square 1200 / 1800 Hz x3).
+  finish: ()=>{
+    [[0,50,1200],[50,75,1800],[125,50,1200],[175,75,1800],[250,50,1200],[300,100,1800]]
+      .forEach(n=>rhBeepAt(n[0],n[1],n[2],BEEP_VOL,'square'));
+  },
+  // Gate crossing, pitch per channel:
   // enter: square 25 ms, 1 s tail; exit: sawtooth 35 ms twice, 70 ms apart.
-  enter: (slot)=>crossBeep('square',25,slot,1),
-  exit:  (slot)=>{crossBeep('sawtooth',35,slot,0.02);setTimeout(()=>crossBeep('sawtooth',35,slot,1),70);}
+  enter: (slot)=>rhBeep(25,chTone(slot),BEEP_VOL,'square'),
+  exit:  (slot)=>{rhBeep(35,chTone(slot),BEEP_VOL,'sawtooth',0.02);rhBeepAt(70,35,chTone(slot),BEEP_VOL,'sawtooth');}
 };
 
 var speechQ=[],speechBusy=false,speechWarmedUp=false,speechWarming=false,lastSpeechStart=0;

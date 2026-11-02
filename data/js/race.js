@@ -230,7 +230,7 @@ function showCountdown(){
   },50);
 }
 function stopRace(){
-  ensureAudio();beepSeq([[880,.2,'sine',0],[440,.2,'sine',220],[220,.3,'sine',440]]);
+  ensureAudio();sfx.stop();
   fetch('/api/race/stop',{method:'POST'})
     .then(r=>{if(!r.ok)return;
       clearStopWatchdog();
@@ -284,7 +284,7 @@ function checkFinished(p,finished){
     finished=raceRunning&&tot>0&&laps===tot;
   }
   if(finished){
-    beepSeq([[880,.2,'sine',0],[1320,.2,'sine',220],[1760,.3,'sine',440]]);
+    ensureAudio();sfx.finish();
     if(voiceEnabled&&announceMode!=='beep'&&announceMode!=='none'){
       var u=new SpeechSynthesisUtterance(getSpokenName(p)+'、フィニッシュ');u.lang='ja-JP';u.rate=speechRate;speechSynthesis.speak(u);
     }
