@@ -61,6 +61,11 @@ void netBegin() {
         WiFi.mode(WIFI_STA);
         WiFi.setAutoReconnect(true);
         WiFi.begin(staSsid.c_str(), staPass.c_str());
+        // No modem sleep as a client: with it the radio dozes between beacons,
+        // and the burst of requests for the web UI's page and scripts stalls
+        // or drops (the page shows, but its scripts don't load). The access
+        // point never sleeps, which is why host mode was fine.
+        WiFi.setSleep(false);
         staMode = true;
         staSinceMs = millis();
         rtcStaTrying = kStaTrying;
