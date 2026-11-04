@@ -5,12 +5,19 @@
 #include <WiFi.h>
 #include <esp_https_server.h>
 #include <esp_random.h>
+#include <esp_system.h>
 #include <mbedtls/pk.h>
 #include <mbedtls/ecp.h>
 #include <mbedtls/x509_crt.h>
 #include "https_redirect.h"
 
 namespace {
+
+// Set while the certificate is made and the server starts; survives a crash
+// reset. If that ever crashes, the next boot skips HTTPS instead of crashing
+// again, so the access point and the web UI always come up.
+const uint32_t kHttpsTrying = 0x4854505A;
+RTC_NOINIT_ATTR uint32_t rtcHttpsTrying;
 
 httpd_handle_t https = nullptr;
 String certPem, keyPem;
@@ -103,7 +110,7 @@ esp_err_t redirect(httpd_req_t* req) {
 
 }  // namespace
 
-void httpsRedirectBegin() {
+static void startServer() {
     if (!loadOrMakeCertificate()) {
         Serial.println("[HTTPS] no certificate, https:// redirect off");
         return;
@@ -133,4 +140,27 @@ void httpsRedirectBegin() {
         httpd_register_uri_handler(https, &u);
     }
     Serial.println("[HTTPS] port 443: redirecting to http://");
+}
+
+// Making the key and signing the certificate needs more stack than the
+// Arduino loop task has (8 KB): run it in a task of its own, a moment after
+// boot, so the access point and the web UI are already up.
+static void httpsTask(void*) {
+    vTaskDelay(pdMS_TO_TICKS(3000));
+    rtcHttpsTrying = kHttpsTrying;
+    startServer();
+    rtcHttpsTrying = 0;
+    vTaskDelete(nullptr);
+}
+
+void httpsRedirectBegin() {
+    esp_reset_reason_t r = esp_reset_reason();
+    bool crashed = r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT;
+    if (crashed && rtcHttpsTrying == kHttpsTrying) {
+        rtcHttpsTrying = 0;
+        Serial.println("[HTTPS] crashed starting last time: https:// redirect off this boot");
+        return;
+    }
+    rtcHttpsTrying = 0;
+    xTaskCreatePinnedToCore(httpsTask, "https", 16384, nullptr, 1, nullptr, 1);
 }
