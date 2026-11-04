@@ -74,7 +74,6 @@ void raceStage() {
 }
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
-static uint32_t timeUpAt = 0;
 
 void raceStart() {
     uint32_t now = millis();
@@ -257,10 +256,8 @@ void sendC5Status() {
 // ── Timed race ─────────────────────────────────────────────────────────────
 // When the time runs out: with the last lap counted, each pilot's next pass
 // ends their race (race::Core marks it, FINISHED! on the goggles); without,
-// every pilot who had started is done at once. The race stops by itself
-// once every pilot who started is done, or 60 s after the time ran out
-// (someone crashed on the last lap).
-static const uint32_t TIME_UP_GRACE_MS = 60000;
+// every pilot who had started is done at once. The race keeps running (the
+// clock counts on below zero) until Stop is pressed.
 
 static void serviceTimedRace(uint32_t now) {
     if (raceRules.rankMode != 2 && !timeUpHandled) return;   // not a timed race: nothing to do
@@ -273,7 +270,6 @@ static void serviceTimedRace(uint32_t now) {
     if (!running) return;
     if (up && !timeUpHandled) {
         timeUpHandled = true;
-        timeUpAt = now;
         Serial.println("[Race] time up");
         JsonDocument d;
         d["type"] = "time_up";
@@ -294,16 +290,6 @@ static void serviceTimedRace(uint32_t now) {
                 if (done[s]) elrsPilotDone(s, pos[s], tot[s]);
         }
     }
-    if (!timeUpHandled) return;
-    bool allDone = true;
-    {
-        Guard g;
-        for (int s = 0; s < MAX_ACTIVE; s++) {
-            const race::SlotState& st = raceCore.slot(s);
-            if (rosterValid(activePilots[s]) && st.lapCount > 0 && !st.finished) allDone = false;
-        }
-    }
-    if (allDone || now - timeUpAt >= TIME_UP_GRACE_MS) raceStop();
 }
 
 // ── Race director (ELRS TX switch) ─────────────────────────────────────────
