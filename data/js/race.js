@@ -32,7 +32,7 @@ function runTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  var tick=()=>{var el=Math.max(0,serverNow()-raceStartSrv);timerEl.textContent=raceClockText(el);updateRemain(el);};
+  var tick=()=>{var el=Math.max(0,serverNow()-raceStartSrv);timerEl.textContent=raceClockText(el);};
   timerH=setInterval(tick,50);tick();
 }
 // startSrv: the race start on the timer's clock (race_start ts).
@@ -227,15 +227,6 @@ function renderRanking(){
   });
   t.innerHTML=h+'</tbody>';
 }
-// Timed race: time left next to the rule, from the race clock.
-function updateRemain(elapsedMs){
-  var el=document.getElementById('rankRemain');if(!el)return;
-  if(rankMode!==2){el.textContent='';return;}
-  var left=timeLimitSec-(elapsedMs||0)/1000;
-  var over=timeIsUp||left<=0;
-  el.textContent=over?'時間切れ':'残り '+fmtSec(left);
-  el.classList.toggle('over',over);
-}
 
 // Forget every lap on this browser (a new race, or Clear from any browser).
 function resetLaps(){
@@ -262,7 +253,6 @@ function onRaceStart(ts){
   raceStartApplied=raceStartSeq;clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
   lapEpoch++;resetLaps();
-  timeIsUp=false;updateRemain(0);
 }
 function onRaceResume(ts){
   clearStartWatchdog();

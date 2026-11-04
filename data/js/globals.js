@@ -49,7 +49,7 @@ var lapMode      = localStorage.getItem('lapMode')||'holeshot';
 var cooldownMs   = parseInt(localStorage.getItem('cooldownMs')||'3000');
 var sdLogMode    = localStorage.getItem('sdLogMode')||'always';
 // Ranking rule (from the timer): 0 laps then total time, 1 best lap, 2 laps in a time limit.
-var rankMode=0, timeLimitSec=120, countLastLap=true, timeIsUp=false;
+var rankMode=0, timeLimitSec=120, countLastLap=true;
 function sdLogModeInt(m){return m==='off'?2:(m==='rotate'?1:0);}
 
 var c5Status = null;         // last "c5" WebSocket message (receiver + ELRS link)

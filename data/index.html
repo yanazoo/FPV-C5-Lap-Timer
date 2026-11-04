@@ -64,8 +64,6 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .rank-panel{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:8px 12px 6px;margin-bottom:12px}
 .rank-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:4px}
 .rank-head b{color:var(--tx);font-size:13px}
-.rank-remain{font-family:"Courier New",monospace;font-weight:bold;color:var(--accent)}
-.rank-remain.over{color:var(--err)}
 .rank-wrap{overflow-x:auto}
 .rank-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .rank-table th{font-size:11px;font-weight:normal;color:var(--muted);text-align:right;padding:3px 6px;white-space:nowrap}
@@ -323,7 +321,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     </div>
   </div>
   <div class="rank-panel" id="rankPanel">
-    <div class="rank-head"><b>順位</b><span id="rankRule"></span><span class="rank-remain" id="rankRemain"></span></div>
+    <div class="rank-head"><b>順位</b><span id="rankRule"></span></div>
     <div class="rank-wrap"><table class="rank-table" id="rankTable"></table></div>
   </div>
   <div class="pilot-race-grid" id="pilotGrid"></div>

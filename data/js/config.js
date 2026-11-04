@@ -242,7 +242,7 @@ function saveRaceRules(){
   var t=Math.max(30,Math.min(1800,mi*60+se));
   var c=document.getElementById('countLastLapSelect').value==='1';
   rankMode=m;timeLimitSec=t;countLastLap=c;
-  showRaceRules();renderRanking();updateRemain(raceElapsedMs());
+  showRaceRules();renderRanking();
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({rankMode:m,timeLimitSec:t,countLastLap:c})})
     .then(r=>toast(r.ok?'✓ 順位の決め方を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))

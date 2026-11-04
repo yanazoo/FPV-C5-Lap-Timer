@@ -153,7 +153,7 @@ function onMsg(d){
   }
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
-  if(d.type==='time_up'){timeIsUp=true;updateRemain();toast('⏱ 時間切れ');return;}
+  if(d.type==='time_up'){toast('⏱ 時間切れ');return;}
   if(d.type==='race_start'){onRaceStart(d.ts);return;}
   if(d.type==='race_resume'){onRaceResume(d.ts);return;}
   if(d.type==='race_stop'){onRaceStop(d.elapsed);return;}
@@ -289,7 +289,7 @@ function applySettings(st){
   if(st.totalLaps!==undefined)setField('totalLaps',st.totalLaps);
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
-    showRaceRules();renderRanking();updateRemain(raceElapsedMs());}
+    showRaceRules();renderRanking();}
   slots.forEach(p=>updateRaceCard(p));
 }
 
