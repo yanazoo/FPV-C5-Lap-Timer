@@ -117,6 +117,12 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
 // With voice off (or beeps only) `then` runs at once. iOS often never fires
 // onend, so the end is also taken from speechSynthesis.speaking going false,
 // and after 2.5 s at the latest the countdown starts anyway.
+// iOS Safari speaks only after the page has spoken inside a tap: the Start
+// tap does that (silently), so "レディ" from race_ready is heard.
+function warmSpeech(){
+  if(speechWarmedUp||typeof speechSynthesis==='undefined')return;
+  try{var u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);speechWarmedUp=true;}catch(e){}
+}
 function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}

@@ -230,29 +230,34 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast(dict(state["settings"], type="settings"))
             return self.reply({"ok": True})
         r = state["race"]
-        if p == "/api/mock/rd":   # the race director switch: ready, stage, start
+        # Start (web button or /api/mock/rd = the race director's switch): the
+        # timer runs ready -> stage -> start, or resumes a stopped race.
+        if p in ("/api/race/start", "/api/mock/rd"):
+            if r["running"] or r.get("seq"):
+                return self.reply({"ok": True})
+            if r["paused"]:
+                r.update(running=True, paused=False, t0=time.monotonic())
+                broadcast({"type": "race_resume", "ts": int(r["t0"] * 1000 - r["elapsed"] * 1000)})
+                return self.reply({"ok": True})
+            token = object()
+            r["seq"] = token
             def seq():
                 broadcast({"type": "race_ready"}); time.sleep(1.5)
+                if r.get("seq") is not token: return
                 broadcast({"type": "race_stage"}); time.sleep(3.3)
+                if r.get("seq") is not token: return
+                r["seq"] = None
                 r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
                 broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
             threading.Thread(target=seq, daemon=True).start()
             return self.reply({"ok": True})
-        if p == "/api/race/stage":
-            broadcast({"type": "race_stage"})
-            return self.reply({"ok": True})
-        if p == "/api/race/start":
-            r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
-            broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
-            return self.reply({"ok": True})
         if p == "/api/race/stop":
+            if not r["running"] and not r.get("seq"):
+                return self.reply({"ok": True})
+            r["seq"] = None
             if r["running"]:
                 r.update(running=False, paused=True, elapsed=race_elapsed())
             broadcast({"type": "race_stop", "elapsed": int(race_elapsed() * 1000)})
-            return self.reply({"ok": True})
-        if p == "/api/race/resume":
-            r.update(running=True, paused=False, t0=time.monotonic())
-            broadcast({"type": "race_resume", "ts": int(r["t0"] * 1000 - r["elapsed"] * 1000)})
             return self.reply({"ok": True})
         if p == "/api/net":
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),

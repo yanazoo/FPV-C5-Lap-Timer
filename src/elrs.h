@@ -29,7 +29,8 @@ void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec = 0);
 void elrsLap(int slot, const osd::LapInfo& lap);
 void elrsPosition(int slot, int laps, int position);
 void elrsPilotDone(int slot, int position, uint32_t totalMs);
-void elrsRaceStop();
+// elapsedMs: the race time it stopped on (shown on the race clock row).
+void elrsRaceStop(uint32_t elapsedMs);
 void elrsLapsClear();
 void elrsAnnounce(const char* text);
 void elrsTest(int slot);   // -1 = every OSD recipient

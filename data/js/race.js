@@ -241,16 +241,16 @@ function resetLaps(){
 }
 
 // ── Race state transitions ──────────────────────────────────────────────
-// The web node broadcasts race_start / race_resume / race_stop over the
-// WebSocket, which is the normal trigger for these. Each Start/Stop also
-// arms a short watchdog: if that WS message is ever lost, the watchdog
-// applies the transition locally so the controls can never get stuck.
-var raceStartSeq=0, raceStartApplied=-1, startWatchdog=null, stopWatchdog=null;
+// The timer runs the race and tells every browser over the WebSocket:
+// race_ready ("レディ"), race_stage (3-2-1), race_start / race_resume,
+// race_stop. The buttons only ask the timer, so the browser that pressed
+// Start, every other browser and the goggles' OSD all follow one sequence.
+// A lost message is put right by the 1 Hz race status (reconcileRace).
+var startWatchdog=null;
 function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);startWatchdog=null;}}
-function clearStopWatchdog(){if(stopWatchdog){clearTimeout(stopWatchdog);stopWatchdog=null;}}
 
 function onRaceStart(ts){
-  raceStartApplied=raceStartSeq;clearStartWatchdog();
+  clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
   lapEpoch++;resetLaps();
 }
@@ -258,9 +258,12 @@ function onRaceResume(ts){
   clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(ts);
 }
-// Race director start: "レディ" on every browser, then race_stage's countdown.
+// A start under way: "レディ" on every browser, then race_stage's countdown.
+var readyUntil=0;   // until then the 1 Hz status mustn't undo the start
 function onRaceReady(){
+  clearStartWatchdog();
   if(countdownH)return;
+  readyUntil=performance.now()+2500;
   ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
   timerEl.classList.remove('running');
   announceStart();
@@ -271,49 +274,22 @@ var stopToneAt=-1e9;
 function onRaceStop(elapsed){
   if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
   if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
-  clearStopWatchdog();
   raceRunning=false;setBtns(false);stopTimer(elapsed);
 }
 
 function startRace(){
-  ensureAudio();
-  var btnStart=document.getElementById('btnStart');
-  var btnClear=document.getElementById('btnClear');
-  btnStart.disabled=true;
-  if(btnClear)btnClear.disabled=true;
-  // Resume a paused race (Stop → Start) without countdown or reset.
-  if(raceStarted && !raceRunning){
-    fetch('/api/race/resume',{method:'POST'})
-      .then(r=>{if(!r.ok)throw 0;
-        clearStartWatchdog();
-        startWatchdog=setTimeout(()=>{if(!raceRunning)onRaceResume();},1500);
-      })
-      .catch(e=>{btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ 再開 通信エラー');});
-    return;
-  }
-  // "レディ" first; the countdown starts once it has been said.
-  announceStart(beginCountdown);
-}
-function beginCountdown(){
-  var btnStart=document.getElementById('btnStart');
-  var btnClear=document.getElementById('btnClear');
-  // Countdown start = RotorHazard "stage": ARM NOW on the goggles. The
-  // firmware passes it on to every browser, which show the countdown too.
-  showCountdown();
-  fetch('/api/race/stage',{method:'POST'}).catch(()=>{});
-  setTimeout(async()=>{
-    raceStartSeq++;var mySeq=raceStartSeq;   // claim this start cycle
-    try{
-      var r=await fetch('/api/race/start',{method:'POST'});
-      if(!r.ok)throw 0;
+  ensureAudio();warmSpeech();
+  ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+  var fail=()=>{setBtns(raceRunning);toast('⚠️ スタート 通信エラー');};
+  fetch('/api/race/start',{method:'POST'})
+    .then(r=>{if(!r.ok)throw 0;
+      // Nothing came back (no race_ready / race_resume): give the buttons back.
       clearStartWatchdog();
-      startWatchdog=setTimeout(()=>{if(raceStartApplied!==mySeq)onRaceStart();},1500);
-    }
-    catch(e){btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ スタート 通信エラー');}
-  },3300);
+      startWatchdog=setTimeout(()=>{if(!raceRunning&&!countdownH)setBtns(raceRunning);},3000);
+    })
+    .catch(fail);
 }
-// 3-2-1 before the start; on the browser that pressed Start and, through
-// race_stage, on every other one.
+// 3-2-1 before the start, on race_stage (every browser).
 function showCountdown(){
   if(countdownH)return;   // already counting down
   ensureAudio();sfx.count();
@@ -325,18 +301,13 @@ function showCountdown(){
     var rem=Math.max(0,3000-(performance.now()-cdStart));
     timerEl.textContent=(rem/1000).toFixed(2);
     if(rem===0){clearInterval(countdownH);countdownH=null;
-      // No start followed (the presser's request failed): give the buttons back.
+      // No start followed (stopped meanwhile): give the buttons back.
       setTimeout(()=>{if(!raceRunning&&!countdownH)setBtns(raceRunning);},2500);}
   },50);
 }
 function stopRace(){
   ensureAudio();sfx.stop();stopToneAt=performance.now();
-  fetch('/api/race/stop',{method:'POST'})
-    .then(r=>{if(!r.ok)return;
-      clearStopWatchdog();
-      stopWatchdog=setTimeout(()=>{if(raceRunning)onRaceStop();},1500);
-    })
-    .catch(()=>{});
+  fetch('/api/race/stop',{method:'POST'}).catch(()=>toast('⚠️ ストップ 通信エラー'));
 }
 async function clearAllLaps(){
   // Always ask the timer: it clears every browser (race_clear), even when

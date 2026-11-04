@@ -19,6 +19,8 @@ struct Event {
     int16_t      position;
     int16_t      laps;
     uint32_t     value;
+    uint32_t     at;      // millis() when posted: the OSD clock is set from
+                          // this, not from when the task got round to it
     osd::LapInfo lap;
     char         text[41];
 };
@@ -91,6 +93,7 @@ Event ev(Ev k, int slot = -1) {
     Event e = {};
     e.kind = k;
     e.slot = (int8_t)slot;
+    e.at = millis();
     return e;
 }
 
@@ -244,12 +247,14 @@ void handle(const Event& e, uint32_t now) {
     switch (e.kind) {
     case Ev::Config:    refreshConfig(); break;
     case Ev::Reconnect: refreshConfig(); disconnect(); lastAttempt = now - 5000; break;
-    case Ev::Stage:     engine.onRaceStage(now, e.text); break;
-    case Ev::Start:     engine.onRaceStart(now, e.value, (uint16_t)e.laps); break;
+    // Stage: 3-2-1 on the race clock row, with the browsers' countdown.
+    case Ev::Stage:     engine.onRaceStage(now, e.text, 3); break;
+    // The race has been running since e.at: start the clock that far in.
+    case Ev::Start:     engine.onRaceStart(now, e.value + (now - e.at), (uint16_t)e.laps); break;
     case Ev::Lap:       engine.onLap(now, e.slot, e.lap); break;
     case Ev::Position:  engine.onPosition(now, e.slot, e.laps, e.position); break;
     case Ev::Done:      engine.onPilotDone(now, e.slot, e.position, e.value); break;
-    case Ev::Stop:      engine.onRaceStop(now); break;
+    case Ev::Stop:      engine.onRaceStop(now, (int32_t)e.value); break;
     case Ev::Clear:     engine.onLapsClear(now); break;
     case Ev::Announce:  engine.onAnnounce(now, e.text); break;
     case Ev::Test:      engine.test(now, e.slot); break;
@@ -318,7 +323,11 @@ void elrsPilotDone(int slot, int position, uint32_t totalMs) {
     post(e);
 }
 
-void elrsRaceStop()  { post(ev(Ev::Stop)); }
+void elrsRaceStop(uint32_t elapsedMs) {
+    Event e = ev(Ev::Stop);
+    e.value = elapsedMs;
+    post(e);
+}
 void elrsLapsClear() { post(ev(Ev::Clear)); }
 
 void elrsAnnounce(const char* text) {

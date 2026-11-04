@@ -27,7 +27,7 @@ setInterval(()=>{
 var seenEpoch=null;
 function reconcileRace(r){
   noteServerTime(r.now);
-  if(countdownH)return;   // a start is under way
+  if(countdownH||performance.now()<readyUntil)return;   // a start is under way
   var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
   seenEpoch=r.epoch;
   if(r.run&&!raceRunning){

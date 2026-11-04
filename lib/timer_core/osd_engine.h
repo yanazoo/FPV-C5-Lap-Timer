@@ -52,7 +52,7 @@ constexpr int kRows = 18;         // HDZero OSD rows
 constexpr int kCols = 50;         // vrxc_elrs centres on 50 columns
 constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
-constexpr int kMaxActions = 64;
+constexpr int kMaxActions = 128;
 constexpr int kRefreshRepeats = 2;   // extra bursts after a change
 // Extra bursts after something is taken off the screen (a row emptied, or a
 // full clear). Clears matter as much as draws but nothing else repairs a lost
@@ -129,16 +129,21 @@ public:
     void setRecipient(int idx, bool enabled, const uint8_t uid[6]);
     bool recipientEnabled(int idx) const { return rcpt_[idx].enabled; }
 
-    void onRaceStage(uint32_t now, const char* eventName);
+    // countdownSec > 0: the start follows in that many seconds (plus a few
+    // hundred ms); the race clock row counts 3, 2, 1 with the browsers.
+    void onRaceStage(uint32_t now, const char* eventName, uint32_t countdownSec = 0);
     // elapsedMs: race time already run (non-zero when resuming a pause).
     // countdownSec > 0: a timed race; the race clock shows the time left,
-    // from countdownSec down to 00:00, then the time over as -mm:ss.
+    // from countdownSec down to 00:00, then the time over as -mm:ss (whole
+    // seconds of what the web UI shows: 01:29.70 there is 01:29 here).
     void onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec = 0);
     void onLap(uint32_t now, int slot, const LapInfo& lap);
     // Another pilot's position/lap count changed (vrxc_elrs update_pos).
     void onPosition(uint32_t now, int slot, int laps, int position);
     void onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs);
-    void onRaceStop(uint32_t now);
+    // The race clock stays up showing the final time, as in the web UI:
+    // finalMs (the timer's stopped race time), or the clock's own if < 0.
+    void onRaceStop(uint32_t now, int32_t finalMs = -1);
     void onLapsClear(uint32_t now);
     void onAnnounce(uint32_t now, const char* text);
     // Shows "OSD TEST" on one recipient (or all, idx < 0) for 5 s.
@@ -171,14 +176,14 @@ private:
         bool enabled;
         uint8_t uid[6];
     };
-    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow, Refresh, Settle };
+    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow, Refresh, Settle, Count };
     struct Action {
         bool used;
         uint32_t due;
         Act kind;
         int8_t rcpt;
         int8_t rows[3];
-        uint32_t token;   // LapRedraw / ClearLapRow: the slot's lap token
+        uint32_t token;   // LapRedraw / ClearLapRow: the slot's lap token; Count: the stage
         uint8_t repeat;
     };
     struct SlotLap {
@@ -207,9 +212,12 @@ private:
     uint32_t now_ = 0;   // time of the event being handled
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;
-    uint32_t lastClockSec_ = 0;
+    char lastClock_[12] = "";
     uint32_t clockDownSec_ = 0;   // timed race length, 0 = count up
-    void clockText(uint32_t sec, char* buf, size_t cap) const;
+    uint32_t stageToken_ = 0;     // bumped by stage / start / stop / clear
+    // The race clock for `ms` of race time.
+    void clockText(uint32_t ms, char* buf, size_t cap) const;
+    void showCount(uint32_t n);   // the 3-2-1 before the start
 
     // Frame editing (vrxc_elrs send_clear_osd / send_osd_text / ...).
     void clearFrame(int r);

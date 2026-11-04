@@ -215,14 +215,10 @@ void registerHttpRoutes() {
     });
 
     // ── Race ───────────────────────────────────────────────────────────────
-    server.on("/api/race/stage", HTTP_POST, [](AsyncWebServerRequest* req) { raceStage(); ok(req); });
-    server.on("/api/race/start", HTTP_POST, [](AsyncWebServerRequest* req) { raceStart(); ok(req); });
-    server.on("/api/race/stop", HTTP_POST, [](AsyncWebServerRequest* req) { raceStop(); ok(req); });
-    // Continue a paused race (Stop -> Start) without resetting laps.
-    server.on("/api/race/resume", HTTP_POST, [](AsyncWebServerRequest* req) {
-        if (raceResume()) ok(req);
-        else req->send(200, "application/json", R"({"ok":false,"reason":"not_paused"})");
-    });
+    // Start: the timer runs ready -> stage -> start (or resumes a stopped
+    // race) and every browser and goggle follows it.
+    server.on("/api/race/start", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStart(); ok(req); });
+    server.on("/api/race/stop", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStop(); ok(req); });
     // The Clear button: save to SD (per SD log mode), then forget the race.
     server.on("/api/race/save", HTTP_POST, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", raceClear());

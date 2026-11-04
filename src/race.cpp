@@ -108,17 +108,16 @@ bool raceResume() {
 }
 
 void raceStop() {
+    uint32_t elapsed;
     {
         Guard g;
         raceCore.stop(millis());
+        elapsed = raceCore.elapsed(millis());
     }
-    elrsRaceStop();
+    elrsRaceStop(elapsed);   // the goggles' clock stops on the same time
     JsonDocument d;
     d["type"] = "race_stop";
-    {
-        Guard g;
-        d["elapsed"] = raceCore.elapsed(millis());   // every browser freezes on this time
-    }
+    d["elapsed"] = elapsed;   // every browser freezes on this time
     wsJson(d);
 }
 
@@ -292,12 +291,13 @@ static void serviceTimedRace(uint32_t now) {
     }
 }
 
-// ── Race director (ELRS TX switch) ─────────────────────────────────────────
-// The switch runs the same sequence as the web UI's Start button, driven by
-// the firmware since no browser pressed anything: race_ready (every browser
-// says "レディ"), then the stage (ARM NOW, 3-2-1 on every browser), then the
-// start 3.3 s later.
+// ── Start / Stop (web buttons and the race director's TX switch) ───────────
+// The firmware runs the whole start sequence, whoever asked for it, so every
+// browser and every goggle follow one clock: race_ready (every browser says
+// "レディ"), then the stage (ARM NOW and 3-2-1 on the goggles, the 3-2-1
+// countdown on every browser), then the start 3.3 s later.
 static volatile int16_t rdPending = -1;   // switch state waiting for raceLoop
+static volatile int8_t  webPending = -1;  // web Start (1) / Stop (0) waiting for raceLoop
 enum RdPhase : uint8_t { RD_IDLE, RD_READY, RD_COUNTDOWN };
 static RdPhase  rdPhase = RD_IDLE;
 static uint32_t rdNextAt = 0;
@@ -345,7 +345,15 @@ static void rdStop() {
     raceStop();
 }
 
+void raceRequestStart() { webPending = 1; }
+void raceRequestStop()  { webPending = 0; }
+
 static void serviceRaceDirector() {
+    int8_t w = webPending;
+    if (w >= 0) {
+        webPending = -1;
+        w ? rdStart() : rdStop();
+    }
     int16_t v = rdPending;
     if (v >= 0) {
         rdPending = -1;
