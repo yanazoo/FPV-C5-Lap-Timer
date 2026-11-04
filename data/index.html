@@ -51,6 +51,7 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
 #timer.running{color:var(--ok)}
+#timer.timeup,#timer.running.timeup{color:var(--err)}
 .race-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
 .lap-count-row{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;justify-content:center}
 .lap-count-row input[type="number"]{width:56px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px 6px;text-align:center;font-size:14px}

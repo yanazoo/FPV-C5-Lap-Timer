@@ -52,7 +52,7 @@ function onMsg(d){
     else{
       // Not running on the timer: stop a clock this browser was still running.
       if(timerH){clearInterval(timerH);timerH=null;timerEl.classList.remove('running');}
-      timerEl.textContent=fmtTimer(d.racePaused?timerFrozenMs:0);
+      timerEl.textContent=raceClockText(d.racePaused?timerFrozenMs:0);
       if(!d.racePaused)timerFrozenMs=0;
     }
     if(d.sdPresent!==undefined)updateSdSection(d.sdPresent);

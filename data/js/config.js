@@ -232,6 +232,8 @@ function showRaceRules(){
   setField('timeLimitSec',timeLimitSec%60);
   setField('countLastLapSelect',countLastLap?'1':'0');
   document.querySelectorAll('.rank-timed').forEach(e=>e.style.display=rankMode===2?'':'none');
+  // Not racing: show the new start value (the time limit, or 00:00).
+  if(!timerH&&!countdownH)timerEl.textContent=raceClockText(timerFrozenMs);
 }
 function saveRaceRules(){
   var m=parseInt(document.getElementById('rankModeSelect').value)||0;
