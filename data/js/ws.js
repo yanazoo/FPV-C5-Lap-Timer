@@ -1,14 +1,44 @@
 'use strict';
 
-var wsConn=null,wsRetry=1000;
+var wsConn=null,wsRetry=1000,wsLastMsg=0;
 var wsDot=document.getElementById('wsDot');
 
 function wsConnect(){
-  wsConn=new WebSocket('ws://'+location.host+'/ws');
-  wsConn.onopen=()=>{wsRetry=1000;wsDot.className='ws-dot connected';};
-  wsConn.onerror=()=>wsConn.close();
-  wsConn.onclose=()=>{wsDot.className='ws-dot disconnected';setTimeout(()=>{wsRetry=Math.min(wsRetry*2,16000);wsConnect();},wsRetry);};
-  wsConn.onmessage=e=>{var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
+  var c=new WebSocket('ws://'+location.host+'/ws');
+  wsConn=c;wsLastMsg=performance.now();
+  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';};
+  c.onerror=()=>c.close();
+  c.onclose=()=>{
+    if(wsConn!==c)return;   // replaced already
+    wsDot.className='ws-dot disconnected';
+    setTimeout(()=>{wsRetry=Math.min(wsRetry*2,4000);wsConnect();},wsRetry);
+  };
+  c.onmessage=e=>{wsLastMsg=performance.now();var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
+}
+// The timer sends its status every second: three seconds of silence means
+// the connection is stuck (WiFi hiccup, phone woke from sleep). Reconnect
+// instead of showing a frozen race.
+setInterval(()=>{
+  if(wsConn&&wsConn.readyState===1&&performance.now()-wsLastMsg>3000){try{wsConn.close();}catch(e){}}
+},1000);
+
+// The race as the timer sees it (1 Hz status): put this browser right if it
+// missed a start, stop, clear or lap.
+var seenEpoch=null;
+function reconcileRace(r){
+  noteServerTime(r.now);
+  if(countdownH)return;   // a start is under way
+  var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
+  seenEpoch=r.epoch;
+  if(r.run&&!raceRunning){
+    raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(r.now-r.el);
+  }else if(!r.run&&raceRunning){
+    raceRunning=false;setBtns(false);stopTimer(r.el);
+  }else if(!r.run&&!r.paused&&(timerFrozenMs||raceStarted)&&r.laps===0){
+    onRaceClear();   // cleared elsewhere
+  }
+  var mine=slots.reduce((n,p)=>n+p.lapTimes.length,0);
+  if(epochChanged||mine!==r.laps)syncLaps();
 }
 
 function onMsg(d){
@@ -19,7 +49,12 @@ function onMsg(d){
     noteServerTime(d.now);
     timerFrozenMs=d.raceElapsedMs||0;
     if(raceRunning)resumeTimer(d.now!==undefined?d.raceStartMs:undefined);
-    else if(d.racePaused)timerEl.textContent=fmtTimer(timerFrozenMs);
+    else{
+      // Not running on the timer: stop a clock this browser was still running.
+      if(timerH){clearInterval(timerH);timerH=null;timerEl.classList.remove('running');}
+      timerEl.textContent=fmtTimer(d.racePaused?timerFrozenMs:0);
+      if(!d.racePaused)timerFrozenMs=0;
+    }
     if(d.sdPresent!==undefined)updateSdSection(d.sdPresent);
     applySettings(d);
     (d.pilots||[]).forEach(pd=>{
@@ -64,6 +99,7 @@ function onMsg(d){
     return;
   }
   if(d.type==='c5'){
+    if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
     if(activeTab==='config')renderC5Status();
     return;

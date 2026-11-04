@@ -39,7 +39,7 @@ state = {
             "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
     "password": "admin",
     "posts": [],   # every POST, for tests
-    "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": []},
+    "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": [], "epoch": 0},
 }
 
 ws_clients = []
@@ -234,7 +234,7 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast({"type": "race_stage"})
             return self.reply({"ok": True})
         if p == "/api/race/start":
-            r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[])
+            r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
             return self.reply({"ok": True})
         if p == "/api/race/stop":
@@ -264,7 +264,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": ok}, 200 if ok else 401)
         if p == "/api/race/save":
             had = bool(r["laps"])
-            r.update(running=False, paused=False, elapsed=0.0, laps=[])
+            r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
         if p == "/api/sd/pilots/restore":
@@ -275,9 +275,16 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print(f"mock FPV C5 Lap Timer on http://localhost:{port}")
-    def telemetry():   # the firmware's 10 Hz rssi_all, for its clock
+    def telemetry():   # the firmware's 10 Hz rssi_all and 1 Hz status
+        n = 0
         while True:
             time.sleep(0.1)
             broadcast({"type": "rssi_all", "ts": now_ms(), "p": []})
+            n += 1
+            if n % 10 == 0:
+                r = state["race"]
+                broadcast({"type": "c5", "online": True, "scanning": True, "state": "SCAN", "elrs": {"enabled": False},
+                           "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
+                                    "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"]}})
     threading.Thread(target=telemetry, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

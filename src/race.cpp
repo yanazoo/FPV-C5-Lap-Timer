@@ -10,6 +10,10 @@ race::Core raceCore;
 
 static uint32_t lastRssiSend = 0;
 static uint32_t lastStatusSend = 0;
+// Bumped by every start and clear: a browser that sees a different value in
+// the 1 Hz status missed one and re-reads the race.
+static uint32_t raceEpoch = 0;
+
 
 const char* activeName(int slot) {
     int ri = activePilots[slot];
@@ -79,6 +83,7 @@ void raceStart() {
         applyRaceRules();
         raceCore.start(now);
     }
+    raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
     elrsRaceStart(0);
@@ -131,6 +136,7 @@ String raceClear() {
         if (hadLaps && !saved && !reason[0]) reason = "error";
         raceCore.clear();
     }
+    raceEpoch++;
     elrsLapsClear();
     // Clear on one browser clears every browser.
     JsonDocument d;
@@ -205,7 +211,10 @@ static void sendTelemetry() {
             o["ex"]       = l.exits;
         }
     }
-    if (arr.size()) wsJson(d);
+    if (!arr.size() || !ws.count()) return;
+    String s;
+    serializeJson(d, s);
+    wsTelemetry(s);
 }
 
 void sendC5Status() {
@@ -229,6 +238,19 @@ void sendC5Status() {
     el["peer"]      = e.peer;
     el["version"]   = e.version;
     el["bytes"]     = e.bytesSent;
+    // The race as the timer sees it, once a second: a browser that missed a
+    // stop, clear or lap puts itself right from this.
+    JsonObject rs = d["race"].to<JsonObject>();
+    {
+        Guard g;
+        uint32_t now = millis();
+        rs["run"]    = raceCore.running();
+        rs["paused"] = raceCore.paused();
+        rs["el"]     = raceCore.elapsed(now);
+        rs["now"]    = now;
+        rs["laps"]   = raceCore.lapCount();
+        rs["epoch"]  = raceEpoch;
+    }
     wsJson(d);
 }
 

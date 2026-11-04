@@ -46,6 +46,7 @@ IPAddress lastGood;
 bool    rdValid = false;
 uint8_t rdUid[6];
 bool    rdListenDue = false;   // OSD went out since the bridge last listened
+bool    rdListening = false;   // the bridge is on the RD's UID right now
 
 portMUX_TYPE stMux = portMUX_INITIALIZER_UNLOCKED;
 ElrsStatus   st = {};
@@ -54,6 +55,7 @@ struct TransportOut : osd::Output {
     void write(const uint8_t* d, size_t n) override {
         if (!enabled) return;
         rdListenDue = true;
+        rdListening = false;
         if (transport == 1) {
             if (uartOpen) Serial2.write(d, n);
         } else if (client.connected()) {
@@ -123,6 +125,7 @@ void listenForRd() {
     size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
     out.write(f, n);
     rdListenDue = false;
+    rdListening = true;
 }
 
 // A frame from the bridge / netpack: the backpack version, or the race
@@ -133,7 +136,9 @@ void onFrame() {
         snprintf(st.version, sizeof st.version, "%u.%u", parser.payload()[0], parser.payload()[1]);
         portEXIT_CRITICAL(&stMux);
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
-        if (rdValid) raceDirectorSwitch(parser.payload()[0]);
+        // Only while the bridge listens on the RD's UID: on a pilot's UID it
+        // would hear that pilot's own DVR switch.
+        if (rdValid && rdListening) raceDirectorSwitch(parser.payload()[0]);
     }
 }
 

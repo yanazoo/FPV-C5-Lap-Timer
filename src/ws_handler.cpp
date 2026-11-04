@@ -1,4 +1,6 @@
 #include <ArduinoJson.h>
+#include <memory>
+#include <vector>
 #include "ws_handler.h"
 #include "c5_link.h"
 #include "data_model.h"
@@ -9,6 +11,41 @@ AsyncWebSocket ws("/ws");
 DNSServer      dnsServer;
 
 void wsText(const String& msg) { ws.textAll(msg); }
+
+// Connected client ids, for the telemetry below (kept from the WebSocket
+// events; the library's own client list is not ours to walk).
+static portMUX_TYPE idMux = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t wsIds[16];
+static int      wsIdCount = 0;
+
+static void rememberClient(uint32_t id, bool on) {
+    portENTER_CRITICAL(&idMux);
+    int i = 0;
+    while (i < wsIdCount && wsIds[i] != id) ++i;
+    if (on && i == wsIdCount && wsIdCount < 16) wsIds[wsIdCount++] = id;
+    if (!on && i < wsIdCount) wsIds[i] = wsIds[--wsIdCount];
+    portEXIT_CRITICAL(&idMux);
+}
+
+// The 10 Hz telemetry goes only to browsers that are keeping up. A client's
+// queue holds 32 messages and, once full, drops whatever comes next; a phone
+// that fell behind for a few seconds had its queue filled with telemetry, so
+// race_stop / race_clear / laps were the ones dropped and that browser fell
+// out of step. Telemetry is the one message that can be skipped.
+void wsTelemetry(const String& msg) {
+    uint32_t ids[16];
+    int n;
+    portENTER_CRITICAL(&idMux);
+    n = wsIdCount;
+    memcpy(ids, wsIds, n * sizeof ids[0]);
+    portEXIT_CRITICAL(&idMux);
+    if (!n) return;
+    auto buf = std::make_shared<std::vector<uint8_t>>(msg.begin(), msg.end());
+    for (int i = 0; i < n; ++i) {
+        AsyncWebSocketClient* c = ws.client(ids[i]);
+        if (c && c->status() == WS_CONNECTED && c->queueLen() < 4) c->text(buf);
+    }
+}
 void wsText(const char* msg)   { ws.textAll(msg); }
 
 static void addSlots(JsonArray pa, bool withRace) {
@@ -71,7 +108,9 @@ void wsActiveUpdate() {
 }
 
 static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventType evType, void*, uint8_t*, size_t) {
+    if (evType == WS_EVT_DISCONNECT) rememberClient(client->id(), false);
     if (evType != WS_EVT_CONNECT) return;
+    rememberClient(client->id(), true);
     JsonDocument doc;
     {
         Guard g;
