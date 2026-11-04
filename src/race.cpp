@@ -86,7 +86,7 @@ void raceStart() {
     raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
-    elrsRaceStart(0);
+    elrsRaceStart(0, raceCore.timeLimitMs / 1000);
     JsonDocument d;
     d["type"] = "race_start";
     d["ts"] = now;
@@ -100,7 +100,7 @@ bool raceResume() {
         if (!raceCore.resume(millis())) return false;
         elapsed = raceCore.elapsed(millis());
     }
-    elrsRaceStart(elapsed);
+    elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000);
     JsonDocument d;
     d["type"] = "race_resume";
     d["ts"] = raceCore.startMs();

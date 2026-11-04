@@ -24,7 +24,8 @@ void elrsConfigChanged();
 void elrsReconnect();
 
 void elrsRaceStage();
-void elrsRaceStart(uint32_t elapsedMs);
+// countdownSec > 0: timed race, the goggles' race clock counts down.
+void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec = 0);
 void elrsLap(int slot, const osd::LapInfo& lap);
 void elrsPosition(int slot, int laps, int position);
 void elrsPilotDone(int slot, int position, uint32_t totalMs);

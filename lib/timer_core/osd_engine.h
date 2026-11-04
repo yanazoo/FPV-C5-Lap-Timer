@@ -131,7 +131,9 @@ public:
 
     void onRaceStage(uint32_t now, const char* eventName);
     // elapsedMs: race time already run (non-zero when resuming a pause).
-    void onRaceStart(uint32_t now, uint32_t elapsedMs);
+    // countdownSec > 0: a timed race; the race clock shows the time left,
+    // from countdownSec down to 00:00, instead of the time so far.
+    void onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec = 0);
     void onLap(uint32_t now, int slot, const LapInfo& lap);
     // Another pilot's position/lap count changed (vrxc_elrs update_pos).
     void onPosition(uint32_t now, int slot, int laps, int position);
@@ -206,6 +208,8 @@ private:
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;
     uint32_t lastClockSec_ = 0;
+    uint32_t clockDownSec_ = 0;   // timed race length, 0 = count up
+    void clockText(uint32_t sec, char* buf, size_t cap) const;
 
     // Frame editing (vrxc_elrs send_clear_osd / send_osd_text / ...).
     void clearFrame(int r);

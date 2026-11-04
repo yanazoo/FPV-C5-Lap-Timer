@@ -210,6 +210,13 @@ void Engine::runAction(uint32_t now, Action& a) {
     }
 }
 
+// The race clock for `sec` whole seconds of race time.
+void Engine::clockText(uint32_t sec, char* buf, size_t cap) const {
+    uint32_t show = sec;
+    if (clockDownSec_) show = sec >= clockDownSec_ ? 0 : clockDownSec_ - sec;
+    snprintf(buf, cap, "%02lu:%02lu", (unsigned long)(show / 60), (unsigned long)(show % 60));
+}
+
 void Engine::tick(uint32_t now) {
     now_ = now;
     if (clockRunning_) {
@@ -217,7 +224,7 @@ void Engine::tick(uint32_t now) {
         if (sec != lastClockSec_) {
             lastClockSec_ = sec;
             char msg[12];
-            snprintf(msg, sizeof msg, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+            clockText(sec, msg, sizeof msg);
             for (int r = 0; r < kRecipients; ++r) {
                 if (!isBroadcast(r)) continue;
                 clearRow(r, opt_.raceClock.row);   // "100:00" centres one column left
@@ -268,8 +275,9 @@ void Engine::onRaceStage(uint32_t now, const char* eventName) {
     }
 }
 
-void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs) {
+void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec) {
     now_ = now;
+    clockDownSec_ = countdownSec;
     if (opt_.showRaceClock) {
         clockRunning_ = true;
         clockBase_ = now - elapsedMs;
@@ -280,8 +288,7 @@ void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs) {
         if (a.used && a.kind == Act::ClearStart) a.used = false;
     char clock[12] = "";
     if (opt_.showRaceClock) {
-        uint32_t sec = elapsedMs / 1000;
-        snprintf(clock, sizeof clock, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+        clockText(elapsedMs / 1000, clock, sizeof clock);
     }
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;

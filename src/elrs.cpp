@@ -245,7 +245,7 @@ void handle(const Event& e, uint32_t now) {
     case Ev::Config:    refreshConfig(); break;
     case Ev::Reconnect: refreshConfig(); disconnect(); lastAttempt = now - 5000; break;
     case Ev::Stage:     engine.onRaceStage(now, e.text); break;
-    case Ev::Start:     engine.onRaceStart(now, e.value); break;
+    case Ev::Start:     engine.onRaceStart(now, e.value, (uint16_t)e.laps); break;
     case Ev::Lap:       engine.onLap(now, e.slot, e.lap); break;
     case Ev::Position:  engine.onPosition(now, e.slot, e.laps, e.position); break;
     case Ev::Done:      engine.onPilotDone(now, e.slot, e.position, e.value); break;
@@ -291,9 +291,10 @@ void elrsRaceStage() {
     post(e);
 }
 
-void elrsRaceStart(uint32_t elapsedMs) {
+void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec) {
     Event e = ev(Ev::Start);
     e.value = elapsedMs;
+    e.laps = (int16_t)countdownSec;   // timed race length (<= 1800 s)
     post(e);
 }
 

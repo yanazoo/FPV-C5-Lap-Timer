@@ -701,6 +701,35 @@ void testOsdSurvivesOutage() {
     }
 }
 
+// Timed race: the goggles' race clock counts down from the limit to 00:00.
+void testOsdCountdownClock() {
+    Goggles g("p");
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    int row = e.options().raceClock.row;
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStart(0, 0, 90);
+    at(0);
+    CHECK(g.shows(row, "01:30"));
+    at(1000);
+    CHECK(g.shows(row, "01:29"));
+    at(61000);
+    CHECK(g.shows(row, "00:29"));
+    at(90000);
+    CHECK(g.shows(row, "00:00"));
+    at(95000);
+    CHECK(g.shows(row, "00:00"));
+    // A resumed timed race continues from where it was.
+    e.onRaceStart(100000, 30000, 90);
+    at(100000);
+    CHECK(g.shows(row, "01:00"));
+    // Without a limit it counts up as before.
+    e.onRaceStart(200000, 0);
+    at(201000);
+    CHECK(g.shows(row, "00:01"));
+}
+
 void testFormat() {
     char b[16];
     osd::Engine::formatTime(1700, b, sizeof b);
@@ -726,6 +755,7 @@ int runTests() {
     testOsdClearsSurviveLoss();
     testOsdAppearsAndClearsOnTime();
     testOsdSurvivesOutage();
+    testOsdCountdownClock();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;
