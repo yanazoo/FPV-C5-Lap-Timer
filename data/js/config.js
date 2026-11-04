@@ -245,14 +245,15 @@ function saveRaceRules(){
   showRaceRules();renderRanking();
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({rankMode:m,timeLimitSec:t,countLastLap:c})})
-    .then(r=>toast(r.ok?'✓ 順位の決め方を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))
+    .then(r=>toast(r.ok?'✓ レース内容を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))
     .catch(()=>toast('⚠️ 接続エラー'));
 }
 
-// Total laps lives on the race tab but the firmware needs it for FINISHED! on the OSD.
+// Total laps (settings → レース内容); the firmware needs it for FINISHED! on the OSD.
 function saveTotalLaps(){
   var t=Math.max(0,Math.min(99,parseInt(document.getElementById('totalLaps').value)||0));
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({totalLaps:t})}).catch(()=>{});
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({totalLaps:t})})
+    .then(r=>toast(r.ok?'✓ 総周回数を保存しました':'⚠️ 保存エラー')).catch(()=>toast('⚠️ 接続エラー'));
 }
 
 // ── ELRS OSD (vrxc_elrs settings) ─────────────────────────────────────────

@@ -309,10 +309,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     </div>
     <div id="authHint">🔒 操作するには <a onclick="onAuthBtn()">ログイン</a> が必要です</div>
     <div class="lap-count-row">
-      <label>総周回数:</label>
-      <input type="number" id="totalLaps" min="0" max="99" value="0" onchange="saveTotalLaps()">
-      <span style="font-size:11px;color:var(--muted)">（0=無制限）</span>
-      <span style="color:var(--bd);margin:0 4px">｜</span>
       <label class="toggle-sw">
         <input type="checkbox" id="voiceToggle" onchange="toggleVoice()" checked>
         <span class="toggle-track"></span>
@@ -331,6 +327,41 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <!-- ═══════════════════════════ CONFIG ════════════════════════ -->
 <section id="pane-config" class="tab-pane">
   <h2 class="section-title">設定</h2>
+
+  <div class="global-config-card">
+    <h3 class="global-title">🏁 レース内容</h3>
+    <p class="section-desc">レースの周回数と、レース画面の順位表の並べ方です。順位表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
+    <div class="config-row">
+      <label>総周回数</label>
+      <div class="slider-num">
+        <input type="number" id="totalLaps" min="0" max="99" value="0" onchange="saveTotalLaps()" style="width:70px">
+        <span class="unit" style="font-size:11px">周（0=無制限）</span>
+      </div>
+    </div>
+    <div class="config-row">
+      <label>順位の決め方</label>
+      <select id="rankModeSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="0">トータルタイム（周回数の多い順 → 同じ周回数はタイムの速い順）</option>
+        <option value="1">最速ラップ（ベストラップの速い順）</option>
+        <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
+      </select>
+    </div>
+    <div class="config-row rank-timed">
+      <label>制限時間</label>
+      <div class="slider-num">
+        <input type="number" id="timeLimitMin" min="0" max="30" value="2" onchange="saveRaceRules()" style="width:60px"><span class="unit">分</span>
+        <input type="number" id="timeLimitSec" min="0" max="59" value="0" onchange="saveRaceRules()" style="width:60px"><span class="unit">秒</span>
+      </div>
+    </div>
+    <div class="config-row rank-timed">
+      <label>時間切れ時の最終周</label>
+      <select id="countLastLapSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="1">カウントする（時間切れ後の次の通過までを数える）</option>
+        <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
+      </select>
+    </div>
+    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。全員が完走するか、時間切れから 60 秒たつとレースは自動で止まります。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
+  </div>
 
   <div class="global-config-card">
     <h3 class="global-title">📡 C5 受信機（FPVGate C5MK）</h3>
@@ -375,34 +406,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 SDバックアップ保存</button>
       <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 SDから復元</button>
     </div>
-  </div>
-
-  <div class="global-config-card">
-    <h3 class="global-title">🏁 順位の決め方</h3>
-    <p class="section-desc">レース画面の順位表の並べ方です。表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
-    <div class="config-row">
-      <label>順位の決め方</label>
-      <select id="rankModeSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="0">トータルタイム（周回数の多い順 → 同じ周回数はタイムの速い順）</option>
-        <option value="1">最速ラップ（ベストラップの速い順）</option>
-        <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
-      </select>
-    </div>
-    <div class="config-row rank-timed">
-      <label>制限時間</label>
-      <div class="slider-num">
-        <input type="number" id="timeLimitMin" min="0" max="30" value="2" onchange="saveRaceRules()" style="width:60px"><span class="unit">分</span>
-        <input type="number" id="timeLimitSec" min="0" max="59" value="0" onchange="saveRaceRules()" style="width:60px"><span class="unit">秒</span>
-      </div>
-    </div>
-    <div class="config-row rank-timed">
-      <label>時間切れ時の最終周</label>
-      <select id="countLastLapSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="1">カウントする（時間切れ後の次の通過までを数える）</option>
-        <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
-      </select>
-    </div>
-    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。全員が完走するか、時間切れから 60 秒たつとレースは自動で止まります。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
   </div>
 
   <div class="global-config-card">
