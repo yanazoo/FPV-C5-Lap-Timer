@@ -98,6 +98,31 @@ static uint32_t rowHash(const char* line) {
     return h;
 }
 
+void Engine::flushClock(int r) {
+    if (!rcpt_[r].enabled) return;
+    int row = opt_.raceClock.row;
+    if (row < 0 || row >= kRows) return;
+    uint8_t p[msp::kMaxPayload];
+    p[0] = 0x01;
+    memcpy(p + 1, rcpt_[r].uid, 6);
+    sendMsp(msp::kElrsSetSendUid, p, 7);
+    char line[kCols + 1];
+    composeRow(r, row, line);
+    sentHash_[r][row] = rowHash(line);
+    shown_[r][row] = frames_[r].rows[row].n != 0;
+    p[0] = 0x03;
+    p[1] = (uint8_t)row;
+    p[2] = 0;
+    p[3] = 0;
+    memcpy(p + 4, line, kCols);
+    sendMsp(msp::kElrsSetOsd, p, 4 + kCols);
+    p[0] = 0x04;   // display
+    sendMsp(msp::kElrsSetOsd, p, 1);
+    p[0] = 0x00;
+    sendMsp(msp::kElrsSetSendUid, p, 1);
+    out_.burstDone();
+}
+
 void Engine::flush(int r, bool hard, bool clockTick) {
     if (!rcpt_[r].enabled) return;
     bool changed = hard;
@@ -143,13 +168,17 @@ void Engine::flush(int r, bool hard, bool clockTick) {
     p[0] = 0x00;   // back to the bind-phrase UID
     sendMsp(msp::kElrsSetSendUid, p, 1);
     out_.burstDone();
+    lastFull_[r] = now_;
+    // The quick repeats (within a second) always go out. The slow settle
+    // repeats wait while the race clock runs: its ticks resend the whole
+    // screen every kFullFrameMs anyway.
     if (changed) {
         bool pending = refreshLeft_[r] > 0;
         int want = cleared ? kClearRepeats : kRefreshRepeats;
         if (refreshLeft_[r] < want) refreshLeft_[r] = (uint8_t)want;
         if (!pending) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);
         bool settling = settleLeft_[r] > 0;
-        settleLeft_[r] = kSettleRepeats;
+        settleLeft_[r] = kSettleRepeats;   // still due once the clock stops
         if (!settling) schedule(now_ + kSettleFirstMs, Act::Settle, r, -1, -1, -1);
     }
 }
@@ -180,6 +209,7 @@ void Engine::runAction(uint32_t now, Action& a) {
         break;
     case Act::LapRedraw: {
         if (lap_[r].token != a.token) break;   // a newer lap took over
+        if (clockRunning_) break;   // the clock's whole-screen ticks repair it
         drawLap(r, false);
         uint32_t uptime = opt_.resultsUptimeDs * 100u;
         uint32_t next = (uint32_t)(a.repeat + 1) * kLapRepeatMs;
@@ -196,8 +226,7 @@ void Engine::runAction(uint32_t now, Action& a) {
     case Act::Settle:
         if (settleLeft_[r] == 0) break;
         --settleLeft_[r];
-        // While the race clock runs, its tick resends the whole frame every
-        // second already.
+        // While the race clock runs, its ticks resend the whole screen.
         if (!clockRunning_) flush(r);
         if (settleLeft_[r] > 0) schedule(now_ + kSettleMs, Act::Settle, r, -1, -1, -1);
         break;
@@ -250,7 +279,13 @@ void Engine::tick(uint32_t now) {
                 if (!isBroadcast(r)) continue;
                 clearRow(r, opt_.raceClock.row);   // "100:00" centres one column left
                 setText(r, opt_.raceClock, msg);
-                flush(r, false, true);
+                // The whole screen for a few seconds after a change (the
+                // settle window: repairs a lost write within a second) and
+                // every kFullFrameMs; otherwise just the clock row.
+                bool full = !lightClock_ || settleLeft_[r] > 0 ||
+                            (int32_t)(now - lastFull_[r]) >= (int32_t)kFullFrameMs;
+                if (!full) flushClock(r);
+                else flush(r, false, true);
             }
         }
     }

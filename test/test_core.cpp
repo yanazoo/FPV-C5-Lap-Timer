@@ -387,6 +387,7 @@ Watch watchRace(Goggles& g, bool withRd) {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     if (withRd) {
         uint8_t rd[6];
         msp::bindPhraseUid("rd", rd);
@@ -453,6 +454,7 @@ void testOsdClockAndStop() {
     osd::Engine e(cap);
     Goggles g("p");
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.onRaceStage(0, "");
     e.onRaceStart(1000, 0);
     for (uint32_t t = 1000; t <= 62000; t += 20) e.tick(t);
@@ -486,6 +488,7 @@ void testOsdFinishWithoutResults() {
     osd::Engine e(cap);
     Goggles g("p");
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.options().resultsMode = false;
     e.onRaceStage(0, "");
     e.onRaceStart(0, 0);
@@ -508,6 +511,7 @@ void testOsdClearsSurviveLoss() {
         g.dropPct = 15;
         g.seed = seed;
         e.setRecipient(0, true, g.uid);
+        e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
         e.onRaceStage(0, "");
         e.onRaceStart(1000, 0);
         uint32_t t = 1000;
@@ -551,6 +555,7 @@ Timeline raceTimeline(Goggles& g, bool finish = true) {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.options().eventName = {0, -1};
     Timeline tl;
     struct { int row; const char* text; } items[Timeline::kItems] = {
@@ -710,6 +715,7 @@ void testOsdCountdownClock() {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     int row = e.options().raceClock.row;
     auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
     e.onRaceStart(0, 0, 90);
@@ -745,6 +751,7 @@ void testOsdStageCountAndStopTime() {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     int row = e.options().raceClock.row;
     auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
     e.onRaceStage(0, "", 3);

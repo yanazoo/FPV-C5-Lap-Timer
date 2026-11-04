@@ -66,6 +66,9 @@ constexpr uint32_t kRefreshMs = 200;
 constexpr int kSettleRepeats = 4;
 constexpr uint32_t kSettleFirstMs = 1000;
 constexpr uint32_t kSettleMs = 1500;
+// While the race clock runs, a tick that only moves the clock sends just
+// that row; the whole screen still goes out at least this often.
+constexpr uint32_t kFullFrameMs = 2000;
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
 
@@ -123,6 +126,10 @@ public:
     explicit Engine(Output& out) : out_(out) {}
 
     Options& options() { return opt_; }
+    // Light clock (default): a clock tick writes only the clock row, with
+    // the whole screen every kFullFrameMs. Off: every tick sends the whole
+    // screen (for goggles that redraw each display from scratch).
+    void setLightClock(bool on) { lightClock_ = on; }
 
     // Recipients 0..7 are the timer's slots, 8 the race director. Disabled
     // recipients get nothing.
@@ -213,6 +220,8 @@ private:
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;
     char lastClock_[12] = "";
+    bool lightClock_ = true;
+    uint32_t lastFull_[kRecipients] = {};   // when each got its whole screen
     uint32_t clockDownSec_ = 0;   // timed race length, 0 = count up
     uint32_t stageToken_ = 0;     // bumped by stage / start / stop / clear
     // The race clock for `ms` of race time.
@@ -227,6 +236,8 @@ private:
     // with "clear" (only when the screen is meant to go blank).
     // clockTick: only the race clock moved (no refresh bursts for that).
     void flush(int r, bool hard = false, bool clockTick = false);
+    // Only the race clock row (a light clock tick).
+    void flushClock(int r);
     void composeRow(int r, int row, char* line) const;
     void sendMsp(uint16_t func, const uint8_t* payload, size_t len);
 
