@@ -75,6 +75,9 @@ struct Goggles {
     bool scratch = false;
     int dropPct = 0;
     uint32_t seed = 1;
+    // A radio outage: every OSD packet in [outFrom, outTo) ms is lost.
+    int outFrom = -1, outTo = -1;
+    uint32_t now = 0;
     bool mine = false;
     char canvas[osd::kRows][osd::kCols + 1];
     char screen[osd::kRows][osd::kCols + 1];
@@ -107,6 +110,7 @@ struct Goggles {
             z = (z ^ (z >> 13)) * 0xC2B2AE35u;
             z ^= z >> 16;
             if (dropPct > 0 && (int)(z % 100) < dropPct) continue;
+            if (outFrom >= 0 && (int)now >= outFrom && (int)now < outTo) continue;
             if (p[0] == 0x02) {
                 blank(canvas);
             } else if (p[0] == 0x03 && n >= 4) {
@@ -525,6 +529,7 @@ Timeline raceTimeline(Goggles& g, bool finish = true) {
         if (t == kStop) e.onRaceStop(t);
         if (t == kClear) e.onLapsClear(t);
         e.tick(t);
+        g.now = t;
         g.feed(cap.bytes);
         cap.bytes.clear();
         for (int i = 0; i < Timeline::kItems; ++i) {
@@ -628,6 +633,38 @@ void testOsdAppearsAndClearsOnTime() {
     }
 }
 
+// A 1.5 s outage starting exactly when something changes swallows the
+// change and all its quick repeats (they fall within ~1 s). The slow
+// settle repeats, or the race clock's per-second redraw while it runs,
+// must still land it within ~2.6 s.
+void testOsdSurvivesOutage() {
+    const int kOut = 1500, kLate = 2600;
+    struct Case { uint32_t at; bool finish; int item; bool appear; const char* what; };
+    const Case cases[] = {
+        {kLap + 5000, true, 4, false, "lap time clear (clock running)"},
+        {kDone + 10000, true, 7, false, "FINISHED clear (clock running)"},
+        {kAnn + 5000, true, 9, false, "announcement clear"},
+        {kStop, true, 3, false, "clock row clear at the stop"},
+        {kStop, false, 10, true, "LAND NOW after the stop"},
+        {kDone, true, 7, true, "FINISHED draw"},
+    };
+    for (const Case& c : cases) {
+        Goggles g("p");
+        g.outFrom = (int)c.at;
+        g.outTo = (int)c.at + kOut;
+        Timeline tl = raceTimeline(g, c.finish);
+        const Span& sp = tl.s[c.item];
+        bool ok;
+        if (c.appear) ok = sp.first >= (int)c.at && sp.first <= (int)c.at + kLate;
+        else {
+            int gone = sp.last + 20;
+            ok = gone <= (int)c.at + kLate;
+        }
+        if (!ok) printf("outage: %s: up %d..%d\n", c.what, sp.first, sp.last + 20);
+        CHECK(ok);
+    }
+}
+
 void testFormat() {
     char b[16];
     osd::Engine::formatTime(1700, b, sizeof b);
@@ -651,6 +688,7 @@ int runTests() {
     testOsdFinishWithoutResults();
     testOsdClearsSurviveLoss();
     testOsdAppearsAndClearsOnTime();
+    testOsdSurvivesOutage();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

@@ -244,6 +244,7 @@ async function loadElrsSettings(){
     ELRS_BOOLS.forEach(k=>{var e=document.getElementById('elrs_'+k);if(e)e.checked=!!d[k];});
     ELRS_TEXTS.concat(ELRS_NUMS).forEach(k=>{var e=document.getElementById('elrs_'+k);if(e)e.value=d[k];});
     var t=document.getElementById('elrs_transport');if(t)t.value=String(d.transport);
+    var rs=document.getElementById('elrs_rdSwitch');if(rs)rs.value=String(d.rdSwitch||0);
     ELRS_POS.forEach(k=>{var e=document.getElementById('elrsPos_'+k);if(e&&d.pos)e.value=d.pos[k];});
     onElrsTransport();
   }catch(e){}
@@ -256,6 +257,7 @@ function onElrsTransport(){
 
 async function saveElrsSettings(){
   var d={transport:parseInt(document.getElementById('elrs_transport').value)||0,pos:{}};
+  var rs=document.getElementById('elrs_rdSwitch');if(rs)d.rdSwitch=parseInt(rs.value)||0;
   ELRS_BOOLS.forEach(k=>{d[k]=document.getElementById('elrs_'+k).checked;});
   ELRS_TEXTS.forEach(k=>{d[k]=document.getElementById('elrs_'+k).value.trim();});
   ELRS_NUMS.forEach(k=>{d[k]=parseInt(document.getElementById('elrs_'+k).value)||0;});

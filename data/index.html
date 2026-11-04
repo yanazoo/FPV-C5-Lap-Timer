@@ -173,8 +173,12 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
 .modal-box p{color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5}
 /* 16px: smaller text makes iOS zoom the page in when the field is focused */
-.modal-box input[type=password]{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px 12px;font-size:16px}
-.modal-box input[type=password]:focus{outline:none;border-color:var(--accent)}
+/* Passwords are plain text fields drawn as dots: a real password field
+   makes the browser offer to save a password after a login, a WiFi
+   password change or even a pilot edit. */
+.pw-mask{-webkit-text-security:disc;text-security:disc}
+.modal-box input.pw-mask{width:100%;background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:8px 12px;font-size:16px}
+.modal-box input.pw-mask:focus{outline:none;border-color:var(--accent)}
 .modal-err{color:var(--err);font-size:11px;margin-top:6px;display:none}
 .modal-actions{display:flex;gap:6px;margin-top:12px}
 .modal-actions button{flex:1}
@@ -417,6 +421,11 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <label class="elrs-tcp">netpack アドレス（auto=自動検出）<input type="text" id="elrs_host" maxlength="63" placeholder="auto"></label>
       <label class="elrs-tcp">ポート<input type="number" id="elrs_port" min="1" max="65535"></label>
       <label>レースディレクターのバインドフレーズ（任意）<input type="text" id="elrs_rdBind" maxlength="32" autocomplete="off"></label>
+      <label>レースディレクターのスイッチ<select id="elrs_rdSwitch">
+          <option value="0">トグル（ON でスタート・OFF でストップ）</option>
+          <option value="1">プッシュ（押すたびにスタート／ストップ）</option>
+        </select></label>
+      <p class="hint" style="grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)">送信機の ELRS 設定（Lua → Backpack → DVR Rec）で、スタート／ストップに使う AUX スイッチを割り当ててください。そのスイッチの操作でレースを開始・停止できます（ESP-NOW ブリッジ経由）。</p>
       <label>イベント名（ARM NOW 時に表示・英数字）<input type="text" id="elrs_eventName" maxlength="32"></label>
     </div>
     <div style="margin-top:6px">
@@ -472,7 +481,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <div class="config-row" style="gap:8px"><label style="width:110px">接続先 SSID</label>
         <input type="text" id="netStaSsid" maxlength="32" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
       <div class="config-row" style="gap:8px"><label style="width:110px">接続先パスワード</label>
-        <input type="password" id="netStaPass" maxlength="63" autocomplete="new-password" placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <input type="text" class="pw-mask" id="netStaPass" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
       <div class="config-row" style="gap:8px"><label style="width:110px">ホストに切替</label>
         <select id="netFallback" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="15">15 秒接続できなければ</option>
@@ -494,7 +503,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <h3 class="global-title">🔒 管理者パスワード</h3>
     <p class="section-desc">レース以外のタブ（設定・キャリブ・SD）とレース制御ボタンは、このパスワードでログインした端末からのみ操作できます。変更するときは新しいパスワードを入力して保存してください（現在のパスワードは表示されません）。</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
-      <input type="password" id="pwField" maxlength="32" autocomplete="new-password" placeholder="新しいパスワード" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+      <input type="text" class="pw-mask" id="pwField" maxlength="32" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="新しいパスワード" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
       <button onclick="savePassword()" class="btn-success">保存</button></div>
   </div>
 </section>
@@ -526,7 +535,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div class="modal-box">
     <h3>🔒 管理者ログイン</h3>
     <p>レース以外のタブとレース制御ボタンを操作するには、パスワードが必要です。</p>
-    <input type="password" id="loginPw" autocomplete="current-password" placeholder="パスワード"
+    <input type="text" class="pw-mask" id="loginPw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="パスワード"
       onkeydown="if(event.key==='Enter')submitLogin()">
     <div id="loginErr" class="modal-err"></div>
     <div class="modal-actions">

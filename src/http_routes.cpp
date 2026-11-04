@@ -306,6 +306,7 @@ void registerHttpRoutes() {
         d["host"]          = elrsCfg.host;
         d["port"]          = elrsCfg.port;
         d["rdBind"]        = elrsCfg.rdBind;
+        d["rdSwitch"]      = elrsRdSwitch;
         d["eventName"]     = elrsCfg.eventName;
         d["showRaceClock"] = o.showRaceClock;
         d["showBestLap"]   = o.showBestLap;
@@ -349,6 +350,7 @@ void registerHttpRoutes() {
             if (!e.host[0]) strlcpy(e.host, "auto", sizeof e.host);
             if (!d["port"].isNull()) e.port = (uint16_t)constrain((int)d["port"], 1, 65535);
             copyStr(d, "rdBind", e.rdBind, sizeof e.rdBind);
+            if (!d["rdSwitch"].isNull()) elrsRdSwitch = (int)d["rdSwitch"] == 1 ? 1 : 0;
             copyStr(d, "eventName", e.eventName, sizeof e.eventName);
             if (!d["showRaceClock"].isNull()) o.showRaceClock = d["showRaceClock"] | true;
             if (!d["showBestLap"].isNull())   o.showBestLap   = d["showBestLap"] | true;

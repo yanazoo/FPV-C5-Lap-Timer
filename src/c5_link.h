@@ -27,6 +27,10 @@ struct C5SlotLive {
     uint16_t raw;
     bool     inside;
     bool     signal;    // readings arriving for this slot
+    uint16_t enters;    // gate entries / exits seen so far (wrap around):
+    uint16_t exits;     // the web UI plays its tones from these, so a
+                        // crossing shorter than the telemetry interval
+                        // still beeps
 };
 
 void c5Begin();

@@ -29,7 +29,7 @@ async function submitLogin(){
       body:JSON.stringify({password:v})});
     if(r.ok){
       isAuthed=true;sessionStorage.setItem('authed','1');
-      if(pw)pw.blur();   // close the keyboard before the modal goes
+      if(pw){pw.blur();pw.value='';}   // close the keyboard; leave no password behind
       closeLoginModal();applyAuthState();
       // Go to the tab that asked for the login; from the header button,
       // stay on the tab that is open (e.g. the race tab).
