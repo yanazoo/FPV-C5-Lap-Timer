@@ -15,7 +15,6 @@
 #include "data_model.h"
 #include "elrs.h"
 #include "http_routes.h"
-#include "https_redirect.h"
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
@@ -48,7 +47,6 @@ void setup() {
     initWsHandler();
     registerHttpRoutes();
     server.begin();
-    httpsRedirectBegin();   // https:// -> http:// (port 443)
     Serial.printf("[Web] HTTP started  roster=%d/%d\n", rosterCount, MAX_REGISTERED);
 }
 

@@ -123,6 +123,11 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
 }
 
 void loadAll() {
+    // The certificate an earlier build kept for its https:// redirect: gone
+    // with that feature, free its NVS space.
+    prefs.begin("tls", false);
+    if (prefs.isKey("crt")) prefs.clear();
+    prefs.end();
     prefs.begin("pilots", true);
     rosterCount = constrain(prefs.getInt("count", 0), 0, MAX_REGISTERED);
     for (int i = 0; i < rosterCount; i++) {
