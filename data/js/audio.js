@@ -183,7 +183,7 @@ function buildSpeech(p,lapCount,lapMs){
   if(announceMode==='lap_laptime'){var lapLabel=lapMode==='immediate'?lapCount+'周':(lapCount===1?'ホールショット':(lapCount-1)+'周');return spokenName+'、'+lapLabel+'、'+tStr;}
   return spokenName+'、'+tStr;
 }
-// 🔊 音声テスト (race tab) / テスト (settings): the gate tone, then a sample
+// 音声テスト (race tab) / テスト (settings): the gate tone, then a sample
 // call when voice is on. Also unlocks sound for this browser.
 function testVoice(){
   ensureAudio();sfx.exit(0);
