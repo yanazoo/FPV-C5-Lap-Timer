@@ -318,7 +318,25 @@ static uint32_t rdNextAt = 0;
 static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
 static const uint32_t RD_COUNTDOWN_MS = 3300;   // stage -> start, as the web UI
 
-void raceDirectorSwitch(uint8_t state) { rdPending = state ? 1 : 0; }
+// Called from the ELRS link for each switch message. Only a change of the
+// switch counts: the TX may send its state more than once (and some setups
+// repeat it), which used to flip a push-mode race on and off again, or
+// restart a race that was stopped or cleared from the web while the switch
+// stayed on. A message after a gap of RD_EDGE_GAP_MS also counts, so one
+// lost message (the bridge was briefly on a pilot's UID) can't leave the
+// switch stuck.
+static int8_t   rdLastState = -1;   // -1: nothing heard yet
+static uint32_t rdLastMsgAt = 0;
+static const uint32_t RD_EDGE_GAP_MS = 1500;
+
+void raceDirectorSwitch(uint8_t state) {
+    int8_t v = state ? 1 : 0;
+    uint32_t now = millis();
+    bool edge = v != rdLastState || now - rdLastMsgAt > RD_EDGE_GAP_MS;
+    rdLastState = v;
+    rdLastMsgAt = now;
+    if (edge) rdPending = v;
+}
 
 static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
 
@@ -345,7 +363,7 @@ static void serviceRaceDirector() {
     int16_t v = rdPending;
     if (v >= 0) {
         rdPending = -1;
-        Serial.printf("[RD] switch %s\n", v ? "on" : "off");
+        Serial.printf("[RD] switch %s (%s mode)\n", v ? "on" : "off", elrsRdSwitch == 1 ? "push" : "toggle");
         if (elrsRdSwitch == 1) {           // push: each press flips the race
             if (v == 1) raceBusy() ? rdStop() : rdStart();
         } else {                           // toggle: on = start, off = stop

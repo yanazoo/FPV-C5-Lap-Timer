@@ -52,9 +52,9 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
 #timer.running{color:var(--ok)}
 #timer.timeup,#timer.running.timeup{color:var(--err)}
-.race-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.lap-count-row{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;justify-content:center}
-.lap-count-row input[type="number"]{width:56px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px 6px;text-align:center;font-size:14px}
+.race-buttons{display:flex;gap:8px;justify-content:center}
+.race-buttons button{white-space:nowrap}
+@media(max-width:460px){.race-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;width:100%}.race-buttons button{padding:10px 2px;font-size:12px}}
 
 /* ── Pilot race grid ── */
 .pilot-race-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -306,15 +306,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button id="btnStart" onclick="startRace()" class="btn-success">▶ スタート</button>
       <button id="btnStop"  onclick="stopRace()"  class="btn-danger" disabled>■ ストップ</button>
       <button id="btnClear" onclick="clearAllLaps()" class="btn-secondary">クリア</button>
+      <button id="btnVoiceTest" onclick="testVoice()" class="btn-secondary">🔊 音声テスト</button>
     </div>
     <div id="authHint">🔒 操作するには <a onclick="onAuthBtn()">ログイン</a> が必要です</div>
-    <div class="lap-count-row">
-      <label class="toggle-sw">
-        <input type="checkbox" id="voiceToggle" onchange="toggleVoice()" checked>
-        <span class="toggle-track"></span>
-        🔊 音声
-      </label>
-    </div>
   </div>
   <div class="rank-panel" id="rankPanel">
     <div class="rank-head"><b>順位</b><span id="rankRule"></span></div>

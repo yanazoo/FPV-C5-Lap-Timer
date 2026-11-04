@@ -183,9 +183,14 @@ function buildSpeech(p,lapCount,lapMs){
   if(announceMode==='lap_laptime'){var lapLabel=lapMode==='immediate'?lapCount+'周':(lapCount===1?'ホールショット':(lapCount-1)+'周');return spokenName+'、'+lapLabel+'、'+tStr;}
   return spokenName+'、'+tStr;
 }
+// 🔊 音声テスト (race tab) / テスト (settings): the gate tone, then a sample
+// call when voice is on. Also unlocks sound for this browser.
 function testVoice(){
   ensureAudio();sfx.exit(0);
-  if(voiceEnabled&&announceMode!=='beep'&&announceMode!=='none'){
+  if(typeof speechSynthesis==='undefined')return;
+  if(!voiceEnabled||announceMode==='none'){toast('🔇 音声はOFFです（設定タブで切替）');return;}
+  if(announceMode!=='beep'){
+    speechWarmedUp=true;
     var u=new SpeechSynthesisUtterance('テスト、1分23秒4');u.lang='ja-JP';u.rate=speechRate;
     var voices=speechSynthesis.getVoices();
     var jaVoice=voices.find(v=>v.lang&&v.lang.startsWith('ja'));
@@ -216,7 +221,7 @@ function toggleVoice(){
   }
 }
 function refreshVoiceBtns(){
-  ['voiceToggle','voiceToggle2'].forEach(id=>{
+  ['voiceToggle2'].forEach(id=>{
     var el=document.getElementById(id);if(!el)return;
     el.checked=voiceEnabled;
   });
