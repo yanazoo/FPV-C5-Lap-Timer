@@ -16,8 +16,9 @@ function onMsg(d){
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);
+    noteServerTime(d.now);
     timerFrozenMs=d.raceElapsedMs||0;
-    if(raceRunning)resumeTimer();
+    if(raceRunning)resumeTimer(d.now!==undefined?d.raceStartMs:undefined);
     else if(d.racePaused)timerEl.textContent=fmtTimer(timerFrozenMs);
     if(d.sdPresent!==undefined)updateSdSection(d.sdPresent);
     applySettings(d);
@@ -68,6 +69,7 @@ function onMsg(d){
     return;
   }
   if(d.type==='rssi_all'){
+    noteServerTime(d.ts);
     (d.p||[]).forEach(x=>{x.type='rssi';x.ts=d.ts;onMsg(x);});
     return;
   }
@@ -78,7 +80,6 @@ function onMsg(d){
     p.rssiSignal=d.signal!==false;
     p.rssi=p.rssiSignal?(d.rssi!==undefined?d.rssi:p.rssi):0;
     p.crossing=p.rssiSignal&&(d.crossing!==undefined?d.crossing:p.crossing);
-    if(d.name&&d.name!=='---')p.name=d.name;
     // Enter/exit cues — audio is tab-independent during a race or calibration.
     // The firmware counts every gate entry and exit (en / ex); a crossing
     // shorter than the 10 Hz telemetry would never show up as a change of
@@ -109,15 +110,6 @@ function onMsg(d){
     }
     return;
   }
-  if(d.type==='gate_start'){
-    var s=d.pilot;if(s<0||s>=N)return;
-    var p=slots[s];
-    if(d.name&&d.name!=='---')p.name=d.name;
-    ensureAudio();sfx.enter(s);
-    if(lapMode==='holeshot')speak(getSpokenName(p)+(announceMode==='lap_laptime'?'、ホールショット':''));
-    updateRaceCard(p);
-    return;
-  }
   if(d.type==='lap'){
     if(lapQueue){lapQueue.push(d);return;}   // the lap list is being fetched
     applyLap(d,false);
@@ -126,9 +118,9 @@ function onMsg(d){
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
   if(d.type==='time_up'){timeIsUp=true;updateRemain();toast('⏱ 時間切れ');return;}
-  if(d.type==='race_start'){onRaceStart();return;}
-  if(d.type==='race_resume'){onRaceResume();return;}
-  if(d.type==='race_stop'){onRaceStop();return;}
+  if(d.type==='race_start'){onRaceStart(d.ts);return;}
+  if(d.type==='race_resume'){onRaceResume(d.ts);return;}
+  if(d.type==='race_stop'){onRaceStop(d.elapsed);return;}
   if(d.type==='sd_status'){updateSdSection(d.present);return;}
 }
 
@@ -261,7 +253,7 @@ function applySettings(st){
   if(st.totalLaps!==undefined)setField('totalLaps',st.totalLaps);
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
-    showRaceRules();renderRanking();updateRemain(raceRunning?performance.now()-raceStartPerf:timerFrozenMs);}
+    showRaceRules();renderRanking();updateRemain(raceElapsedMs());}
   slots.forEach(p=>updateRaceCard(p));
 }
 

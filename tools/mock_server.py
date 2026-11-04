@@ -93,7 +93,8 @@ def init_msg():
         o = dict(o, lapCount=counts[o["slot"]], bestLap=0, rssi=0, crossing=False)
         pilots.append(o)
     return dict(state["settings"], type="init", raceRunning=r["running"], racePaused=r["paused"],
-                raceElapsedMs=int(race_elapsed() * 1000), sdPresent=True, pilots=pilots)
+                raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
+                now=now_ms(), sdPresent=True, pilots=pilots)
 
 
 def slot_of(pid):
@@ -155,9 +156,6 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(state["elrs"])
         if p == "/api/net":
             return self.reply(state["net"])
-        if p == "/api/status":
-            return self.reply({"raceRunning": state["race"]["running"], "lapCount": len(state["race"]["laps"]),
-                               "rosterCount": len(state["pilots"])})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":
@@ -237,16 +235,16 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/api/race/start":
             r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[])
-            broadcast({"type": "race_start", "ts": now_ms()})
+            broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
             return self.reply({"ok": True})
         if p == "/api/race/stop":
             if r["running"]:
                 r.update(running=False, paused=True, elapsed=race_elapsed())
-            broadcast({"type": "race_stop"})
+            broadcast({"type": "race_stop", "elapsed": int(race_elapsed() * 1000)})
             return self.reply({"ok": True})
         if p == "/api/race/resume":
             r.update(running=True, paused=False, t0=time.monotonic())
-            broadcast({"type": "race_resume"})
+            broadcast({"type": "race_resume", "ts": int(r["t0"] * 1000 - r["elapsed"] * 1000)})
             return self.reply({"ok": True})
         if p == "/api/net":
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
@@ -277,4 +275,9 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print(f"mock FPV C5 Lap Timer on http://localhost:{port}")
+    def telemetry():   # the firmware's 10 Hz rssi_all, for its clock
+        while True:
+            time.sleep(0.1)
+            broadcast({"type": "rssi_all", "ts": now_ms(), "p": []})
+    threading.Thread(target=telemetry, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

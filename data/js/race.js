@@ -2,22 +2,45 @@
 
 var timerEl=document.getElementById('timer');
 
-function startTimer(){
+// The race clock runs on the timer's own clock (millis()), not on when a
+// browser happened to receive race_start: every browser shows the same
+// time, whatever its network delay. srvOff = timer ms - performance.now(),
+// from the timestamps in the 10 Hz telemetry; the largest value seen is the
+// one with the least delay. It drifts down slowly (clocks differ by up to
+// ~0.05 %) so a better sample can take over.
+var srvOff=null,srvOffAt=0,raceStartSrv=0;
+function noteServerTime(ts){
+  if(!ts)return;
+  var now=performance.now(),s=ts-now;
+  if(srvOff===null||s>srvOff-(now-srvOffAt)*0.0005)srvOff=s;
+  else srvOff-=(now-srvOffAt)*0.0005;
+  srvOffAt=now;
+}
+function serverNow(){return performance.now()+(srvOff||0);}
+function raceElapsedMs(){return timerH?serverNow()-raceStartSrv:timerFrozenMs;}
+function runTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}
-  timerFrozenMs=0;raceStartPerf=performance.now();
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
+  var tick=()=>{var el=Math.max(0,serverNow()-raceStartSrv);timerEl.textContent=fmtTimer(el);updateRemain(el);};
+  timerH=setInterval(tick,50);tick();
 }
-function resumeTimer(){
-  if(countdownH){clearInterval(countdownH);countdownH=null;}
-  raceStartPerf=performance.now()-timerFrozenMs;
-  timerEl.classList.add('running');
-  if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
+// startSrv: the race start on the timer's clock (race_start ts).
+function startTimer(startSrv){
+  timerFrozenMs=0;
+  raceStartSrv=startSrv!==undefined&&srvOff!==null?startSrv:serverNow();
+  runTimer();
 }
-function stopTimer(){
-  if(timerH){timerFrozenMs=performance.now()-raceStartPerf;clearInterval(timerH);timerH=null;}
+// startSrv: race_resume's / init's raceStartMs (already moved past pauses).
+function resumeTimer(startSrv){
+  raceStartSrv=startSrv!==undefined&&srvOff!==null?startSrv:serverNow()-timerFrozenMs;
+  runTimer();
+}
+// elapsed: race time at the stop, from the timer (race_stop elapsed).
+function stopTimer(elapsed){
+  if(timerH){timerFrozenMs=elapsed!==undefined?elapsed:serverNow()-raceStartSrv;clearInterval(timerH);timerH=null;}
+  else if(elapsed!==undefined)timerFrozenMs=elapsed;
+  timerEl.textContent=fmtTimer(timerFrozenMs);
   timerEl.classList.remove('running');
 }
 
@@ -225,19 +248,19 @@ var raceStartSeq=0, raceStartApplied=-1, startWatchdog=null, stopWatchdog=null;
 function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);startWatchdog=null;}}
 function clearStopWatchdog(){if(stopWatchdog){clearTimeout(stopWatchdog);stopWatchdog=null;}}
 
-function onRaceStart(){
+function onRaceStart(ts){
   raceStartApplied=raceStartSeq;clearStartWatchdog();
-  raceRunning=true;raceStarted=true;setBtns(true);startTimer();
+  raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
   lapEpoch++;resetLaps();
   timeIsUp=false;updateRemain(0);
 }
-function onRaceResume(){
+function onRaceResume(ts){
   clearStartWatchdog();
-  raceRunning=true;raceStarted=true;setBtns(true);resumeTimer();
+  raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(ts);
 }
-function onRaceStop(){
+function onRaceStop(elapsed){
   clearStopWatchdog();
-  raceRunning=false;setBtns(false);stopTimer();
+  raceRunning=false;setBtns(false);stopTimer(elapsed);
 }
 
 function startRace(){

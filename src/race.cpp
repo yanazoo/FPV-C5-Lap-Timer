@@ -111,6 +111,10 @@ void raceStop() {
     elrsRaceStop();
     JsonDocument d;
     d["type"] = "race_stop";
+    {
+        Guard g;
+        d["elapsed"] = raceCore.elapsed(millis());   // every browser freezes on this time
+    }
     wsJson(d);
 }
 
@@ -194,9 +198,7 @@ static void sendTelemetry() {
             C5SlotLive l = c5Live(s);
             JsonObject o = arr.add<JsonObject>();
             o["pilot"]    = s;
-            o["name"]     = activeName(s);
             o["rssi"]     = l.filtered;
-            o["raw"]      = l.raw;
             o["crossing"] = l.inside;
             o["signal"]   = l.signal;
             o["en"]       = l.enters;   // edge counters for the gate tones
@@ -239,6 +241,7 @@ void sendC5Status() {
 static const uint32_t TIME_UP_GRACE_MS = 60000;
 
 static void serviceTimedRace(uint32_t now) {
+    if (raceRules.rankMode != 2 && !timeUpHandled) return;   // not a timed race: nothing to do
     bool up, running;
     {
         Guard g;

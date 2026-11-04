@@ -24,7 +24,6 @@ struct C5Status {
 
 struct C5SlotLive {
     uint16_t filtered;
-    uint16_t raw;
     bool     inside;
     bool     signal;    // readings arriving for this slot
     uint16_t enters;    // gate entries / exits seen so far (wrap around):

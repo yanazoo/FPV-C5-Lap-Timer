@@ -83,6 +83,7 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
         // Authoritative elapsed time so a reloaded client restores the timer
         // (running: keeps counting; paused: frozen at the pause point).
         doc["raceElapsedMs"] = raceCore.elapsed(now);
+        doc["now"]           = now;   // the browser's race clock follows this clock
         doc["sdPresent"]     = sdPresent;
         addSettings(doc);
         addSlots(doc["pilots"].to<JsonArray>(), true);

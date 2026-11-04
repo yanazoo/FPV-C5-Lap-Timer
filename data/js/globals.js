@@ -39,7 +39,7 @@ function rebuildRosterIndex(){
 }
 var activeSlotsLocal = Array(N).fill(-1);
 
-var raceRunning=false, raceStartPerf=0, timerH=null, countdownH=null;
+var raceRunning=false, timerH=null, countdownH=null;
 var raceStarted=false, timerFrozenMs=0;
 var lapEpoch=0;   // bumped by Start and Clear: a lap list fetched before is stale
 var voiceEnabled = localStorage.getItem('voice')!=='0';

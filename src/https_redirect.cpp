@@ -113,7 +113,10 @@ void httpsRedirectBegin() {
     conf.servercert_len = certPem.length() + 1;
     conf.prvtkey_pem = (const uint8_t*)keyPem.c_str();
     conf.prvtkey_len = keyPem.length() + 1;
-    conf.httpd.max_open_sockets = 2;
+    // Only ever a redirect: one connection, below the web UI's priority so a
+    // TLS handshake never holds up the race display.
+    conf.httpd.max_open_sockets = 1;
+    conf.httpd.task_priority = 1;
     conf.httpd.lru_purge_enable = true;
     conf.httpd.uri_match_fn = httpd_uri_match_wildcard;
     conf.httpd.ctrl_port = 32790;

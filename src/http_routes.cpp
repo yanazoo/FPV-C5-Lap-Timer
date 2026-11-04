@@ -243,17 +243,6 @@ void registerHttpRoutes() {
         sendJson(req, doc);
     });
 
-    server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* req) {
-        JsonDocument doc;
-        Guard g;
-        doc["raceRunning"] = raceCore.running();
-        doc["raceStartMs"] = raceCore.startMs();
-        doc["lapCount"]    = raceCore.lapCount();
-        doc["rosterCount"] = rosterCount;
-        doc["uptime"]      = millis();
-        doc["sdPresent"]   = sdPresent;
-        sendJson(req, doc);
-    });
 
     // ── Settings ───────────────────────────────────────────────────────────
     server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -291,17 +280,6 @@ void registerHttpRoutes() {
         wsSettings();   // every browser shows the same settings
     });
 
-    // ── C5 receiver ────────────────────────────────────────────────────────
-    server.on("/api/c5", HTTP_GET, [](AsyncWebServerRequest* req) {
-        C5Status c = c5Status();
-        JsonDocument d;
-        d["online"] = c.online, d["scanning"] = c.scanning, d["state"] = c.state;
-        d["fw"] = c.firmware, d["gain"] = c.gain, d["records"] = c.records;
-        d["gaps"] = c.seqGaps, d["bad"] = c.badRecords, d["badLines"] = c.badLines;
-        JsonArray rate = d["rate"].to<JsonArray>();
-        for (int i = 0; i < 8; i++) rate.add(c.rate[i]);
-        sendJson(req, d);
-    });
 
     // ── ELRS OSD (vrxc_elrs settings) ──────────────────────────────────────
     server.on("/api/elrs", HTTP_GET, [](AsyncWebServerRequest* req) {
