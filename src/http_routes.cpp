@@ -264,6 +264,9 @@ void registerHttpRoutes() {
         doc["sdLogMode"]  = settings.sdLogMode;
         doc["totalLaps"]  = settings.totalLaps;
         doc["gain"]       = settings.gain;
+        doc["rankMode"]     = raceRules.rankMode;
+        doc["timeLimitSec"] = raceRules.timeLimitSec;
+        doc["countLastLap"] = raceRules.countLastLap;
         sendJson(req, doc);
     });
     onJson("/api/settings", [](AsyncWebServerRequest* req, JsonDocument& doc) {
@@ -277,6 +280,10 @@ void registerHttpRoutes() {
             if (!doc["cooldownMs"].isNull()) settings.cooldownMs = constrain((int)doc["cooldownMs"], 500, 30000);
             if (!doc["totalLaps"].isNull()) settings.totalLaps = (uint16_t)constrain((int)doc["totalLaps"], 0, 99);
             if (!doc["gain"].isNull()) settings.gain = (uint8_t)constrain((int)doc["gain"], 0, 89);
+            if (!doc["rankMode"].isNull()) raceRules.rankMode = (uint8_t)constrain((int)doc["rankMode"], 0, 2);
+            if (!doc["timeLimitSec"].isNull())
+                raceRules.timeLimitSec = (uint16_t)constrain((int)doc["timeLimitSec"], 30, 1800);
+            if (!doc["countLastLap"].isNull()) raceRules.countLastLap = doc["countLastLap"] | true;
             saveSettings();
         }
         applyGateConfig();

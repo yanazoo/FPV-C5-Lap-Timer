@@ -220,6 +220,42 @@ void testRaceImmediatePauseFinish() {
     CHECK(r.lapMs == 0);
 }
 
+void testRaceTimed() {
+    race::PassResult r;
+    // Last lap counts: the first pass after the time is up ends the race.
+    race::Core c;
+    c.lapMode = race::LapMode::Holeshot;
+    c.cooldownMs = 1000;
+    c.timeLimitMs = 60000;
+    c.countLastLap = true;
+    c.start(0);
+    CHECK(c.pass(0, 0, 2000, 0, &r) && r.holeshot);
+    CHECK(c.pass(0, 0, 30000, 0, &r) && !r.justFinished);
+    CHECK(!c.timeUp(59000) && c.timeUp(60000));
+    CHECK(c.pass(0, 0, 65000, 0, &r) && r.justFinished && r.laps == 2 && r.totalMs == 63000);
+    CHECK(!c.pass(0, 0, 90000, 0, &r));   // done
+    CHECK(c.slot(0).finished && c.slot(0).totalMs == 63000);
+    // Pauses don't eat into the time.
+    c.start(0);
+    c.pass(1, 1, 1000, 0, &r);
+    c.stop(10000);
+    c.resume(30000);   // 20 s pause
+    CHECK(!c.timeUp(75000) && c.timeUp(80000));
+    // Last lap not counted: passes after the time don't count; finishSlot
+    // ends the race of pilots who had started.
+    race::Core d;
+    d.lapMode = race::LapMode::Immediate;
+    d.cooldownMs = 1000;
+    d.timeLimitMs = 60000;
+    d.countLastLap = false;
+    d.start(0);
+    CHECK(d.pass(0, 0, 20000, 0, &r) && r.laps == 1);
+    CHECK(!d.pass(0, 0, 61000, 0, &r));
+    CHECK(d.laps(0) == 1);
+    CHECK(d.finishSlot(0) && d.slot(0).finished && !d.finishSlot(0));
+    CHECK(!d.finishSlot(3));   // never started
+}
+
 void testPositions() {
     race::Core c;
     c.lapMode = race::LapMode::Immediate;
@@ -680,6 +716,7 @@ int runTests() {
     testUid();
     testRaceHoleshot();
     testRaceImmediatePauseFinish();
+    testRaceTimed();
     testPositions();
     testOsdLapFlow();
     testOsdRdAndJapanese();

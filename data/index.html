@@ -57,6 +57,28 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 
 /* ── Pilot race grid ── */
 .pilot-race-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+/* Ranking summary under the timer: every pilot's best lap, laps and total
+   time in one table; rows ordered by the ranking rule in settings, whose
+   column is highlighted. */
+.rank-panel{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:8px 12px 6px;margin-bottom:12px}
+.rank-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:4px}
+.rank-head b{color:var(--tx);font-size:13px}
+.rank-remain{font-family:"Courier New",monospace;font-weight:bold;color:var(--accent)}
+.rank-remain.over{color:var(--err)}
+.rank-wrap{overflow-x:auto}
+.rank-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.rank-table th{font-size:11px;font-weight:normal;color:var(--muted);text-align:right;padding:3px 6px;white-space:nowrap}
+.rank-table th.l,.rank-table td.l{text-align:left}
+.rank-table th.key{color:var(--accent);font-weight:bold}
+.rank-table td{padding:4px 6px;border-top:1px solid var(--bd);text-align:right;white-space:nowrap;font-family:"Courier New",monospace}
+.rank-table td.pos{width:2.2em;text-align:center;font-weight:bold}
+.rank-table td.name{font-family:inherit;font-weight:bold;max-width:9em;overflow:hidden;text-overflow:ellipsis}
+.rank-table td.key{color:var(--tx);font-weight:bold}
+.rank-table td.gap{color:var(--muted);font-size:12px}
+.rank-table tr.r1 td.pos{color:#e3b341}.rank-table tr.r2 td.pos{color:#c0c8d2}.rank-table tr.r3 td.pos{color:#d08a4c}
+.rank-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.rank-empty{color:var(--muted);font-size:12px;padding:6px 0;text-align:center}
+@media(max-width:600px){.rank-panel{padding:6px 8px 4px}.rank-table{font-size:12px}.rank-table th,.rank-table td{padding:3px 3px}.rank-table td.name{max-width:6.5em}.rank-table td.gap{font-size:11px}.rank-dot{margin-right:3px}}
 .pilot-race-card{background:var(--sf);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
 .pilot-card-header{position:relative;display:flex;align-items:center;gap:6px;padding:7px 10px;font-weight:700;font-size:13px}
 .pilot-card-header.p0{background:var(--p0-bg);border-bottom:2px solid var(--p0);color:var(--p0)}
@@ -299,6 +321,10 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       </label>
     </div>
   </div>
+  <div class="rank-panel" id="rankPanel">
+    <div class="rank-head"><b>順位</b><span id="rankRule"></span><span class="rank-remain" id="rankRemain"></span></div>
+    <div class="rank-wrap"><table class="rank-table" id="rankTable"></table></div>
+  </div>
   <div class="pilot-race-grid" id="pilotGrid"></div>
   <div id="noPilotsMsg" style="display:none;padding:24px;text-align:center;color:var(--muted);font-size:13px">使用中のチャネルがありません。設定タブでパイロットに VTX チャンネルを設定し、Ch に割り当ててください。</div>
 </section>
@@ -350,6 +376,34 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 SDバックアップ保存</button>
       <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 SDから復元</button>
     </div>
+  </div>
+
+  <div class="global-config-card">
+    <h3 class="global-title">🏁 順位の決め方</h3>
+    <p class="section-desc">レース画面の順位表の並べ方です。表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
+    <div class="config-row">
+      <label>順位の決め方</label>
+      <select id="rankModeSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="0">トータルタイム（周回数の多い順 → 同じ周回数はタイムの速い順）</option>
+        <option value="1">最速ラップ（ベストラップの速い順）</option>
+        <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
+      </select>
+    </div>
+    <div class="config-row rank-timed">
+      <label>制限時間</label>
+      <div class="slider-num">
+        <input type="number" id="timeLimitMin" min="0" max="30" value="2" onchange="saveRaceRules()" style="width:60px"><span class="unit">分</span>
+        <input type="number" id="timeLimitSec" min="0" max="59" value="0" onchange="saveRaceRules()" style="width:60px"><span class="unit">秒</span>
+      </div>
+    </div>
+    <div class="config-row rank-timed">
+      <label>時間切れ時の最終周</label>
+      <select id="countLastLapSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="1">カウントする（時間切れ後の次の通過までを数える）</option>
+        <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
+      </select>
+    </div>
+    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。全員が完走するか、時間切れから 60 秒たつとレースは自動で止まります。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
   </div>
 
   <div class="global-config-card">

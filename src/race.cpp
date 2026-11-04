@@ -22,6 +22,13 @@ int activeSlotOf(int ri) {
     return -1;
 }
 
+// Timed race rules into the race core (call under the lock, while idle).
+static void applyRaceRules() {
+    bool timed = raceRules.rankMode == 2;
+    raceCore.timeLimitMs = timed ? (uint32_t)raceRules.timeLimitSec * 1000u : 0;
+    raceCore.countLastLap = raceRules.countLastLap;
+}
+
 void applyGateConfig() {
     uint16_t mhz[8] = {}, en[8], ex[8];
     {
@@ -37,6 +44,9 @@ void applyGateConfig() {
         raceCore.lapMode = settings.lapMode == 1 ? race::LapMode::Immediate : race::LapMode::Holeshot;
         raceCore.cooldownMs = settings.cooldownMs;
         raceCore.totalLaps = settings.totalLaps;
+        // A rule change mid-race would move the goalposts: it applies from
+        // the next start.
+        if (!raceCore.running() && !raceCore.paused()) applyRaceRules();
     }
     c5Configure(mhz, en, ex);
     c5SetGain(settings.gain);
@@ -59,12 +69,17 @@ void raceStage() {
     wsJson(d);
 }
 
+static bool timeUpHandled = false;   // timed race: the time-up step has run
+static uint32_t timeUpAt = 0;
+
 void raceStart() {
     uint32_t now = millis();
     {
         Guard g;
+        applyRaceRules();
         raceCore.start(now);
     }
+    timeUpHandled = false;
     c5ResetDetectors();
     elrsRaceStart(0);
     JsonDocument d;
@@ -215,6 +230,57 @@ void sendC5Status() {
     wsJson(d);
 }
 
+// ── Timed race ─────────────────────────────────────────────────────────────
+// When the time runs out: with the last lap counted, each pilot's next pass
+// ends their race (race::Core marks it, FINISHED! on the goggles); without,
+// every pilot who had started is done at once. The race stops by itself
+// once every pilot who started is done, or 60 s after the time ran out
+// (someone crashed on the last lap).
+static const uint32_t TIME_UP_GRACE_MS = 60000;
+
+static void serviceTimedRace(uint32_t now) {
+    bool up, running;
+    {
+        Guard g;
+        up = raceCore.timeUp(now);
+        running = raceCore.running();
+    }
+    if (!running) return;
+    if (up && !timeUpHandled) {
+        timeUpHandled = true;
+        timeUpAt = now;
+        Serial.println("[Race] time up");
+        JsonDocument d;
+        d["type"] = "time_up";
+        wsJson(d);
+        if (!raceRules.countLastLap) {
+            int pos[MAX_ACTIVE];
+            uint32_t tot[MAX_ACTIVE];
+            bool done[MAX_ACTIVE];
+            {
+                Guard g;
+                for (int s = 0; s < MAX_ACTIVE; s++) {
+                    done[s] = raceCore.finishSlot(s);
+                    pos[s] = raceCore.position(s);
+                    tot[s] = raceCore.slot(s).totalMs;
+                }
+            }
+            for (int s = 0; s < MAX_ACTIVE; s++)
+                if (done[s]) elrsPilotDone(s, pos[s], tot[s]);
+        }
+    }
+    if (!timeUpHandled) return;
+    bool allDone = true;
+    {
+        Guard g;
+        for (int s = 0; s < MAX_ACTIVE; s++) {
+            const race::SlotState& st = raceCore.slot(s);
+            if (rosterValid(activePilots[s]) && st.lapCount > 0 && !st.finished) allDone = false;
+        }
+    }
+    if (allDone || now - timeUpAt >= TIME_UP_GRACE_MS) raceStop();
+}
+
 // ── Race director (ELRS TX switch) ─────────────────────────────────────────
 // Countdown run by the firmware itself when the race director starts the
 // race (no browser drives it): stage now, start 3.3 s later, the same
@@ -267,6 +333,7 @@ void raceLoop() {
     C5Pass p;
     while (c5PopPass(&p)) onPass(p);
     uint32_t now = millis();
+    serviceTimedRace(now);
     if (now - lastRssiSend >= RSSI_INTERVAL_MS) {
         lastRssiSend = now;
         sendTelemetry();

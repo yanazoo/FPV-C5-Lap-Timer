@@ -23,7 +23,8 @@ DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 state = {
     "pilots": [],
     "active": [-1] * 8,
-    "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30},
+    "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30,
+                 "rankMode": 0, "timeLimitSec": 120, "countLastLap": True},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,

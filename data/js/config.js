@@ -225,6 +225,28 @@ function saveGain(){
     .then(r=>toast(r.ok?'✓ ゲインを '+g+' に設定しました（閾値の再調整を推奨）':'⚠️ 保存エラー',3000)).catch(()=>toast('⚠️ 接続エラー'));
 }
 
+// ── Ranking rule / timed race ───────────────────────────────────────────
+function showRaceRules(){
+  setField('rankModeSelect',String(rankMode));
+  setField('timeLimitMin',Math.floor(timeLimitSec/60));
+  setField('timeLimitSec',timeLimitSec%60);
+  setField('countLastLapSelect',countLastLap?'1':'0');
+  document.querySelectorAll('.rank-timed').forEach(e=>e.style.display=rankMode===2?'':'none');
+}
+function saveRaceRules(){
+  var m=parseInt(document.getElementById('rankModeSelect').value)||0;
+  var mi=parseInt(document.getElementById('timeLimitMin').value)||0;
+  var se=parseInt(document.getElementById('timeLimitSec').value)||0;
+  var t=Math.max(30,Math.min(1800,mi*60+se));
+  var c=document.getElementById('countLastLapSelect').value==='1';
+  rankMode=m;timeLimitSec=t;countLastLap=c;
+  showRaceRules();renderRanking();updateRemain(raceRunning?performance.now()-raceStartPerf:timerFrozenMs);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({rankMode:m,timeLimitSec:t,countLastLap:c})})
+    .then(r=>toast(r.ok?'✓ 順位の決め方を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))
+    .catch(()=>toast('⚠️ 接続エラー'));
+}
+
 // Total laps lives on the race tab but the firmware needs it for FINISHED! on the OSD.
 function saveTotalLaps(){
   var t=Math.max(0,Math.min(99,parseInt(document.getElementById('totalLaps').value)||0));

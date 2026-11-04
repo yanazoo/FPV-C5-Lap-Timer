@@ -31,6 +31,14 @@ struct Settings {
     uint8_t  gain       = C5_DEFAULT_GAIN;
 };
 
+// How the race is ranked (web UI ranking panel) and the timed race.
+// Stored under its own key, so Settings' stored layout stays the same.
+struct RaceRules {
+    uint8_t  rankMode     = 0;     // 0 laps then total time, 1 best lap, 2 laps in a time limit
+    uint16_t timeLimitSec = 120;   // rankMode 2: race length (30 .. 1800 s)
+    bool     countLastLap = true;  // rankMode 2: the lap flown when time runs out counts
+};
+
 struct ElrsSettings {
     bool     enabled   = false;
     uint8_t  transport = 1;       // 1 UART straight to the ESP-NOW bridge (default), 0 TCP (elrs-netpack XIAO)
@@ -46,6 +54,7 @@ extern CalibConfig  rosterCal[MAX_REGISTERED];
 extern int          rosterCount;
 extern int          activePilots[MAX_ACTIVE];
 extern Settings     settings;
+extern RaceRules    raceRules;
 extern ElrsSettings elrsCfg;
 // Race director's TX switch: 0 toggle (on = start, off = stop), 1 push
 // (each press starts or stops). Its own NVS key, so ElrsSettings' stored
