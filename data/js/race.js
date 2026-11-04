@@ -18,13 +18,15 @@ function noteServerTime(ts){
 }
 function serverNow(){return performance.now()+(srvOff||0);}
 function raceElapsedMs(){return timerH?serverNow()-raceStartSrv:timerFrozenMs;}
-// What the big race clock shows for a race time: the time left in a timed
-// race (laps within a time limit), otherwise the time so far.
+// What the big race clock shows for a race time: in a timed race (laps
+// within a time limit) the time left, then the time over the limit as
+// -mm:ss.cc in red; otherwise the time so far.
 function raceClockText(el){
   if(rankMode!==2){timerEl.classList.remove('timeup');return fmtTimer(el);}
-  var left=Math.max(0,timeLimitSec*1000-el);
+  var left=timeLimitSec*1000-el;
   timerEl.classList.toggle('timeup',left<=0&&el>0);
-  return fmtTimer(Math.ceil(left/10)*10);
+  if(left>=0)return fmtTimer(Math.ceil(left/10)*10);
+  return '-'+fmtTimer(Math.floor(-left/10)*10);
 }
 function runTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}

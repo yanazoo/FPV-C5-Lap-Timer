@@ -701,7 +701,8 @@ void testOsdSurvivesOutage() {
     }
 }
 
-// Timed race: the goggles' race clock counts down from the limit to 00:00.
+// Timed race: the goggles' race clock counts down from the limit to 00:00,
+// then shows the time over the limit as -mm:ss.
 void testOsdCountdownClock() {
     Goggles g("p");
     Capture cap;
@@ -719,7 +720,9 @@ void testOsdCountdownClock() {
     at(90000);
     CHECK(g.shows(row, "00:00"));
     at(95000);
-    CHECK(g.shows(row, "00:00"));
+    CHECK(g.shows(row, "-00:05"));
+    at(161000);
+    CHECK(g.shows(row, "-01:11"));
     // A resumed timed race continues from where it was.
     e.onRaceStart(100000, 30000, 90);
     at(100000);

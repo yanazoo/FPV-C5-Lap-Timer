@@ -210,11 +210,16 @@ void Engine::runAction(uint32_t now, Action& a) {
     }
 }
 
-// The race clock for `sec` whole seconds of race time.
+// The race clock for `sec` whole seconds of race time. A timed race counts
+// down to 00:00, then shows the time over the limit as -mm:ss.
 void Engine::clockText(uint32_t sec, char* buf, size_t cap) const {
     uint32_t show = sec;
-    if (clockDownSec_) show = sec >= clockDownSec_ ? 0 : clockDownSec_ - sec;
-    snprintf(buf, cap, "%02lu:%02lu", (unsigned long)(show / 60), (unsigned long)(show % 60));
+    const char* sign = "";
+    if (clockDownSec_) {
+        if (sec <= clockDownSec_) show = clockDownSec_ - sec;
+        else show = sec - clockDownSec_, sign = "-";
+    }
+    snprintf(buf, cap, "%s%02lu:%02lu", sign, (unsigned long)(show / 60), (unsigned long)(show % 60));
 }
 
 void Engine::tick(uint32_t now) {
