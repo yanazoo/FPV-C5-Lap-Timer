@@ -307,17 +307,20 @@ static void serviceTimedRace(uint32_t now) {
 }
 
 // ── Race director (ELRS TX switch) ─────────────────────────────────────────
-// Countdown run by the firmware itself when the race director starts the
-// race (no browser drives it): stage now, start 3.3 s later, the same
-// timing as the web UI's Start button.
+// The switch runs the same sequence as the web UI's Start button, driven by
+// the firmware since no browser pressed anything: race_ready (every browser
+// says "レディ"), then the stage (ARM NOW, 3-2-1 on every browser), then the
+// start 3.3 s later.
 static volatile int16_t rdPending = -1;   // switch state waiting for raceLoop
-static bool     rdCountdown = false;
-static uint32_t rdStartAt = 0;
-static const uint32_t RD_COUNTDOWN_MS = 3300;
+enum RdPhase : uint8_t { RD_IDLE, RD_READY, RD_COUNTDOWN };
+static RdPhase  rdPhase = RD_IDLE;
+static uint32_t rdNextAt = 0;
+static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
+static const uint32_t RD_COUNTDOWN_MS = 3300;   // stage -> start, as the web UI
 
 void raceDirectorSwitch(uint8_t state) { rdPending = state ? 1 : 0; }
 
-static bool raceBusy() { return rdCountdown || raceCore.running(); }
+static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
 
 static void rdStart() {
     if (raceBusy()) return;
@@ -325,14 +328,16 @@ static void rdStart() {
         raceResume();
         return;
     }
-    raceStage();
-    rdCountdown = true;
-    rdStartAt = millis() + RD_COUNTDOWN_MS;
+    JsonDocument d;
+    d["type"] = "race_ready";
+    wsJson(d);
+    rdPhase = RD_READY;
+    rdNextAt = millis() + RD_READY_MS;
 }
 
 static void rdStop() {
-    if (rdCountdown) rdCountdown = false;   // stopped during the countdown
-    else if (!raceCore.running()) return;
+    if (rdPhase == RD_IDLE && !raceCore.running()) return;
+    rdPhase = RD_IDLE;   // stopped before the start: drop it
     raceStop();
 }
 
@@ -347,9 +352,15 @@ static void serviceRaceDirector() {
             v ? rdStart() : rdStop();
         }
     }
-    if (rdCountdown && (int32_t)(millis() - rdStartAt) >= 0) {
-        rdCountdown = false;
-        raceStart();
+    if (rdPhase != RD_IDLE && (int32_t)(millis() - rdNextAt) >= 0) {
+        if (rdPhase == RD_READY) {
+            raceStage();
+            rdPhase = RD_COUNTDOWN;
+            rdNextAt = millis() + RD_COUNTDOWN_MS;
+        } else {
+            rdPhase = RD_IDLE;
+            raceStart();
+        }
     }
 }
 

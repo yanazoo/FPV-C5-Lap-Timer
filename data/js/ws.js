@@ -151,6 +151,7 @@ function onMsg(d){
     applyLap(d,false);
     return;
   }
+  if(d.type==='race_ready'){if(!raceRunning)onRaceReady();return;}
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
   if(d.type==='time_up'){toast('⏱ 時間切れ');return;}

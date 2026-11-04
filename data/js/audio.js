@@ -221,3 +221,10 @@ function refreshVoiceBtns(){
     el.checked=voiceEnabled;
   });
 }
+
+// Browsers only allow sound after a tap or key press on the page. Unlock it
+// on the first one, so a start or stop from the race director or another
+// browser is heard even when this one never pressed a race button.
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,function un(){
+  ensureAudio();document.removeEventListener(ev,un,true);
+},true));

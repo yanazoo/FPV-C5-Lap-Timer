@@ -258,7 +258,19 @@ function onRaceResume(ts){
   clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(ts);
 }
+// Race director start: "レディ" on every browser, then race_stage's countdown.
+function onRaceReady(){
+  if(countdownH)return;
+  ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+  timerEl.classList.remove('running');
+  announceStart();
+}
+// The stop tone on every browser (Stop pressed elsewhere, or the race
+// director); the browser that pressed Stop has already played it.
+var stopToneAt=-1e9;
 function onRaceStop(elapsed){
+  if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
+  if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
   clearStopWatchdog();
   raceRunning=false;setBtns(false);stopTimer(elapsed);
 }
@@ -318,7 +330,7 @@ function showCountdown(){
   },50);
 }
 function stopRace(){
-  ensureAudio();sfx.stop();
+  ensureAudio();sfx.stop();stopToneAt=performance.now();
   fetch('/api/race/stop',{method:'POST'})
     .then(r=>{if(!r.ok)return;
       clearStopWatchdog();
