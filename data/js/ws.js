@@ -34,7 +34,7 @@ function reconcileRace(r){
     raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(r.now-r.el);
   }else if(!r.run&&raceRunning){
     raceRunning=false;setBtns(false);stopTimer(r.el);
-  }else if(!r.run&&!r.paused&&(timerFrozenMs||raceStarted)&&r.laps===0){
+  }else if(!r.run&&!r.paused&&(epochChanged||timerFrozenMs||raceStarted)&&r.laps===0){
     onRaceClear();   // cleared elsewhere
   }
   var mine=slots.reduce((n,p)=>n+p.lapTimes.length,0);

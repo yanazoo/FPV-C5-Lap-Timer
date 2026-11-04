@@ -327,20 +327,20 @@ function stopRace(){
     .catch(()=>{});
 }
 async function clearAllLaps(){
+  // Always ask the timer: it clears every browser (race_clear), even when
+  // there are no laps yet (a stopped race with its clock still showing).
   var hasData=slots.some(p=>p.lapCount>0);
-  if(hasData){
-    try{
-      var r=await fetch('/api/race/save',{method:'POST'});
-      if(r.ok){
-        var j=await r.json();
-        if(j.saved)toast('✅ レース結果をSDに保存しました');
-        else if(j.reason==='off')toast('ℹ️ SDログOFF — 未保存のままクリアしました');
-        else if(j.reason==='empty')toast('記録なし');
-        else toast('⚠️ SDカードなし — 未保存のままクリアしました',3500);
-      }
-      else toast('⚠️ SD保存エラー');
-    }catch(e){toast('⚠️ SD保存 接続エラー');}
-  }
+  try{
+    var r=await fetch('/api/race/save',{method:'POST'});
+    if(r.ok){
+      var j=await r.json();
+      if(j.saved)toast('✅ レース結果をSDに保存しました');
+      else if(j.reason==='off')toast('ℹ️ SDログOFF — 未保存のままクリアしました');
+      else if(j.reason==='empty'){if(hasData)toast('記録なし');}
+      else toast('⚠️ SDカードなし — 未保存のままクリアしました',3500);
+    }
+    else toast('⚠️ SD保存エラー');
+  }catch(e){toast('⚠️ 接続エラー — クリアできませんでした');return;}
   onRaceClear();
 }
 // Clear from any browser (race_clear) or this one.
