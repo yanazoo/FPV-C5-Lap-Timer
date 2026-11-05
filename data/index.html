@@ -475,7 +475,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="0">トグル（ON でスタート・OFF でストップ）</option>
           <option value="1">プッシュ（押すたびにスタート／ストップ）</option>
         </select></label>
-      <p class="hint" style="grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)">送信機の ELRS 設定（Lua → Backpack → DVR Rec）で、スタート／ストップに使う AUX スイッチを割り当ててください。そのスイッチの操作でレースを開始・停止できます（ESP-NOW ブリッジ経由）。</p>
+      <p class="hint" style="grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)">送信機の ELRS 設定（Lua → Backpack → DVR Rec）で、スタート／ストップに使う AUX スイッチを割り当ててください。そのスイッチの操作でレースを開始・停止できます（ESP-NOW ブリッジ経由）。プッシュは押しボタン用で、押すたびにスタート／ストップします（1.5 秒以内に続けて押した分は 1 回と数えます）。トグルは倒したままのスイッチ用です。</p>
       <label>イベント名（ARM NOW 時に表示・英数字）<input type="text" id="elrs_eventName" maxlength="32"></label>
     </div>
     <div style="margin-top:6px">

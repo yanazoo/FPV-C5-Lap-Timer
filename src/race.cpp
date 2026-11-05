@@ -304,18 +304,33 @@ static uint32_t rdNextAt = 0;
 static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
 static const uint32_t RD_COUNTDOWN_MS = 3300;   // stage -> start, as the web UI
 
-// Called from the ELRS link for each switch message. Only a change of the
-// switch counts (off -> on, on -> off). The TX may send its state again and
-// again while the switch stays put: counting a repeat as a new press made a
-// push-mode switch stop the race during its own start (ready -> stop, the
-// clock never ran), and in toggle mode restarted a race stopped from the
-// web while the switch stayed on. A TX that repeats its state also repairs
-// a lost message by itself.
-static int8_t rdLastState = -1;   // -1: nothing heard yet
+// Called from the ELRS link for each switch message.
+// Toggle (a switch that stays where it is put): only a change counts
+// (off -> on starts, on -> off stops). The TX may send its state again and
+// again; counting a repeat restarted a race stopped from the web while the
+// switch stayed on.
+// Push (a button that springs back): every "on" is a press, the "off" of
+// the release isn't needed. Waiting for off -> on missed every press after
+// a release that didn't arrive (the bridge is on a pilot's UID for a moment
+// while the OSD goes out), so a press needed doing twice. An "on" within
+// RD_PRESS_MS of the last press is that same press, sent again.
+static int8_t   rdLastState = -1;   // -1: nothing heard yet
+static uint32_t rdLastPressAt = 0;
+static bool     rdPressed = false;
+static const uint32_t RD_PRESS_MS = 1500;
 
 void raceDirectorSwitch(uint8_t state) {
     int8_t v = state ? 1 : 0;
-    if (v == rdLastState) return;
+    if (elrsRdSwitch == 1) {   // push
+        if (!v) return;
+        uint32_t now = millis();
+        if (rdPressed && now - rdLastPressAt < RD_PRESS_MS) return;
+        rdPressed = true;
+        rdLastPressAt = now;
+        rdPending = 1;
+        return;
+    }
+    if (v == rdLastState) return;   // toggle
     rdLastState = v;
     rdPending = v;
 }
