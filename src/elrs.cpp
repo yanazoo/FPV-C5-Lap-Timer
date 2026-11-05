@@ -7,6 +7,7 @@
 #include "data_model.h"
 #include "msp_v2.h"
 #include "wifi_mgr.h"
+#include "race.h"
 
 namespace {
 
@@ -36,12 +37,23 @@ uint16_t port = ELRS_TCP_PORT;
 uint32_t  lastAttempt = 0;
 IPAddress lastGood;
 
+// Race director: the bridge only hears what is sent to the MAC it has at
+// the moment, and a TX backpack sends its DVR-record switch to the
+// bind-phrase UID. So once a round of OSD bursts is done, the bridge is
+// switched to the race director's UID and left there while idle, where it
+// can hear the RD's switch (the way a RotorHazard timer's own backpack,
+// bound to the RD's phrase, does).
+bool    rdValid = false;
+uint8_t rdUid[6];
+bool    rdListenDue = false;   // OSD went out since the bridge last listened
+
 portMUX_TYPE stMux = portMUX_INITIALIZER_UNLOCKED;
 ElrsStatus   st = {};
 
 struct TransportOut : osd::Output {
     void write(const uint8_t* d, size_t n) override {
         if (!enabled) return;
+        rdListenDue = true;
         if (transport == 1) {
             if (uartOpen) Serial2.write(d, n);
         } else if (client.connected()) {
@@ -97,6 +109,32 @@ void refreshConfig() {
     bool rd = enabled && elrsCfg.rdBind[0];
     if (rd) msp::bindPhraseUid(elrsCfg.rdBind, uid);
     engine.setRecipient(osd::kRd, rd, uid);
+    rdValid = rd;
+    if (rd) memcpy(rdUid, uid, 6);
+    rdListenDue = rd;
+}
+
+// Point the bridge at the race director's UID (see rdValid).
+void listenForRd() {
+    if (!rdValid || !rdListenDue || !st.connected) return;
+    uint8_t p[7] = {0x01};
+    memcpy(p + 1, rdUid, 6);
+    uint8_t f[msp::kMaxFrame];
+    size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
+    out.write(f, n);
+    rdListenDue = false;
+}
+
+// A frame from the bridge / netpack: the backpack version, or the race
+// director's TX switch.
+void onFrame() {
+    if (parser.function() == msp::kElrsGetBackpackVersion && parser.size() >= 2) {
+        portENTER_CRITICAL(&stMux);
+        snprintf(st.version, sizeof st.version, "%u.%u", parser.payload()[0], parser.payload()[1]);
+        portEXIT_CRITICAL(&stMux);
+    } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
+        if (rdValid) raceDirectorSwitch(parser.payload()[0]);
+    }
 }
 
 void disconnect() {
@@ -120,6 +158,7 @@ bool tryConnect(IPAddress ip) {
     char peer[40];
     snprintf(peer, sizeof peer, "%s:%u", ip.toString().c_str(), port);
     setStatus(true, peer);
+    rdListenDue = rdValid;
     Serial.printf("[ELRS] connected to elrs-netpack %s\n", peer);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsGetBackpackVersion, nullptr, 0, f, sizeof f);
@@ -173,8 +212,10 @@ void serviceTransport(uint32_t now) {
             Serial2.begin(ELRS_UART_BAUD, SERIAL_8N1, ELRS_UART_RX_PIN, ELRS_UART_TX_PIN);
             uartOpen = true;
             setStatus(true, "UART");
+            rdListenDue = rdValid;
         }
-        while (Serial2.available()) parser.feed((uint8_t)Serial2.read());
+        while (Serial2.available())
+            if (parser.feed((uint8_t)Serial2.read())) onFrame();
         return;
     }
     if (uartOpen) Serial2.end(), uartOpen = false;
@@ -190,14 +231,8 @@ void serviceTransport(uint32_t now) {
         else connectHost();
         return;
     }
-    while (client.available()) {
-        if (!parser.feed((uint8_t)client.read())) continue;
-        if (parser.function() == msp::kElrsGetBackpackVersion && parser.size() >= 2) {
-            portENTER_CRITICAL(&stMux);
-            snprintf(st.version, sizeof st.version, "%u.%u", parser.payload()[0], parser.payload()[1]);
-            portEXIT_CRITICAL(&stMux);
-        }
-    }
+    while (client.available())
+        if (parser.feed((uint8_t)client.read())) onFrame();
 }
 
 void handle(const Event& e, uint32_t now) {
@@ -228,6 +263,7 @@ void elrsTask(void*) {
             while (xQueueReceive(evQ, &e, 0) == pdTRUE);
         }
         engine.tick(millis());
+        listenForRd();
     }
 }
 

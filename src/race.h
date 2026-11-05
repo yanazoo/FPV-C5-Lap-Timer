@@ -16,6 +16,11 @@ void raceStage();          // countdown started (ARM NOW on the goggles)
 void raceStart();
 bool raceResume();
 void raceStop();
+// The race director's TX switch (MSP_ELRS_BACKPACK_SET_RECORDING_STATE,
+// 1 = on). Any task may call it; raceLoop() acts on it. Depending on the
+// switch setting it starts the race (3 s countdown, as from the web UI),
+// resumes a stopped one, or stops it.
+void raceDirectorSwitch(uint8_t state);
 // Clear button: optionally save to SD, then forget the race.
 // Returns the JSON response for /api/race/save.
 String raceClear();

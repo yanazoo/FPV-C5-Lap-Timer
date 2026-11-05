@@ -9,6 +9,7 @@ int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
 ElrsSettings elrsCfg;
+uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
 String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
@@ -92,6 +93,7 @@ void saveElrs() {
     prefs.begin("elrs", false);
     prefs.putUInt("ver", kElrsVer);
     prefs.putBytes("cfg", &elrsCfg, sizeof elrsCfg);
+    prefs.putUChar("rdsw", elrsRdSwitch);
     prefs.end();
 }
 
@@ -160,6 +162,7 @@ void loadAll() {
         ElrsSettings e;
         if (prefs.getBytes("cfg", &e, sizeof e) == sizeof e) elrsCfg = e;
     }
+    elrsRdSwitch = prefs.getUChar("rdsw", 0) == 1 ? 1 : 0;
     prefs.end();
     sanitizeElrs(elrsCfg);
 

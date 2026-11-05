@@ -29,6 +29,13 @@
 // single lost write left LAND NOW!'s clock row, an expired lap time or a
 // cleared FINISHED! up for good.
 //
+// Those quick repeats all fall within about a second, so a short radio
+// outage (interference, the bridge busy switching UIDs) could still swallow
+// every one of them. So a change is also settled: kSettleRepeats more bursts
+// spread over several seconds (skipped while the race clock redraws the
+// screen every second anyway), and a row that was emptied is resent as
+// spaces in every burst for kBlankKeepMs, not just a few times.
+//
 // Gevent greenlets with sleeps become timed actions run from tick(). One
 // task owns the Engine; nothing here is thread safe.
 #pragma once
@@ -45,15 +52,20 @@ constexpr int kRows = 18;         // HDZero OSD rows
 constexpr int kCols = 50;         // vrxc_elrs centres on 50 columns
 constexpr int kCellsPerRow = 3;
 constexpr int kTextMax = 40;
-constexpr int kMaxActions = 48;
+constexpr int kMaxActions = 64;
 constexpr int kRefreshRepeats = 2;   // extra bursts after a change
 // Extra bursts after something is taken off the screen (a row emptied, or a
 // full clear). Clears matter as much as draws but nothing else repairs a lost
 // one once the clock stops, and they are rare, so they get more repeats.
 constexpr int kClearRepeats = 4;
-// Bursts that repeat a row's blanking: every refresh after the clear.
-constexpr int kBlankResends = kClearRepeats;
+// How long a row that was emptied is resent as spaces, in every burst.
+constexpr uint32_t kBlankKeepMs = 8000;
 constexpr uint32_t kRefreshMs = 200;
+// Slow repeats after a change: first after kSettleFirstMs, then every
+// kSettleMs (at +1 s, +2.5 s, +4 s, +5.5 s).
+constexpr int kSettleRepeats = 4;
+constexpr uint32_t kSettleFirstMs = 1000;
+constexpr uint32_t kSettleMs = 1500;
 constexpr int kLapRepeats = 2;            // LAP_OSD_REPEATS
 constexpr uint32_t kLapRepeatMs = 800;    // LAP_OSD_REPEAT_INTERVAL
 
@@ -157,7 +169,7 @@ private:
         bool enabled;
         uint8_t uid[6];
     };
-    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow, Refresh };
+    enum class Act : uint8_t { ClearRows, ClearStart, LapRedraw, ClearLapRow, Refresh, Settle };
     struct Action {
         bool used;
         uint32_t due;
@@ -182,13 +194,14 @@ private:
     bool finished_[kPilots] = {};
     char lastPos_[kPilots][kTextMax + 1] = {};
     // What each recipient's goggles were last sent per row, for overwriting
-    // rows that became empty: how many more bursts resend it as spaces.
+    // rows that became empty: until when bursts resend it as spaces.
     bool shown_[kRecipients][kRows] = {};
-    uint8_t blankResends_[kRecipients][kRows] = {};
+    uint32_t blankUntil_[kRecipients][kRows] = {};
     // Hash of each row as last sent, to tell a change from a redraw, and the
     // refresh bursts still to come per recipient.
     uint32_t sentHash_[kRecipients][kRows] = {};
     uint8_t refreshLeft_[kRecipients] = {};
+    uint8_t settleLeft_[kRecipients] = {};
     uint32_t now_ = 0;   // time of the event being handled
     bool clockRunning_ = false;
     uint32_t clockBase_ = 0;

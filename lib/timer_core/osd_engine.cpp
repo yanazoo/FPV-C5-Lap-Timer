@@ -43,9 +43,10 @@ void Engine::setRecipient(int idx, bool enabled, const uint8_t uid[6]) {
     if (changed) {
         clearFrame(idx);
         memset(shown_[idx], 0, sizeof shown_[idx]);
-        memset(blankResends_[idx], 0, sizeof blankResends_[idx]);
+        memset(blankUntil_[idx], 0, sizeof blankUntil_[idx]);
         memset(sentHash_[idx], 0, sizeof sentHash_[idx]);
         refreshLeft_[idx] = 0;
+        settleLeft_[idx] = 0;
     }
 }
 
@@ -120,16 +121,15 @@ void Engine::flush(int r, bool hard, bool clockTick) {
         bool empty = frames_[r].rows[row].n == 0;
         if (empty) {
             if (shown_[r][row]) {
-                blankResends_[r][row] = kBlankResends + 1;
+                blankUntil_[r][row] = now_ + kBlankKeepMs;
                 cleared = true;
             }
             shown_[r][row] = false;
-            if (blankResends_[r][row] == 0) continue;
-            --blankResends_[r][row];
+            if ((int32_t)(blankUntil_[r][row] - now_) <= 0) continue;
             if (hard) continue;   // "clear" already blanks it this time
         } else {
             shown_[r][row] = true;
-            blankResends_[r][row] = 0;
+            blankUntil_[r][row] = now_;   // nothing to keep blanking
         }
         p[0] = 0x03;   // write text: the whole row, so it replaces what was there
         p[1] = (uint8_t)row;
@@ -148,6 +148,9 @@ void Engine::flush(int r, bool hard, bool clockTick) {
         int want = cleared ? kClearRepeats : kRefreshRepeats;
         if (refreshLeft_[r] < want) refreshLeft_[r] = (uint8_t)want;
         if (!pending) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);
+        bool settling = settleLeft_[r] > 0;
+        settleLeft_[r] = kSettleRepeats;
+        if (!settling) schedule(now_ + kSettleFirstMs, Act::Settle, r, -1, -1, -1);
     }
 }
 
@@ -189,6 +192,14 @@ void Engine::runAction(uint32_t now, Action& a) {
         --refreshLeft_[r];
         flush(r);   // unchanged, so it schedules nothing itself
         if (refreshLeft_[r] > 0) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);   // from when it was due
+        break;
+    case Act::Settle:
+        if (settleLeft_[r] == 0) break;
+        --settleLeft_[r];
+        // While the race clock runs, its tick resends the whole frame every
+        // second already.
+        if (!clockRunning_) flush(r);
+        if (settleLeft_[r] > 0) schedule(now_ + kSettleMs, Act::Settle, r, -1, -1, -1);
         break;
     case Act::ClearLapRow:
         // A newer lap has already redrawn the row: don't wipe it.
@@ -239,6 +250,7 @@ void Engine::onRaceStage(uint32_t now, const char* eventName) {
     // Fresh race: drop pending clears and every per-pilot cache.
     for (auto& a : actions_) a.used = false;
     memset(refreshLeft_, 0, sizeof refreshLeft_);
+    memset(settleLeft_, 0, sizeof settleLeft_);
     for (int s = 0; s < kPilots; ++s) {
         lap_[s].token++;
         finished_[s] = false;
@@ -379,6 +391,7 @@ void Engine::onLapsClear(uint32_t now) {
     now_ = now;
     for (auto& a : actions_) a.used = false;
     memset(refreshLeft_, 0, sizeof refreshLeft_);
+    memset(settleLeft_, 0, sizeof settleLeft_);
     for (int s = 0; s < kPilots; ++s) {
         lap_[s].token++;
         finished_[s] = false;

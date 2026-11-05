@@ -80,7 +80,21 @@ function onMsg(d){
     p.crossing=p.rssiSignal&&(d.crossing!==undefined?d.crossing:p.crossing);
     if(d.name&&d.name!=='---')p.name=d.name;
     // Enter/exit cues — audio is tab-independent during a race or calibration.
-    if(raceRunning||activeTab==='calib'){
+    // The firmware counts every gate entry and exit (en / ex); a crossing
+    // shorter than the 10 Hz telemetry would never show up as a change of
+    // the crossing flag, so the tones follow the counters instead.
+    var tonesOn=raceRunning||activeTab==='calib';
+    if(d.en!==undefined&&d.ex!==undefined){
+      var newEnter=p.enCnt!==undefined&&((d.en-p.enCnt)&0xFFFF)>0;
+      var newExit=p.exCnt!==undefined&&((d.ex-p.exCnt)&0xFFFF)>0;
+      p.enCnt=d.en;p.exCnt=d.ex;
+      if(tonesOn&&(newEnter||newExit)){
+        ensureAudio();
+        if(newEnter)sfx.enter(s);
+        // Both in one sample: a short pass. Let the enter tone be heard first.
+        if(newExit){if(newEnter)setTimeout(()=>sfx.exit(s),120);else sfx.exit(s);}
+      }
+    }else if(tonesOn){   // older firmware: only the flag
       if(!prevCrossing&&p.crossing){ensureAudio();sfx.enter(s);}
       if(prevCrossing&&!p.crossing){ensureAudio();sfx.exit(s);}
     }

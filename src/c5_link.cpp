@@ -18,6 +18,7 @@ gate::Tracker     trackers[8];
 uint16_t          curMhz[8];
 volatile uint32_t lastSampleMs[8];
 volatile uint32_t counts[8];
+volatile uint16_t enterCounts[8], exitCounts[8];
 volatile uint16_t rates[8];
 
 void writeToC5(void*, const uint8_t* data, size_t len) { Serial1.write(data, len); }
@@ -28,7 +29,12 @@ void onSample(void*, const c5host::Sample& s) {
     counts[s.slot] = counts[s.slot] + 1;
     uint32_t passUs;
     uint16_t peak;
-    if (!trackers[s.slot].push(s.rssi, s.timeUs, &passUs, &peak)) return;
+    bool wasInside = trackers[s.slot].inside();
+    bool passEnded = trackers[s.slot].push(s.rssi, s.timeUs, &passUs, &peak);
+    bool isInside = trackers[s.slot].inside();
+    if (!wasInside && isInside) enterCounts[s.slot] = enterCounts[s.slot] + 1;
+    if (wasInside && !isInside) exitCounts[s.slot] = exitCounts[s.slot] + 1;
+    if (!passEnded) return;
     // The peak's time on the C5's clock, mapped by c5host onto micros();
     // move it onto millis() so the race logic works on one clock.
     uint32_t agoMs = (micros() - passUs) / 1000;
@@ -131,6 +137,8 @@ C5SlotLive c5Live(int slot) {
     l.filtered = t.filtered();
     l.raw = t.raw();
     l.inside = t.inside();
+    l.enters = enterCounts[slot];
+    l.exits = exitCounts[slot];
     uint32_t last = lastSampleMs[slot];   // read before millis(): never "in the future"
     l.signal = curMhz[slot] && t.valid() && millis() - last < SIGNAL_LOST_MS;
     return l;

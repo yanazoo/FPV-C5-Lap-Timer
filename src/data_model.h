@@ -47,6 +47,10 @@ extern int          rosterCount;
 extern int          activePilots[MAX_ACTIVE];
 extern Settings     settings;
 extern ElrsSettings elrsCfg;
+// Race director's TX switch: 0 toggle (on = start, off = stop), 1 push
+// (each press starts or stops). Its own NVS key, so ElrsSettings' stored
+// layout stays the same.
+extern uint8_t      elrsRdSwitch;
 extern String       adminPassword;
 extern String       apSsid, apPass;     // host mode: our access point
 extern uint8_t      netMode;            // NetMode (wifi_mgr.h)

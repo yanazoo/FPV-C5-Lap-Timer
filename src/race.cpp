@@ -184,6 +184,8 @@ static void sendTelemetry() {
             o["raw"]      = l.raw;
             o["crossing"] = l.inside;
             o["signal"]   = l.signal;
+            o["en"]       = l.enters;   // edge counters for the gate tones
+            o["ex"]       = l.exits;
         }
     }
     if (arr.size()) wsJson(d);
@@ -213,7 +215,55 @@ void sendC5Status() {
     wsJson(d);
 }
 
+// ── Race director (ELRS TX switch) ─────────────────────────────────────────
+// Countdown run by the firmware itself when the race director starts the
+// race (no browser drives it): stage now, start 3.3 s later, the same
+// timing as the web UI's Start button.
+static volatile int16_t rdPending = -1;   // switch state waiting for raceLoop
+static bool     rdCountdown = false;
+static uint32_t rdStartAt = 0;
+static const uint32_t RD_COUNTDOWN_MS = 3300;
+
+void raceDirectorSwitch(uint8_t state) { rdPending = state ? 1 : 0; }
+
+static bool raceBusy() { return rdCountdown || raceCore.running(); }
+
+static void rdStart() {
+    if (raceBusy()) return;
+    if (raceCore.paused()) {   // stopped mid-race: carry on, like Start in the UI
+        raceResume();
+        return;
+    }
+    raceStage();
+    rdCountdown = true;
+    rdStartAt = millis() + RD_COUNTDOWN_MS;
+}
+
+static void rdStop() {
+    if (rdCountdown) rdCountdown = false;   // stopped during the countdown
+    else if (!raceCore.running()) return;
+    raceStop();
+}
+
+static void serviceRaceDirector() {
+    int16_t v = rdPending;
+    if (v >= 0) {
+        rdPending = -1;
+        Serial.printf("[RD] switch %s\n", v ? "on" : "off");
+        if (elrsRdSwitch == 1) {           // push: each press flips the race
+            if (v == 1) raceBusy() ? rdStop() : rdStart();
+        } else {                           // toggle: on = start, off = stop
+            v ? rdStart() : rdStop();
+        }
+    }
+    if (rdCountdown && (int32_t)(millis() - rdStartAt) >= 0) {
+        rdCountdown = false;
+        raceStart();
+    }
+}
+
 void raceLoop() {
+    serviceRaceDirector();
     C5Pass p;
     while (c5PopPass(&p)) onPass(p);
     uint32_t now = millis();

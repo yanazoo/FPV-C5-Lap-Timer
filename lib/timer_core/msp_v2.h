@@ -17,6 +17,8 @@ constexpr uint16_t kElrsGetBackpackVersion = 0x0010;
 constexpr uint16_t kElrsSetSendUid         = 0x00B5;
 constexpr uint16_t kElrsSetOsd             = 0x00B6;
 constexpr uint16_t kElrsBackpackSetMode    = 0x0380;
+// From a TX backpack when its DVR-record switch moves (payload[0] 1 = on).
+constexpr uint16_t kElrsBackpackSetRecordingState = 0x0305;
 
 constexpr uint8_t kCommand  = '<';
 constexpr uint8_t kResponse = '>';
