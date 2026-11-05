@@ -52,6 +52,9 @@ bool Core::pass(int slot, int rosterIdx, uint32_t ts, int rssi, PassResult* out)
     // Cooldown on pass (peak) times. Signed difference: an out-of-order or
     // repeated ts is inside the cooldown, never a ~49-day "gap".
     if (s.lastLapTs && (int32_t)(ts - s.lastLapTs) < (int32_t)cooldownMs) return false;
+    // Timed race over: the pass either ends the pilot's race or doesn't count.
+    bool overtime = timeLimitMs && (int32_t)(ts - startMs_) >= (int32_t)timeLimitMs;
+    if (overtime && !countLastLap) return false;
 
     // Guard the unsigned subtraction: a peak timed before the reference
     // (pilot already in the gate at the start) gives 0, not ~2^32.
@@ -72,12 +75,13 @@ bool Core::pass(int slot, int rosterIdx, uint32_t ts, int rssi, PassResult* out)
 
     uint32_t base = lapMode == LapMode::Holeshot ? s.hsTs : startMs_;
     uint32_t total = ((int32_t)(ts - base) > 0) ? ts - base : 0;
+    s.totalMs = total;
 
     if (lapCount_ < kMaxLaps) laps_[lapCount_++] = {(int8_t)slot, (int16_t)rosterIdx, lapMs, ts, (int16_t)rssi};
 
     int done = laps(slot);
     bool justFinished = false;
-    if (totalLaps > 0 && !s.finished && done >= (int)totalLaps) {
+    if ((totalLaps > 0 && done >= (int)totalLaps) || overtime) {
         s.finished = true;
         justFinished = true;
     }
@@ -94,6 +98,14 @@ bool Core::pass(int slot, int rosterIdx, uint32_t ts, int rssi, PassResult* out)
         out->totalMs = total;
         out->justFinished = justFinished;
     }
+    return true;
+}
+
+bool Core::finishSlot(int slot) {
+    if (slot < 0 || slot >= kSlots) return false;
+    SlotState& s = slots_[slot];
+    if (s.finished || s.lapCount == 0) return false;
+    s.finished = true;
     return true;
 }
 

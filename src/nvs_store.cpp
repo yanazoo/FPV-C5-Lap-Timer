@@ -8,6 +8,7 @@ CalibConfig  rosterCal[MAX_REGISTERED];
 int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
+RaceRules    raceRules;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -86,6 +87,7 @@ void saveActive() {
 void saveSettings() {
     prefs.begin("settings", false);
     prefs.putBytes("s", &settings, sizeof settings);
+    prefs.putBytes("r", &raceRules, sizeof raceRules);
     prefs.end();
 }
 
@@ -149,7 +151,11 @@ void loadAll() {
     prefs.begin("settings", true);
     Settings st;
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
+    RaceRules rr;
+    if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
     prefs.end();
+    raceRules.rankMode     = raceRules.rankMode <= 2 ? raceRules.rankMode : 0;
+    raceRules.timeLimitSec = constrain(raceRules.timeLimitSec, (uint16_t)30, (uint16_t)1800);
     // Raw bytes from flash: keep them in the ranges the API enforces.
     settings.lapMode    = settings.lapMode == 1 ? 1 : 0;
     settings.cooldownMs = constrain(settings.cooldownMs, 500u, 30000u);

@@ -41,6 +41,9 @@ static void addSettings(JsonDocument& d) {
     d["sdLogMode"]  = settings.sdLogMode;
     d["totalLaps"]  = settings.totalLaps;
     d["gain"]       = settings.gain;
+    d["rankMode"]     = raceRules.rankMode;
+    d["timeLimitSec"] = raceRules.timeLimitSec;
+    d["countLastLap"] = raceRules.countLastLap;
 }
 
 void wsSettings() {

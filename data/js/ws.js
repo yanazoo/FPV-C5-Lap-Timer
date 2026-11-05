@@ -125,6 +125,7 @@ function onMsg(d){
   }
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
+  if(d.type==='time_up'){timeIsUp=true;updateRemain();toast('⏱ 時間切れ');return;}
   if(d.type==='race_start'){onRaceStart();return;}
   if(d.type==='race_resume'){onRaceResume();return;}
   if(d.type==='race_stop'){onRaceStop();return;}
@@ -214,7 +215,9 @@ function applyLap(d,quiet){
   // Firmware is authoritative for best lap (it knows the HS exclusion).
   if(d.bestLap!==undefined)p.bestLapMs=d.bestLap;
   else if(!_isHS&&lapMs>0&&(!p.bestLapMs||lapMs<p.bestLapMs))p.bestLapMs=lapMs;
+  if(d.finished)p.done=true;
   updateRaceCard(p);addLapRow(p,lapMs,_cum,quiet);
+  renderRanking();
   if(quiet)return;
   checkFinished(p,d.finished);
   // No lap tone: a lap is recorded as the pilot leaves the gate, so the
@@ -257,6 +260,8 @@ function applySettings(st){
   setField('cooldownInput',(cooldownMs/1000).toFixed(1));
   if(st.totalLaps!==undefined)setField('totalLaps',st.totalLaps);
   if(st.gain!==undefined)setField('gainInput',st.gain);
+  if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
+    showRaceRules();renderRanking();updateRemain(raceRunning?performance.now()-raceStartPerf:timerFrozenMs);}
   slots.forEach(p=>updateRaceCard(p));
 }
 

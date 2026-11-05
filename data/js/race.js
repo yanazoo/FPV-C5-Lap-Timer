@@ -7,14 +7,14 @@ function startTimer(){
   timerFrozenMs=0;raceStartPerf=performance.now();
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{timerEl.textContent=fmtTimer(performance.now()-raceStartPerf);},50);
+  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
 }
 function resumeTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}
   raceStartPerf=performance.now()-timerFrozenMs;
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{timerEl.textContent=fmtTimer(performance.now()-raceStartPerf);},50);
+  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
 }
 function stopTimer(){
   if(timerH){timerFrozenMs=performance.now()-raceStartPerf;clearInterval(timerH);timerH=null;}
@@ -85,6 +85,7 @@ function buildRaceCards(){
   if(none)none.style.display=shown?'none':'block';
   // Rebuilding the cards (another browser assigned pilots) keeps the laps.
   slots.forEach(p=>renderLapRows(p));
+  renderRanking();
 }
 
 function updateRaceCard(p){
@@ -147,15 +148,72 @@ function addLapRow(p, lapMs, cumMs, quiet){
   card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
   card.addEventListener('animationend',()=>card.classList.remove('flash'),{once:true});
 }
+// ── Ranking table ───────────────────────────────────────────────────────
+// Every assigned pilot with best lap, laps and total time; rows ordered by
+// the ranking rule from settings (rankMode), its column highlighted.
+function completedLaps(p){return lapMode==='immediate'?p.lapCount:Math.max(0,p.lapCount-1);}
+function fmtSec(s){s=Math.max(0,Math.ceil(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+var RANK_RULES=['周回数 → トータルタイム順','最速ラップ順','制限時間内の周回数 → 到達の早い順'];
+function rankRows(){
+  var rows=slots.filter(slotInUse).map(p=>({p:p,laps:completedLaps(p),best:p.bestLapMs||0,total:p.cumulative||0}));
+  var byLaps=(a,b)=>(b.laps-a.laps)||((a.laps?a.total:0)-(b.laps?b.total:0))||(a.p.id-b.p.id);
+  if(rankMode===1)rows.sort((a,b)=>((a.best?0:1)-(b.best?0:1))||(a.best-b.best)||byLaps(a,b));
+  else rows.sort(byLaps);
+  return rows;
+}
+function renderRanking(){
+  var t=document.getElementById('rankTable');if(!t)return;
+  var rule=document.getElementById('rankRule');
+  if(rule)rule.textContent=RANK_RULES[rankMode]+(rankMode===2?'（制限 '+fmtSec(timeLimitSec)+(countLastLap?'・最終周あり':'・最終周なし')+'）':'');
+  var rows=rankRows();
+  var panel=document.getElementById('rankPanel');
+  if(panel)panel.style.display=rows.length?'':'none';
+  if(!rows.length){t.innerHTML='';return;}
+  var lead=rows[0],key=rankMode===1?'best':'laps';
+  var h='<thead><tr><th>順位</th><th class="l">パイロット</th>'
+    +'<th class="'+(key==='best'?'key':'')+'">最速ラップ</th>'
+    +'<th class="'+(key==='laps'?'key':'')+'">周回</th>'
+    +'<th class="'+(key==='laps'?'key':'')+'">トータル</th><th>差</th></tr></thead><tbody>';
+  var started=rows.some(r=>r.laps>0||r.best>0);
+  rows.forEach((r,i)=>{
+    var has=rankMode===1?r.best>0:r.laps>0;
+    var gap='';
+    if(i>0&&has){
+      if(rankMode===1)gap='+'+((r.best-lead.best)/1000).toFixed(3);
+      else if(r.laps<lead.laps)gap='-'+(lead.laps-r.laps)+'周';
+      else gap='+'+((r.total-lead.total)/1000).toFixed(3);
+    }
+    var nm=r.p.name==='---'?'Ch'+(r.p.id+1):r.p.name;
+    h+='<tr class="'+(started&&has&&i<3?'r'+(i+1):'')+'">'
+      +'<td class="pos">'+(started&&has?(i+1):'–')+'</td>'
+      +'<td class="name l"><span class="rank-dot" style="background:'+PCOLORS[r.p.id]+'"></span>'+esc(nm)+(r.p.done?' 🏁':'')+'</td>'
+      +'<td class="'+(key==='best'?'key':'')+'">'+(r.best?fmt(r.best):'—')+'</td>'
+      +'<td class="'+(key==='laps'?'key':'')+'">'+r.laps+'</td>'
+      +'<td class="'+(key==='laps'?'key':'')+'">'+(r.laps?fmt(r.total):'—')+'</td>'
+      +'<td class="gap">'+gap+'</td></tr>';
+  });
+  t.innerHTML=h+'</tbody>';
+}
+// Timed race: time left next to the rule, from the race clock.
+function updateRemain(elapsedMs){
+  var el=document.getElementById('rankRemain');if(!el)return;
+  if(rankMode!==2){el.textContent='';return;}
+  var left=timeLimitSec-(elapsedMs||0)/1000;
+  var over=timeIsUp||left<=0;
+  el.textContent=over?'時間切れ':'残り '+fmtSec(left);
+  el.classList.toggle('over',over);
+}
+
 // Forget every lap on this browser (a new race, or Clear from any browser).
 function resetLaps(){
   slots.forEach(p=>{
-    p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;p.rows=[];p.lastTs=0;
+    p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;p.rows=[];p.lastTs=0;p.done=false;
     var e=p.el;
     var b=e?e.body:document.getElementById('lapBody'+p.id);if(b)b.innerHTML='';
     var d=e?e.delta:document.getElementById('rcDelta'+p.id);if(d)d.textContent='';
     updateRaceCard(p);
   });
+  renderRanking();
 }
 
 // ── Race state transitions ──────────────────────────────────────────────
@@ -171,6 +229,7 @@ function onRaceStart(){
   raceStartApplied=raceStartSeq;clearStartWatchdog();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer();
   lapEpoch++;resetLaps();
+  timeIsUp=false;updateRemain(0);
 }
 function onRaceResume(){
   clearStartWatchdog();

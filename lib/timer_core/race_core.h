@@ -32,7 +32,8 @@ struct SlotState {
     uint32_t bestLapMs = 0;   // holeshot excluded
     uint32_t lastLapTs = 0;   // ts of the last recorded pass (0 = none)
     uint32_t hsTs = 0;        // holeshot ts (holeshot mode)
-    bool finished = false;    // reached totalLaps
+    bool finished = false;    // reached totalLaps, or done when the time ran out
+    uint32_t totalMs = 0;     // race time at the last pass (from holeshot in holeshot mode)
 };
 
 // What one recorded pass means.
@@ -46,7 +47,7 @@ struct PassResult {
     bool newBest;
     uint32_t bestLapMs;
     uint32_t totalMs;    // race time so far (from holeshot in holeshot mode)
-    bool justFinished;   // this pass completed totalLaps
+    bool justFinished;   // this pass completed totalLaps (or the timed race)
 };
 
 class Core {
@@ -54,6 +55,11 @@ public:
     LapMode lapMode = LapMode::Holeshot;
     uint32_t cooldownMs = 3000;   // minimum time between two passes of a pilot
     uint16_t totalLaps = 0;       // 0 = unlimited
+    // Timed race: 0 = off. Once timeLimitMs of race time has passed, a
+    // pilot's next pass ends their race if countLastLap (the lap they were
+    // on counts), otherwise passes no longer count at all.
+    uint32_t timeLimitMs = 0;
+    bool countLastLap = true;
 
     // Fresh race: clears laps and per-slot state.
     void start(uint32_t now);
@@ -74,6 +80,12 @@ public:
     // recorded; false if no race is running or it is within cooldownMs of
     // the pilot's previous pass.
     bool pass(int slot, int rosterIdx, uint32_t ts, int rssi, PassResult* out);
+
+    // Timed race: has the time run out (race time, pauses excluded)?
+    bool timeUp(uint32_t now) const { return timeLimitMs && running_ && elapsed(now) >= timeLimitMs; }
+    // End a pilot's race without a pass (time up, last lap not counted).
+    // Returns true if they had started and weren't finished yet.
+    bool finishSlot(int slot);
 
     // Completed laps (holeshot excluded).
     int laps(int slot) const;
