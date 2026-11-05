@@ -72,6 +72,15 @@ var sfx={
     [[0,50,1200],[50,75,1800],[125,50,1200],[175,75,1800],[250,50,1200],[300,100,1800]]
       .forEach(n=>rhBeepAt(n[0],n[1],n[2],BEEP_VOL,'square'));
   },
+  // Time-limited race over: a short fanfare (G4 C5 E5, then a long G5 and
+  // the C6 above it), triangle like the other race tones.
+  fanfare: ()=>{
+    [[0,110,392],[130,110,523.3],[260,110,659.3],[390,500,784]]
+      .forEach(n=>rhBeepAt(n[0],n[1],n[2],TONE_VOL,'triangle',0.15));
+    rhBeepAt(390,500,1046.5,TONE_VOL*0.6,'triangle',0.6);
+  },
+  // Countdown second without voice: a short 880 Hz tick.
+  tick: ()=>rhBeep(60,880,TONE_VOL,'triangle',0.05),
   // Gate crossing, pitch per channel:
   // enter: square 25 ms, 1 s tail; exit: sawtooth 35 ms twice, 70 ms apart.
   enter: (slot)=>rhBeep(25,chTone(slot),BEEP_VOL,'square'),
@@ -117,6 +126,12 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
 // With voice off (or beeps only) `then` runs at once. iOS often never fires
 // onend, so the end is also taken from speechSynthesis.speaking going false,
 // and after 2.5 s at the latest the countdown starts anyway.
+// iOS Safari speaks only after the page has spoken inside a tap: the Start
+// tap does that (silently), so "レディ" from race_ready is heard.
+function warmSpeech(){
+  if(speechWarmedUp||typeof speechSynthesis==='undefined')return;
+  try{var u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);speechWarmedUp=true;}catch(e){}
+}
 function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
@@ -137,6 +152,19 @@ function announceStart(then){
 
 // Voice-only. Callers play the lap/crossing beep themselves, so an audio
 // cue always fires even when voice is off or the browser drops the utterance.
+// Time-critical callout (the timed race's countdown): said now, ahead of
+// queued lap calls, and cutting off one still being said. Without voice,
+// a tick instead.
+function sayNow(text){
+  if(!voiceEnabled||announceMode==='none'||announceMode==='beep'||typeof speechSynthesis==='undefined'){
+    ensureAudio();sfx.tick();return;
+  }
+  speechQ=[];
+  try{speechSynthesis.cancel();}catch(e){}
+  speechBusy=false;
+  speechQ.push(text);
+  nextSpeech();
+}
 function speak(text){
   if(!voiceEnabled||announceMode==='none'||announceMode==='beep')return;
   if(speechQ.length<8)speechQ.push(text);
@@ -183,9 +211,14 @@ function buildSpeech(p,lapCount,lapMs){
   if(announceMode==='lap_laptime'){var lapLabel=lapMode==='immediate'?lapCount+'周':(lapCount===1?'ホールショット':(lapCount-1)+'周');return spokenName+'、'+lapLabel+'、'+tStr;}
   return spokenName+'、'+tStr;
 }
+// 音声テスト (race tab) / テスト (settings): the gate tone, then a sample
+// call when voice is on. Also unlocks sound for this browser.
 function testVoice(){
   ensureAudio();sfx.exit(0);
-  if(voiceEnabled&&announceMode!=='beep'&&announceMode!=='none'){
+  if(typeof speechSynthesis==='undefined')return;
+  if(!voiceEnabled||announceMode==='none'){toast('🔇 音声はOFFです（設定タブで切替）');return;}
+  if(announceMode!=='beep'){
+    speechWarmedUp=true;
     var u=new SpeechSynthesisUtterance('テスト、1分23秒4');u.lang='ja-JP';u.rate=speechRate;
     var voices=speechSynthesis.getVoices();
     var jaVoice=voices.find(v=>v.lang&&v.lang.startsWith('ja'));
@@ -216,8 +249,15 @@ function toggleVoice(){
   }
 }
 function refreshVoiceBtns(){
-  ['voiceToggle','voiceToggle2'].forEach(id=>{
+  ['voiceToggle2'].forEach(id=>{
     var el=document.getElementById(id);if(!el)return;
     el.checked=voiceEnabled;
   });
 }
+
+// Browsers only allow sound after a tap or key press on the page. Unlock it
+// on the first one, so a start or stop from the race director or another
+// browser is heard even when this one never pressed a race button.
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,function un(){
+  ensureAudio();document.removeEventListener(ev,un,true);
+},true));

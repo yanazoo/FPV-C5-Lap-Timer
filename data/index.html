@@ -51,9 +51,10 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
 #timer.running{color:var(--ok)}
-.race-buttons{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.lap-count-row{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;justify-content:center}
-.lap-count-row input[type="number"]{width:56px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px 6px;text-align:center;font-size:14px}
+#timer.timeup,#timer.running.timeup{color:var(--err)}
+.race-buttons{display:flex;gap:8px;justify-content:center}
+.race-buttons button{white-space:nowrap}
+@media(max-width:460px){.race-buttons{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;width:100%}.race-buttons button{padding:10px 2px;font-size:12px}}
 
 /* ── Pilot race grid ── */
 .pilot-race-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -63,8 +64,6 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .rank-panel{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:8px 12px 6px;margin-bottom:12px}
 .rank-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:4px}
 .rank-head b{color:var(--tx);font-size:13px}
-.rank-remain{font-family:"Courier New",monospace;font-weight:bold;color:var(--accent)}
-.rank-remain.over{color:var(--err)}
 .rank-wrap{overflow-x:auto}
 .rank-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 .rank-table th{font-size:11px;font-weight:normal;color:var(--muted);text-align:right;padding:3px 6px;white-space:nowrap}
@@ -307,22 +306,12 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button id="btnStart" onclick="startRace()" class="btn-success">▶ スタート</button>
       <button id="btnStop"  onclick="stopRace()"  class="btn-danger" disabled>■ ストップ</button>
       <button id="btnClear" onclick="clearAllLaps()" class="btn-secondary">クリア</button>
+      <button id="btnVoiceTest" onclick="testVoice()" class="btn-secondary">音声テスト</button>
     </div>
     <div id="authHint">🔒 操作するには <a onclick="onAuthBtn()">ログイン</a> が必要です</div>
-    <div class="lap-count-row">
-      <label>総周回数:</label>
-      <input type="number" id="totalLaps" min="0" max="99" value="0" onchange="saveTotalLaps()">
-      <span style="font-size:11px;color:var(--muted)">（0=無制限）</span>
-      <span style="color:var(--bd);margin:0 4px">｜</span>
-      <label class="toggle-sw">
-        <input type="checkbox" id="voiceToggle" onchange="toggleVoice()" checked>
-        <span class="toggle-track"></span>
-        🔊 音声
-      </label>
-    </div>
   </div>
   <div class="rank-panel" id="rankPanel">
-    <div class="rank-head"><b>順位</b><span id="rankRule"></span><span class="rank-remain" id="rankRemain"></span></div>
+    <div class="rank-head"><b>順位</b><span id="rankRule"></span></div>
     <div class="rank-wrap"><table class="rank-table" id="rankTable"></table></div>
   </div>
   <div class="pilot-race-grid" id="pilotGrid"></div>
@@ -332,6 +321,41 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <!-- ═══════════════════════════ CONFIG ════════════════════════ -->
 <section id="pane-config" class="tab-pane">
   <h2 class="section-title">設定</h2>
+
+  <div class="global-config-card">
+    <h3 class="global-title">🏁 レース内容</h3>
+    <p class="section-desc">レースの周回数と、レース画面の順位表の並べ方です。順位表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
+    <div class="config-row">
+      <label>総周回数</label>
+      <div class="slider-num">
+        <input type="number" id="totalLaps" min="0" max="99" value="0" onchange="saveTotalLaps()" style="width:70px">
+        <span class="unit" style="font-size:11px">周（0=無制限）</span>
+      </div>
+    </div>
+    <div class="config-row">
+      <label>順位の決め方</label>
+      <select id="rankModeSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="0">トータルタイム（周回数の多い順 → 同じ周回数はタイムの速い順）</option>
+        <option value="1">最速ラップ（ベストラップの速い順）</option>
+        <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
+      </select>
+    </div>
+    <div class="config-row rank-timed">
+      <label>制限時間</label>
+      <div class="slider-num">
+        <input type="number" id="timeLimitMin" min="0" max="30" value="2" onchange="saveRaceRules()" style="width:60px"><span class="unit">分</span>
+        <input type="number" id="timeLimitSec" min="0" max="59" value="0" onchange="saveRaceRules()" style="width:60px"><span class="unit">秒</span>
+      </div>
+    </div>
+    <div class="config-row rank-timed">
+      <label>時間切れ時の最終周</label>
+      <select id="countLastLapSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="1">カウントする（時間切れ後の次の通過までを数える）</option>
+        <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
+      </select>
+    </div>
+    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。残り 30 秒・20 秒で「残り○秒」、残り 10 秒からは 1 秒ごとに数を読み上げ、0 秒でファンファーレが鳴ります（音声オフのときは 10 秒からビープ）。時間切れ後もレースは止まらず、ストップを押すまでマイナス表示で時間を計り続けます。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
+  </div>
 
   <div class="global-config-card">
     <h3 class="global-title">📡 C5 受信機（FPVGate C5MK）</h3>
@@ -376,34 +400,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 SDバックアップ保存</button>
       <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 SDから復元</button>
     </div>
-  </div>
-
-  <div class="global-config-card">
-    <h3 class="global-title">🏁 順位の決め方</h3>
-    <p class="section-desc">レース画面の順位表の並べ方です。表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
-    <div class="config-row">
-      <label>順位の決め方</label>
-      <select id="rankModeSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="0">トータルタイム（周回数の多い順 → 同じ周回数はタイムの速い順）</option>
-        <option value="1">最速ラップ（ベストラップの速い順）</option>
-        <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
-      </select>
-    </div>
-    <div class="config-row rank-timed">
-      <label>制限時間</label>
-      <div class="slider-num">
-        <input type="number" id="timeLimitMin" min="0" max="30" value="2" onchange="saveRaceRules()" style="width:60px"><span class="unit">分</span>
-        <input type="number" id="timeLimitSec" min="0" max="59" value="0" onchange="saveRaceRules()" style="width:60px"><span class="unit">秒</span>
-      </div>
-    </div>
-    <div class="config-row rank-timed">
-      <label>時間切れ時の最終周</label>
-      <select id="countLastLapSelect" onchange="saveRaceRules()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="1">カウントする（時間切れ後の次の通過までを数える）</option>
-        <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
-      </select>
-    </div>
-    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。全員が完走するか、時間切れから 60 秒たつとレースは自動で止まります。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
   </div>
 
   <div class="global-config-card">
@@ -474,12 +470,12 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         </select></label>
       <label class="elrs-tcp">netpack アドレス（auto=自動検出）<input type="text" id="elrs_host" maxlength="63" placeholder="auto"></label>
       <label class="elrs-tcp">ポート<input type="number" id="elrs_port" min="1" max="65535"></label>
-      <label>レースディレクターのバインドフレーズ（任意）<input type="text" id="elrs_rdBind" maxlength="32" autocomplete="off"></label>
+      <label>ディレクターバインドフレーズ（任意）<input type="text" id="elrs_rdBind" maxlength="32" autocomplete="off"></label>
       <label>レースディレクターのスイッチ<select id="elrs_rdSwitch">
           <option value="0">トグル（ON でスタート・OFF でストップ）</option>
           <option value="1">プッシュ（押すたびにスタート／ストップ）</option>
         </select></label>
-      <p class="hint" style="grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)">送信機の ELRS 設定（Lua → Backpack → DVR Rec）で、スタート／ストップに使う AUX スイッチを割り当ててください。そのスイッチの操作でレースを開始・停止できます（ESP-NOW ブリッジ経由）。</p>
+      <p class="hint" style="grid-column:1/-1;margin:0;font-size:11px;color:var(--muted)">送信機の ELRS 設定（Lua → Backpack → DVR Rec）で、スタート／ストップに使う AUX スイッチを割り当ててください。そのスイッチの操作でレースを開始・停止できます（ESP-NOW ブリッジ経由）。プッシュは押しボタン用で、押すたびにスタート／ストップします（1.5 秒以内に続けて押した分は 1 回と数えます）。トグルは倒したままのスイッチ用です。</p>
       <label>イベント名（ARM NOW 時に表示・英数字）<input type="text" id="elrs_eventName" maxlength="32"></label>
     </div>
     <div style="margin-top:6px">

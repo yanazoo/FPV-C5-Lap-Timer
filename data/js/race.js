@@ -2,22 +2,76 @@
 
 var timerEl=document.getElementById('timer');
 
-function startTimer(){
+// The race clock runs on the timer's own clock (millis()), not on when a
+// browser happened to receive race_start: every browser shows the same
+// time, whatever its network delay. srvOff = timer ms - performance.now(),
+// from the timestamps in the 10 Hz telemetry; the largest value seen is the
+// one with the least delay. It drifts down slowly (clocks differ by up to
+// ~0.05 %) so a better sample can take over.
+var srvOff=null,srvOffAt=0,raceStartSrv=0;
+function noteServerTime(ts){
+  if(!ts)return;
+  var now=performance.now(),s=ts-now;
+  if(srvOff===null||s>srvOff-(now-srvOffAt)*0.0005)srvOff=s;
+  else srvOff-=(now-srvOffAt)*0.0005;
+  srvOffAt=now;
+}
+function serverNow(){return performance.now()+(srvOff||0);}
+function raceElapsedMs(){return timerH?serverNow()-raceStartSrv:timerFrozenMs;}
+// What the big race clock shows for a race time: in a timed race (laps
+// within a time limit) the time left, then the time over the limit as
+// -mm:ss.cc in red; otherwise the time so far.
+function raceClockText(el){
+  if(rankMode!==2){timerEl.classList.remove('timeup');return fmtTimer(el);}
+  var left=timeLimitSec*1000-el;
+  timerEl.classList.toggle('timeup',left<=0&&el>0);
+  if(left>=0)return fmtTimer(Math.ceil(left/10)*10);
+  return '-'+fmtTimer(Math.floor(-left/10)*10);
+}
+// Timed race callouts on every browser, from the shared race clock: "残り
+// 30秒", "残り20秒", then 10, 9 ... 1 each second, and a fanfare at 0. Only
+// what is crossed while this browser's clock runs (opening or resuming
+// mid-race doesn't replay the earlier ones).
+var calloutPrevLeft=null;
+function timedCallouts(el){
+  if(rankMode!==2){calloutPrevLeft=null;return;}
+  var left=timeLimitSec*1000-el,prev=calloutPrevLeft;
+  calloutPrevLeft=left;
+  if(prev===null||left>=prev)return;
+  var crossed=t=>prev>t&&left<=t;
+  if(crossed(0)){ensureAudio();sfx.fanfare();return;}
+  for(var n=10;n>=1;n--)if(crossed(n*1000)){sayNow(String(n));return;}
+  if(crossed(20000)){sayNow('残り20秒');return;}
+  if(crossed(30000)&&timeLimitSec>30){sayNow('残り30秒');return;}
+}
+function runTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}
-  timerFrozenMs=0;raceStartPerf=performance.now();
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
+  calloutPrevLeft=null;
+  var tick=()=>{
+    var el=Math.max(0,serverNow()-raceStartSrv);
+    timerEl.textContent=raceClockText(el);
+    timedCallouts(el);
+  };
+  timerH=setInterval(tick,50);tick();
 }
-function resumeTimer(){
-  if(countdownH){clearInterval(countdownH);countdownH=null;}
-  raceStartPerf=performance.now()-timerFrozenMs;
-  timerEl.classList.add('running');
-  if(timerH)clearInterval(timerH);
-  timerH=setInterval(()=>{var el=performance.now()-raceStartPerf;timerEl.textContent=fmtTimer(el);updateRemain(el);},50);
+// startSrv: the race start on the timer's clock (race_start ts).
+function startTimer(startSrv){
+  timerFrozenMs=0;
+  raceStartSrv=startSrv!==undefined&&srvOff!==null?startSrv:serverNow();
+  runTimer();
 }
-function stopTimer(){
-  if(timerH){timerFrozenMs=performance.now()-raceStartPerf;clearInterval(timerH);timerH=null;}
+// startSrv: race_resume's / init's raceStartMs (already moved past pauses).
+function resumeTimer(startSrv){
+  raceStartSrv=startSrv!==undefined&&srvOff!==null?startSrv:serverNow()-timerFrozenMs;
+  runTimer();
+}
+// elapsed: race time at the stop, from the timer (race_stop elapsed).
+function stopTimer(elapsed){
+  if(timerH){timerFrozenMs=elapsed!==undefined?elapsed:serverNow()-raceStartSrv;clearInterval(timerH);timerH=null;}
+  else if(elapsed!==undefined)timerFrozenMs=elapsed;
+  timerEl.textContent=raceClockText(timerFrozenMs);
   timerEl.classList.remove('running');
 }
 
@@ -194,15 +248,6 @@ function renderRanking(){
   });
   t.innerHTML=h+'</tbody>';
 }
-// Timed race: time left next to the rule, from the race clock.
-function updateRemain(elapsedMs){
-  var el=document.getElementById('rankRemain');if(!el)return;
-  if(rankMode!==2){el.textContent='';return;}
-  var left=timeLimitSec-(elapsedMs||0)/1000;
-  var over=timeIsUp||left<=0;
-  el.textContent=over?'時間切れ':'残り '+fmtSec(left);
-  el.classList.toggle('over',over);
-}
 
 // Forget every lap on this browser (a new race, or Clear from any browser).
 function resetLaps(){
@@ -217,68 +262,55 @@ function resetLaps(){
 }
 
 // ── Race state transitions ──────────────────────────────────────────────
-// The web node broadcasts race_start / race_resume / race_stop over the
-// WebSocket, which is the normal trigger for these. Each Start/Stop also
-// arms a short watchdog: if that WS message is ever lost, the watchdog
-// applies the transition locally so the controls can never get stuck.
-var raceStartSeq=0, raceStartApplied=-1, startWatchdog=null, stopWatchdog=null;
+// The timer runs the race and tells every browser over the WebSocket:
+// race_ready ("レディ"), race_stage (3-2-1), race_start / race_resume,
+// race_stop. The buttons only ask the timer, so the browser that pressed
+// Start, every other browser and the goggles' OSD all follow one sequence.
+// A lost message is put right by the 1 Hz race status (reconcileRace).
+var startWatchdog=null;
 function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);startWatchdog=null;}}
-function clearStopWatchdog(){if(stopWatchdog){clearTimeout(stopWatchdog);stopWatchdog=null;}}
 
-function onRaceStart(){
-  raceStartApplied=raceStartSeq;clearStartWatchdog();
-  raceRunning=true;raceStarted=true;setBtns(true);startTimer();
-  lapEpoch++;resetLaps();
-  timeIsUp=false;updateRemain(0);
-}
-function onRaceResume(){
+function onRaceStart(ts){
   clearStartWatchdog();
-  raceRunning=true;raceStarted=true;setBtns(true);resumeTimer();
+  raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
+  lapEpoch++;resetLaps();
 }
-function onRaceStop(){
-  clearStopWatchdog();
-  raceRunning=false;setBtns(false);stopTimer();
+function onRaceResume(ts){
+  clearStartWatchdog();
+  raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(ts);
+}
+// A start under way: "レディ" on every browser, then race_stage's countdown.
+var readyUntil=0;   // until then the 1 Hz status mustn't undo the start
+function onRaceReady(){
+  clearStartWatchdog();
+  if(countdownH)return;
+  readyUntil=performance.now()+2500;
+  ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+  timerEl.classList.remove('running');
+  announceStart();
+}
+// The stop tone on every browser (Stop pressed elsewhere, or the race
+// director); the browser that pressed Stop has already played it.
+var stopToneAt=-1e9;
+function onRaceStop(elapsed){
+  if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
+  if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
+  raceRunning=false;setBtns(false);stopTimer(elapsed);
 }
 
 function startRace(){
-  ensureAudio();
-  var btnStart=document.getElementById('btnStart');
-  var btnClear=document.getElementById('btnClear');
-  btnStart.disabled=true;
-  if(btnClear)btnClear.disabled=true;
-  // Resume a paused race (Stop → Start) without countdown or reset.
-  if(raceStarted && !raceRunning){
-    fetch('/api/race/resume',{method:'POST'})
-      .then(r=>{if(!r.ok)throw 0;
-        clearStartWatchdog();
-        startWatchdog=setTimeout(()=>{if(!raceRunning)onRaceResume();},1500);
-      })
-      .catch(e=>{btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ 再開 通信エラー');});
-    return;
-  }
-  // "レディ" first; the countdown starts once it has been said.
-  announceStart(beginCountdown);
-}
-function beginCountdown(){
-  var btnStart=document.getElementById('btnStart');
-  var btnClear=document.getElementById('btnClear');
-  // Countdown start = RotorHazard "stage": ARM NOW on the goggles. The
-  // firmware passes it on to every browser, which show the countdown too.
-  showCountdown();
-  fetch('/api/race/stage',{method:'POST'}).catch(()=>{});
-  setTimeout(async()=>{
-    raceStartSeq++;var mySeq=raceStartSeq;   // claim this start cycle
-    try{
-      var r=await fetch('/api/race/start',{method:'POST'});
-      if(!r.ok)throw 0;
+  ensureAudio();warmSpeech();
+  ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
+  var fail=()=>{setBtns(raceRunning);toast('⚠️ スタート 通信エラー');};
+  fetch('/api/race/start',{method:'POST'})
+    .then(r=>{if(!r.ok)throw 0;
+      // Nothing came back (no race_ready / race_resume): give the buttons back.
       clearStartWatchdog();
-      startWatchdog=setTimeout(()=>{if(raceStartApplied!==mySeq)onRaceStart();},1500);
-    }
-    catch(e){btnStart.disabled=false;if(btnClear)btnClear.disabled=false;toast('⚠️ スタート 通信エラー');}
-  },3300);
+      startWatchdog=setTimeout(()=>{if(!raceRunning&&!countdownH)setBtns(raceRunning);},3000);
+    })
+    .catch(fail);
 }
-// 3-2-1 before the start; on the browser that pressed Start and, through
-// race_stage, on every other one.
+// 3-2-1 before the start, on race_stage (every browser).
 function showCountdown(){
   if(countdownH)return;   // already counting down
   ensureAudio();sfx.count();
@@ -290,41 +322,36 @@ function showCountdown(){
     var rem=Math.max(0,3000-(performance.now()-cdStart));
     timerEl.textContent=(rem/1000).toFixed(2);
     if(rem===0){clearInterval(countdownH);countdownH=null;
-      // No start followed (the presser's request failed): give the buttons back.
+      // No start followed (stopped meanwhile): give the buttons back.
       setTimeout(()=>{if(!raceRunning&&!countdownH)setBtns(raceRunning);},2500);}
   },50);
 }
 function stopRace(){
-  ensureAudio();sfx.stop();
-  fetch('/api/race/stop',{method:'POST'})
-    .then(r=>{if(!r.ok)return;
-      clearStopWatchdog();
-      stopWatchdog=setTimeout(()=>{if(raceRunning)onRaceStop();},1500);
-    })
-    .catch(()=>{});
+  ensureAudio();sfx.stop();stopToneAt=performance.now();
+  fetch('/api/race/stop',{method:'POST'}).catch(()=>toast('⚠️ ストップ 通信エラー'));
 }
 async function clearAllLaps(){
+  // Always ask the timer: it clears every browser (race_clear), even when
+  // there are no laps yet (a stopped race with its clock still showing).
   var hasData=slots.some(p=>p.lapCount>0);
-  if(hasData){
-    try{
-      var r=await fetch('/api/race/save',{method:'POST'});
-      if(r.ok){
-        var j=await r.json();
-        if(j.saved)toast('✅ レース結果をSDに保存しました');
-        else if(j.reason==='off')toast('ℹ️ SDログOFF — 未保存のままクリアしました');
-        else if(j.reason==='empty')toast('記録なし');
-        else toast('⚠️ SDカードなし — 未保存のままクリアしました',3500);
-      }
-      else toast('⚠️ SD保存エラー');
-    }catch(e){toast('⚠️ SD保存 接続エラー');}
-  }
+  try{
+    var r=await fetch('/api/race/save',{method:'POST'});
+    if(r.ok){
+      var j=await r.json();
+      if(j.saved)toast('✅ レース結果をSDに保存しました');
+      else if(j.reason==='off')toast('ℹ️ SDログOFF — 未保存のままクリアしました');
+      else if(j.reason==='empty'){if(hasData)toast('記録なし');}
+      else toast('⚠️ SDカードなし — 未保存のままクリアしました',3500);
+    }
+    else toast('⚠️ SD保存エラー');
+  }catch(e){toast('⚠️ 接続エラー — クリアできませんでした');return;}
   onRaceClear();
 }
 // Clear from any browser (race_clear) or this one.
 function onRaceClear(){
   stopTimer();
   timerFrozenMs=0;
-  timerEl.textContent='00:00';
+  timerEl.textContent=raceClockText(0);
   lapEpoch++;resetLaps();
   // Clear ends the race; next Start is a fresh race.
   raceStarted=false;

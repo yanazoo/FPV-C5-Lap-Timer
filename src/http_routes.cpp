@@ -215,14 +215,10 @@ void registerHttpRoutes() {
     });
 
     // ── Race ───────────────────────────────────────────────────────────────
-    server.on("/api/race/stage", HTTP_POST, [](AsyncWebServerRequest* req) { raceStage(); ok(req); });
-    server.on("/api/race/start", HTTP_POST, [](AsyncWebServerRequest* req) { raceStart(); ok(req); });
-    server.on("/api/race/stop", HTTP_POST, [](AsyncWebServerRequest* req) { raceStop(); ok(req); });
-    // Continue a paused race (Stop -> Start) without resetting laps.
-    server.on("/api/race/resume", HTTP_POST, [](AsyncWebServerRequest* req) {
-        if (raceResume()) ok(req);
-        else req->send(200, "application/json", R"({"ok":false,"reason":"not_paused"})");
-    });
+    // Start: the timer runs ready -> stage -> start (or resumes a stopped
+    // race) and every browser and goggle follows it.
+    server.on("/api/race/start", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStart(); ok(req); });
+    server.on("/api/race/stop", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStop(); ok(req); });
     // The Clear button: save to SD (per SD log mode), then forget the race.
     server.on("/api/race/save", HTTP_POST, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", raceClear());
@@ -243,17 +239,6 @@ void registerHttpRoutes() {
         sendJson(req, doc);
     });
 
-    server.on("/api/status", HTTP_GET, [](AsyncWebServerRequest* req) {
-        JsonDocument doc;
-        Guard g;
-        doc["raceRunning"] = raceCore.running();
-        doc["raceStartMs"] = raceCore.startMs();
-        doc["lapCount"]    = raceCore.lapCount();
-        doc["rosterCount"] = rosterCount;
-        doc["uptime"]      = millis();
-        doc["sdPresent"]   = sdPresent;
-        sendJson(req, doc);
-    });
 
     // ── Settings ───────────────────────────────────────────────────────────
     server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
@@ -291,17 +276,6 @@ void registerHttpRoutes() {
         wsSettings();   // every browser shows the same settings
     });
 
-    // ── C5 receiver ────────────────────────────────────────────────────────
-    server.on("/api/c5", HTTP_GET, [](AsyncWebServerRequest* req) {
-        C5Status c = c5Status();
-        JsonDocument d;
-        d["online"] = c.online, d["scanning"] = c.scanning, d["state"] = c.state;
-        d["fw"] = c.firmware, d["gain"] = c.gain, d["records"] = c.records;
-        d["gaps"] = c.seqGaps, d["bad"] = c.badRecords, d["badLines"] = c.badLines;
-        JsonArray rate = d["rate"].to<JsonArray>();
-        for (int i = 0; i < 8; i++) rate.add(c.rate[i]);
-        sendJson(req, d);
-    });
 
     // ── ELRS OSD (vrxc_elrs settings) ──────────────────────────────────────
     server.on("/api/elrs", HTTP_GET, [](AsyncWebServerRequest* req) {

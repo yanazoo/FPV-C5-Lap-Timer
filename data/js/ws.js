@@ -1,14 +1,44 @@
 'use strict';
 
-var wsConn=null,wsRetry=1000;
+var wsConn=null,wsRetry=1000,wsLastMsg=0;
 var wsDot=document.getElementById('wsDot');
 
 function wsConnect(){
-  wsConn=new WebSocket('ws://'+location.host+'/ws');
-  wsConn.onopen=()=>{wsRetry=1000;wsDot.className='ws-dot connected';};
-  wsConn.onerror=()=>wsConn.close();
-  wsConn.onclose=()=>{wsDot.className='ws-dot disconnected';setTimeout(()=>{wsRetry=Math.min(wsRetry*2,16000);wsConnect();},wsRetry);};
-  wsConn.onmessage=e=>{var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
+  var c=new WebSocket('ws://'+location.host+'/ws');
+  wsConn=c;wsLastMsg=performance.now();
+  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';};
+  c.onerror=()=>c.close();
+  c.onclose=()=>{
+    if(wsConn!==c)return;   // replaced already
+    wsDot.className='ws-dot disconnected';
+    setTimeout(()=>{wsRetry=Math.min(wsRetry*2,4000);wsConnect();},wsRetry);
+  };
+  c.onmessage=e=>{wsLastMsg=performance.now();var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
+}
+// The timer sends its status every second: three seconds of silence means
+// the connection is stuck (WiFi hiccup, phone woke from sleep). Reconnect
+// instead of showing a frozen race.
+setInterval(()=>{
+  if(wsConn&&wsConn.readyState===1&&performance.now()-wsLastMsg>3000){try{wsConn.close();}catch(e){}}
+},1000);
+
+// The race as the timer sees it (1 Hz status): put this browser right if it
+// missed a start, stop, clear or lap.
+var seenEpoch=null;
+function reconcileRace(r){
+  noteServerTime(r.now);
+  if(countdownH||performance.now()<readyUntil)return;   // a start is under way
+  var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
+  seenEpoch=r.epoch;
+  if(r.run&&!raceRunning){
+    raceRunning=true;raceStarted=true;setBtns(true);resumeTimer(r.now-r.el);
+  }else if(!r.run&&raceRunning){
+    raceRunning=false;setBtns(false);stopTimer(r.el);
+  }else if(!r.run&&!r.paused&&(epochChanged||timerFrozenMs||raceStarted)&&r.laps===0){
+    onRaceClear();   // cleared elsewhere
+  }
+  var mine=slots.reduce((n,p)=>n+p.lapTimes.length,0);
+  if(epochChanged||mine!==r.laps)syncLaps();
 }
 
 function onMsg(d){
@@ -16,9 +46,15 @@ function onMsg(d){
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);
+    noteServerTime(d.now);
     timerFrozenMs=d.raceElapsedMs||0;
-    if(raceRunning)resumeTimer();
-    else if(d.racePaused)timerEl.textContent=fmtTimer(timerFrozenMs);
+    if(raceRunning)resumeTimer(d.now!==undefined?d.raceStartMs:undefined);
+    else{
+      // Not running on the timer: stop a clock this browser was still running.
+      if(timerH){clearInterval(timerH);timerH=null;timerEl.classList.remove('running');}
+      timerEl.textContent=raceClockText(d.racePaused?timerFrozenMs:0);
+      if(!d.racePaused)timerFrozenMs=0;
+    }
     if(d.sdPresent!==undefined)updateSdSection(d.sdPresent);
     applySettings(d);
     (d.pilots||[]).forEach(pd=>{
@@ -63,11 +99,13 @@ function onMsg(d){
     return;
   }
   if(d.type==='c5'){
+    if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
     if(activeTab==='config')renderC5Status();
     return;
   }
   if(d.type==='rssi_all'){
+    noteServerTime(d.ts);
     (d.p||[]).forEach(x=>{x.type='rssi';x.ts=d.ts;onMsg(x);});
     return;
   }
@@ -78,7 +116,6 @@ function onMsg(d){
     p.rssiSignal=d.signal!==false;
     p.rssi=p.rssiSignal?(d.rssi!==undefined?d.rssi:p.rssi):0;
     p.crossing=p.rssiSignal&&(d.crossing!==undefined?d.crossing:p.crossing);
-    if(d.name&&d.name!=='---')p.name=d.name;
     // Enter/exit cues — audio is tab-independent during a race or calibration.
     // The firmware counts every gate entry and exit (en / ex); a crossing
     // shorter than the 10 Hz telemetry would never show up as a change of
@@ -109,26 +146,18 @@ function onMsg(d){
     }
     return;
   }
-  if(d.type==='gate_start'){
-    var s=d.pilot;if(s<0||s>=N)return;
-    var p=slots[s];
-    if(d.name&&d.name!=='---')p.name=d.name;
-    ensureAudio();sfx.enter(s);
-    if(lapMode==='holeshot')speak(getSpokenName(p)+(announceMode==='lap_laptime'?'、ホールショット':''));
-    updateRaceCard(p);
-    return;
-  }
   if(d.type==='lap'){
     if(lapQueue){lapQueue.push(d);return;}   // the lap list is being fetched
     applyLap(d,false);
     return;
   }
+  if(d.type==='race_ready'){if(!raceRunning)onRaceReady();return;}
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
-  if(d.type==='time_up'){timeIsUp=true;updateRemain();toast('⏱ 時間切れ');return;}
-  if(d.type==='race_start'){onRaceStart();return;}
-  if(d.type==='race_resume'){onRaceResume();return;}
-  if(d.type==='race_stop'){onRaceStop();return;}
+  if(d.type==='time_up'){toast('⏱ 時間切れ');return;}
+  if(d.type==='race_start'){onRaceStart(d.ts);return;}
+  if(d.type==='race_resume'){onRaceResume(d.ts);return;}
+  if(d.type==='race_stop'){onRaceStop(d.elapsed);return;}
   if(d.type==='sd_status'){updateSdSection(d.present);return;}
 }
 
@@ -261,7 +290,7 @@ function applySettings(st){
   if(st.totalLaps!==undefined)setField('totalLaps',st.totalLaps);
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
-    showRaceRules();renderRanking();updateRemain(raceRunning?performance.now()-raceStartPerf:timerFrozenMs);}
+    showRaceRules();renderRanking();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

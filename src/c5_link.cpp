@@ -135,7 +135,6 @@ C5SlotLive c5Live(int slot) {
     C5SlotLive l;
     const gate::Tracker& t = trackers[slot];
     l.filtered = t.filtered();
-    l.raw = t.raw();
     l.inside = t.inside();
     l.enters = enterCounts[slot];
     l.exits = exitCounts[slot];

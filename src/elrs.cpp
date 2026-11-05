@@ -19,6 +19,8 @@ struct Event {
     int16_t      position;
     int16_t      laps;
     uint32_t     value;
+    uint32_t     at;      // millis() when posted: the OSD clock is set from
+                          // this, not from when the task got round to it
     osd::LapInfo lap;
     char         text[41];
 };
@@ -46,6 +48,7 @@ IPAddress lastGood;
 bool    rdValid = false;
 uint8_t rdUid[6];
 bool    rdListenDue = false;   // OSD went out since the bridge last listened
+bool    rdListening = false;   // the bridge is on the RD's UID right now
 
 portMUX_TYPE stMux = portMUX_INITIALIZER_UNLOCKED;
 ElrsStatus   st = {};
@@ -54,6 +57,7 @@ struct TransportOut : osd::Output {
     void write(const uint8_t* d, size_t n) override {
         if (!enabled) return;
         rdListenDue = true;
+        rdListening = false;
         if (transport == 1) {
             if (uartOpen) Serial2.write(d, n);
         } else if (client.connected()) {
@@ -89,6 +93,7 @@ Event ev(Ev k, int slot = -1) {
     Event e = {};
     e.kind = k;
     e.slot = (int8_t)slot;
+    e.at = millis();
     return e;
 }
 
@@ -123,6 +128,7 @@ void listenForRd() {
     size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
     out.write(f, n);
     rdListenDue = false;
+    rdListening = true;
 }
 
 // A frame from the bridge / netpack: the backpack version, or the race
@@ -133,7 +139,9 @@ void onFrame() {
         snprintf(st.version, sizeof st.version, "%u.%u", parser.payload()[0], parser.payload()[1]);
         portEXIT_CRITICAL(&stMux);
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
-        if (rdValid) raceDirectorSwitch(parser.payload()[0]);
+        // Only while the bridge listens on the RD's UID: on a pilot's UID it
+        // would hear that pilot's own DVR switch.
+        if (rdValid && rdListening) raceDirectorSwitch(parser.payload()[0]);
     }
 }
 
@@ -239,12 +247,14 @@ void handle(const Event& e, uint32_t now) {
     switch (e.kind) {
     case Ev::Config:    refreshConfig(); break;
     case Ev::Reconnect: refreshConfig(); disconnect(); lastAttempt = now - 5000; break;
-    case Ev::Stage:     engine.onRaceStage(now, e.text); break;
-    case Ev::Start:     engine.onRaceStart(now, e.value); break;
+    // Stage: 3-2-1 on the race clock row, with the browsers' countdown.
+    case Ev::Stage:     engine.onRaceStage(now, e.text, 3); break;
+    // The race has been running since e.at: start the clock that far in.
+    case Ev::Start:     engine.onRaceStart(now, e.value + (now - e.at), (uint16_t)e.laps); break;
     case Ev::Lap:       engine.onLap(now, e.slot, e.lap); break;
     case Ev::Position:  engine.onPosition(now, e.slot, e.laps, e.position); break;
     case Ev::Done:      engine.onPilotDone(now, e.slot, e.position, e.value); break;
-    case Ev::Stop:      engine.onRaceStop(now); break;
+    case Ev::Stop:      engine.onRaceStop(now, (int32_t)e.value); break;
     case Ev::Clear:     engine.onLapsClear(now); break;
     case Ev::Announce:  engine.onAnnounce(now, e.text); break;
     case Ev::Test:      engine.test(now, e.slot); break;
@@ -286,9 +296,10 @@ void elrsRaceStage() {
     post(e);
 }
 
-void elrsRaceStart(uint32_t elapsedMs) {
+void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec) {
     Event e = ev(Ev::Start);
     e.value = elapsedMs;
+    e.laps = (int16_t)countdownSec;   // timed race length (<= 1800 s)
     post(e);
 }
 
@@ -312,7 +323,11 @@ void elrsPilotDone(int slot, int position, uint32_t totalMs) {
     post(e);
 }
 
-void elrsRaceStop()  { post(ev(Ev::Stop)); }
+void elrsRaceStop(uint32_t elapsedMs) {
+    Event e = ev(Ev::Stop);
+    e.value = elapsedMs;
+    post(e);
+}
 void elrsLapsClear() { post(ev(Ev::Clear)); }
 
 void elrsAnnounce(const char* text) {

@@ -39,7 +39,7 @@ function rebuildRosterIndex(){
 }
 var activeSlotsLocal = Array(N).fill(-1);
 
-var raceRunning=false, raceStartPerf=0, timerH=null, countdownH=null;
+var raceRunning=false, timerH=null, countdownH=null;
 var raceStarted=false, timerFrozenMs=0;
 var lapEpoch=0;   // bumped by Start and Clear: a lap list fetched before is stale
 var voiceEnabled = localStorage.getItem('voice')!=='0';
@@ -49,7 +49,7 @@ var lapMode      = localStorage.getItem('lapMode')||'holeshot';
 var cooldownMs   = parseInt(localStorage.getItem('cooldownMs')||'3000');
 var sdLogMode    = localStorage.getItem('sdLogMode')||'always';
 // Ranking rule (from the timer): 0 laps then total time, 1 best lap, 2 laps in a time limit.
-var rankMode=0, timeLimitSec=120, countLastLap=true, timeIsUp=false;
+var rankMode=0, timeLimitSec=120, countLastLap=true;
 function sdLogModeInt(m){return m==='off'?2:(m==='rotate'?1:0);}
 
 var c5Status = null;         // last "c5" WebSocket message (receiver + ELRS link)

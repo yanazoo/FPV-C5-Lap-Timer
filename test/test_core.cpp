@@ -387,6 +387,7 @@ Watch watchRace(Goggles& g, bool withRd) {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     if (withRd) {
         uint8_t rd[6];
         msp::bindPhraseUid("rd", rd);
@@ -453,6 +454,7 @@ void testOsdClockAndStop() {
     osd::Engine e(cap);
     Goggles g("p");
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.onRaceStage(0, "");
     e.onRaceStart(1000, 0);
     for (uint32_t t = 1000; t <= 62000; t += 20) e.tick(t);
@@ -462,7 +464,8 @@ void testOsdClockAndStop() {
     e.onRaceStop(62500);
     g.feed(cap.bytes);
     cap.bytes.clear();
-    CHECK(g.shows(5, "LAND NOW!") && !g.shows(2, ":"));
+    // The clock stays up on the time it stopped on, as in the web UI.
+    CHECK(g.shows(5, "LAND NOW!") && g.shows(2, "01:01"));
     // Resume: GO! for 0.5 s, the clock continues from the paused time.
     e.onRaceStart(70000, 61500);
     g.feed(cap.bytes);
@@ -485,6 +488,7 @@ void testOsdFinishWithoutResults() {
     osd::Engine e(cap);
     Goggles g("p");
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.options().resultsMode = false;
     e.onRaceStage(0, "");
     e.onRaceStart(0, 0);
@@ -507,6 +511,7 @@ void testOsdClearsSurviveLoss() {
         g.dropPct = 15;
         g.seed = seed;
         e.setRecipient(0, true, g.uid);
+        e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
         e.onRaceStage(0, "");
         e.onRaceStart(1000, 0);
         uint32_t t = 1000;
@@ -521,7 +526,7 @@ void testOsdClearsSurviveLoss() {
         run(12000);
         e.onRaceStop(12000);
         run(25000);   // lap row (5 s) and FINISHED! (10 s) have expired
-        bool ok = !g.shows(2, ":") && !g.shows(8, "0:09.0") && !g.shows(5, "FINISHED") && g.shows(12, "BEST");
+        bool ok = g.shows(2, "00:11") && !g.shows(8, "0:09.0") && !g.shows(5, "FINISHED") && g.shows(12, "BEST");
         if (!ok) printf("seed %u: clock %d lap %d finished %d best %d\n", seed, g.shows(2, ":"), g.shows(8, "0:09.0"),
                         g.shows(5, "FINISHED"), g.shows(12, "BEST"));
         CHECK(ok);
@@ -550,6 +555,7 @@ Timeline raceTimeline(Goggles& g, bool finish = true) {
     Capture cap;
     osd::Engine e(cap);
     e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
     e.options().eventName = {0, -1};
     Timeline tl;
     struct { int row; const char* text; } items[Timeline::kItems] = {
@@ -588,7 +594,7 @@ const Want kWant[Timeline::kItems] = {
     {kStage, kStart},               // ARM NOW until GO!
     {kStage, kStart},               // event name until GO! (start clears the frame)
     {kStart, kStart + 500},         // GO! for startUptime 0.5 s
-    {kStart, kStop},                // race clock until the stop
+    {kStart, kClear},               // race clock until cleared (final time after the stop)
     {kLap, kLap + 5000},            // lap time for resultsUptime 5 s
     {kLap, kClear},                 // best lap until the laps are cleared
     {kLap, kDone},                  // position until the pilot finishes
@@ -621,11 +627,12 @@ bool checkTimeline(const Timeline& tl, int slack, const char* what) {
 }
 
 // A pilot still racing at the stop: LAND NOW! from the stop until the laps
-// are cleared, the clock off at the stop, position and lap up as usual.
+// are cleared, the clock on its final time until then, position and lap up
+// as usual.
 bool checkUnfinished(Goggles& g, int slack, const char* what) {
     Timeline tl = raceTimeline(g, false);
     struct { int i; Want w; const char* name; } checks[] = {
-        {10, {kStop, kClear}, "LAND NOW"}, {3, {kStart, kStop}, "clock"}, {6, {kLap, kClear}, "posn"},
+        {10, {kStop, kClear}, "LAND NOW"}, {3, {kStart, kClear}, "clock"}, {6, {kLap, kClear}, "posn"},
         {4, {kLap, kLap + 5000}, "lap"}, {7, {-1, -1}, "FINISHED"}};
     bool ok = true;
     for (auto& c : checks) {
@@ -680,7 +687,7 @@ void testOsdSurvivesOutage() {
         {kLap + 5000, true, 4, false, "lap time clear (clock running)"},
         {kDone + 10000, true, 7, false, "FINISHED clear (clock running)"},
         {kAnn + 5000, true, 9, false, "announcement clear"},
-        {kStop, true, 3, false, "clock row clear at the stop"},
+        {kClear, true, 3, false, "clock row clear at the clear"},
         {kStop, false, 10, true, "LAND NOW after the stop"},
         {kDone, true, 7, true, "FINISHED draw"},
     };
@@ -699,6 +706,78 @@ void testOsdSurvivesOutage() {
         if (!ok) printf("outage: %s: up %d..%d\n", c.what, sp.first, sp.last + 20);
         CHECK(ok);
     }
+}
+
+// Timed race: the goggles' race clock counts down from the limit to 00:00,
+// then shows the time over the limit as -mm:ss.
+void testOsdCountdownClock() {
+    Goggles g("p");
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
+    int row = e.options().raceClock.row;
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStart(0, 0, 90);
+    at(0);
+    CHECK(g.shows(row, "01:30"));
+    // Same seconds as the web UI, which shows 01:29.50 here.
+    at(500);
+    CHECK(g.shows(row, "01:29"));
+    at(1000);
+    CHECK(g.shows(row, "01:29"));
+    at(61000);
+    CHECK(g.shows(row, "00:29"));
+    at(90000);
+    CHECK(g.shows(row, "00:00"));
+    at(95000);
+    CHECK(g.shows(row, "-00:05"));
+    at(161000);
+    CHECK(g.shows(row, "-01:11"));
+    // A resumed timed race continues from where it was.
+    e.onRaceStart(100000, 30000, 90);
+    at(100000);
+    CHECK(g.shows(row, "01:00"));
+    // Without a limit it counts up as before.
+    e.onRaceStart(200000, 0);
+    at(201000);
+    CHECK(g.shows(row, "00:01"));
+}
+
+// The stage counts 3, 2, 1 on the clock row with the browsers; GO! takes
+// over; a stop during it removes the digit. Stop keeps the timer's time.
+void testOsdStageCountAndStopTime() {
+    Goggles g("p");
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    e.setLightClock(!g.scratch);   // scratch goggles need the whole screen each tick
+    int row = e.options().raceClock.row;
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStage(0, "", 3);
+    at(0);
+    CHECK(g.shows(5, "ARM NOW") && g.shows(row, "3"));
+    at(1000);
+    CHECK(g.shows(row, "2"));
+    at(2000);
+    CHECK(g.shows(row, "1"));
+    e.onRaceStart(3300, 0);
+    at(3300);
+    CHECK(g.shows(5, "GO!") && g.shows(row, "00:00"));
+    at(4300);
+    CHECK(g.shows(row, "00:01"));
+    // The goggles show the time the timer stopped on, even if this task is late.
+    e.onRaceStop(9000, 4999);
+    at(9000);
+    CHECK(g.shows(5, "LAND NOW") && g.shows(row, "00:04"));
+    // Stopped during the 3-2-1: the digit goes, no more follow.
+    e.onLapsClear(10000);
+    e.onRaceStage(11000, "", 3);
+    at(11000);
+    e.onRaceStop(11500);
+    at(11500);
+    at(13000);
+    CHECK(!g.shows(row, "1") && !g.shows(row, "2") && !g.shows(row, "3"));
 }
 
 void testFormat() {
@@ -726,6 +805,8 @@ int runTests() {
     testOsdClearsSurviveLoss();
     testOsdAppearsAndClearsOnTime();
     testOsdSurvivesOutage();
+    testOsdCountdownClock();
+    testOsdStageCountAndStopTime();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

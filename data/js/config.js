@@ -232,6 +232,8 @@ function showRaceRules(){
   setField('timeLimitSec',timeLimitSec%60);
   setField('countLastLapSelect',countLastLap?'1':'0');
   document.querySelectorAll('.rank-timed').forEach(e=>e.style.display=rankMode===2?'':'none');
+  // Not racing: show the new start value (the time limit, or 00:00).
+  if(!timerH&&!countdownH)timerEl.textContent=raceClockText(timerFrozenMs);
 }
 function saveRaceRules(){
   var m=parseInt(document.getElementById('rankModeSelect').value)||0;
@@ -240,17 +242,18 @@ function saveRaceRules(){
   var t=Math.max(30,Math.min(1800,mi*60+se));
   var c=document.getElementById('countLastLapSelect').value==='1';
   rankMode=m;timeLimitSec=t;countLastLap=c;
-  showRaceRules();renderRanking();updateRemain(raceRunning?performance.now()-raceStartPerf:timerFrozenMs);
+  showRaceRules();renderRanking();
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({rankMode:m,timeLimitSec:t,countLastLap:c})})
-    .then(r=>toast(r.ok?'✓ 順位の決め方を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))
+    .then(r=>toast(r.ok?'✓ レース内容を保存しました'+(raceRunning?'（制限時間は次のスタートから）':''):'⚠️ 保存エラー'))
     .catch(()=>toast('⚠️ 接続エラー'));
 }
 
-// Total laps lives on the race tab but the firmware needs it for FINISHED! on the OSD.
+// Total laps (settings → レース内容); the firmware needs it for FINISHED! on the OSD.
 function saveTotalLaps(){
   var t=Math.max(0,Math.min(99,parseInt(document.getElementById('totalLaps').value)||0));
-  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({totalLaps:t})}).catch(()=>{});
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({totalLaps:t})})
+    .then(r=>toast(r.ok?'✓ 総周回数を保存しました':'⚠️ 保存エラー')).catch(()=>toast('⚠️ 接続エラー'));
 }
 
 // ── ELRS OSD (vrxc_elrs settings) ─────────────────────────────────────────

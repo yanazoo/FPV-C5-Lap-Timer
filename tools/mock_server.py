@@ -39,7 +39,7 @@ state = {
             "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
     "password": "admin",
     "posts": [],   # every POST, for tests
-    "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": []},
+    "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": [], "epoch": 0},
 }
 
 ws_clients = []
@@ -93,7 +93,8 @@ def init_msg():
         o = dict(o, lapCount=counts[o["slot"]], bestLap=0, rssi=0, crossing=False)
         pilots.append(o)
     return dict(state["settings"], type="init", raceRunning=r["running"], racePaused=r["paused"],
-                raceElapsedMs=int(race_elapsed() * 1000), sdPresent=True, pilots=pilots)
+                raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
+                now=now_ms(), sdPresent=True, pilots=pilots)
 
 
 def slot_of(pid):
@@ -155,9 +156,6 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(state["elrs"])
         if p == "/api/net":
             return self.reply(state["net"])
-        if p == "/api/status":
-            return self.reply({"raceRunning": state["race"]["running"], "lapCount": len(state["race"]["laps"]),
-                               "rosterCount": len(state["pilots"])})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":
@@ -232,21 +230,34 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast(dict(state["settings"], type="settings"))
             return self.reply({"ok": True})
         r = state["race"]
-        if p == "/api/race/stage":
-            broadcast({"type": "race_stage"})
-            return self.reply({"ok": True})
-        if p == "/api/race/start":
-            r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[])
-            broadcast({"type": "race_start", "ts": now_ms()})
+        # Start (web button or /api/mock/rd = the race director's switch): the
+        # timer runs ready -> stage -> start, or resumes a stopped race.
+        if p in ("/api/race/start", "/api/mock/rd"):
+            if r["running"] or r.get("seq"):
+                return self.reply({"ok": True})
+            if r["paused"]:
+                r.update(running=True, paused=False, t0=time.monotonic())
+                broadcast({"type": "race_resume", "ts": int(r["t0"] * 1000 - r["elapsed"] * 1000)})
+                return self.reply({"ok": True})
+            token = object()
+            r["seq"] = token
+            def seq():
+                broadcast({"type": "race_ready"}); time.sleep(1.5)
+                if r.get("seq") is not token: return
+                broadcast({"type": "race_stage"}); time.sleep(3.3)
+                if r.get("seq") is not token: return
+                r["seq"] = None
+                r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
+            threading.Thread(target=seq, daemon=True).start()
             return self.reply({"ok": True})
         if p == "/api/race/stop":
+            if not r["running"] and not r.get("seq"):
+                return self.reply({"ok": True})
+            r["seq"] = None
             if r["running"]:
                 r.update(running=False, paused=True, elapsed=race_elapsed())
-            broadcast({"type": "race_stop"})
-            return self.reply({"ok": True})
-        if p == "/api/race/resume":
-            r.update(running=True, paused=False, t0=time.monotonic())
-            broadcast({"type": "race_resume"})
+            broadcast({"type": "race_stop", "elapsed": int(race_elapsed() * 1000)})
             return self.reply({"ok": True})
         if p == "/api/net":
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
@@ -266,7 +277,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": ok}, 200 if ok else 401)
         if p == "/api/race/save":
             had = bool(r["laps"])
-            r.update(running=False, paused=False, elapsed=0.0, laps=[])
+            r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
         if p == "/api/sd/pilots/restore":
@@ -277,4 +288,16 @@ class Handler(SimpleHTTPRequestHandler):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     print(f"mock FPV C5 Lap Timer on http://localhost:{port}")
+    def telemetry():   # the firmware's 10 Hz rssi_all and 1 Hz status
+        n = 0
+        while True:
+            time.sleep(0.1)
+            broadcast({"type": "rssi_all", "ts": now_ms(), "p": []})
+            n += 1
+            if n % 10 == 0:
+                r = state["race"]
+                broadcast({"type": "c5", "online": True, "scanning": True, "state": "SCAN", "elrs": {"enabled": False},
+                           "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
+                                    "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"]}})
+    threading.Thread(target=telemetry, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

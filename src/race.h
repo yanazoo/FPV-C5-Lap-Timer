@@ -16,6 +16,12 @@ void raceStage();          // countdown started (ARM NOW on the goggles)
 void raceStart();
 bool raceResume();
 void raceStop();
+// The web Start / Stop buttons. Start runs the same sequence as the race
+// director's switch (race_ready, stage, start 3.3 s later), or resumes a
+// stopped race; Stop also cancels a start under way. Any task may call
+// these; raceLoop() acts on them.
+void raceRequestStart();
+void raceRequestStop();
 // The race director's TX switch (MSP_ELRS_BACKPACK_SET_RECORDING_STATE,
 // 1 = on). Any task may call it; raceLoop() acts on it. Depending on the
 // switch setting it starts the race (3 s countdown, as from the web UI),

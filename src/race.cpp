@@ -10,6 +10,10 @@ race::Core raceCore;
 
 static uint32_t lastRssiSend = 0;
 static uint32_t lastStatusSend = 0;
+// Bumped by every start and clear: a browser that sees a different value in
+// the 1 Hz status missed one and re-reads the race.
+static uint32_t raceEpoch = 0;
+
 
 const char* activeName(int slot) {
     int ri = activePilots[slot];
@@ -70,7 +74,6 @@ void raceStage() {
 }
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
-static uint32_t timeUpAt = 0;
 
 void raceStart() {
     uint32_t now = millis();
@@ -79,9 +82,10 @@ void raceStart() {
         applyRaceRules();
         raceCore.start(now);
     }
+    raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
-    elrsRaceStart(0);
+    elrsRaceStart(0, raceCore.timeLimitMs / 1000);
     JsonDocument d;
     d["type"] = "race_start";
     d["ts"] = now;
@@ -95,7 +99,7 @@ bool raceResume() {
         if (!raceCore.resume(millis())) return false;
         elapsed = raceCore.elapsed(millis());
     }
-    elrsRaceStart(elapsed);
+    elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000);
     JsonDocument d;
     d["type"] = "race_resume";
     d["ts"] = raceCore.startMs();
@@ -104,13 +108,16 @@ bool raceResume() {
 }
 
 void raceStop() {
+    uint32_t elapsed;
     {
         Guard g;
         raceCore.stop(millis());
+        elapsed = raceCore.elapsed(millis());
     }
-    elrsRaceStop();
+    elrsRaceStop(elapsed);   // the goggles' clock stops on the same time
     JsonDocument d;
     d["type"] = "race_stop";
+    d["elapsed"] = elapsed;   // every browser freezes on this time
     wsJson(d);
 }
 
@@ -127,6 +134,7 @@ String raceClear() {
         if (hadLaps && !saved && !reason[0]) reason = "error";
         raceCore.clear();
     }
+    raceEpoch++;
     elrsLapsClear();
     // Clear on one browser clears every browser.
     JsonDocument d;
@@ -194,16 +202,17 @@ static void sendTelemetry() {
             C5SlotLive l = c5Live(s);
             JsonObject o = arr.add<JsonObject>();
             o["pilot"]    = s;
-            o["name"]     = activeName(s);
             o["rssi"]     = l.filtered;
-            o["raw"]      = l.raw;
             o["crossing"] = l.inside;
             o["signal"]   = l.signal;
             o["en"]       = l.enters;   // edge counters for the gate tones
             o["ex"]       = l.exits;
         }
     }
-    if (arr.size()) wsJson(d);
+    if (!arr.size() || !ws.count()) return;
+    String s;
+    serializeJson(d, s);
+    wsTelemetry(s);
 }
 
 void sendC5Status() {
@@ -227,18 +236,30 @@ void sendC5Status() {
     el["peer"]      = e.peer;
     el["version"]   = e.version;
     el["bytes"]     = e.bytesSent;
+    // The race as the timer sees it, once a second: a browser that missed a
+    // stop, clear or lap puts itself right from this.
+    JsonObject rs = d["race"].to<JsonObject>();
+    {
+        Guard g;
+        uint32_t now = millis();
+        rs["run"]    = raceCore.running();
+        rs["paused"] = raceCore.paused();
+        rs["el"]     = raceCore.elapsed(now);
+        rs["now"]    = now;
+        rs["laps"]   = raceCore.lapCount();
+        rs["epoch"]  = raceEpoch;
+    }
     wsJson(d);
 }
 
 // ── Timed race ─────────────────────────────────────────────────────────────
 // When the time runs out: with the last lap counted, each pilot's next pass
 // ends their race (race::Core marks it, FINISHED! on the goggles); without,
-// every pilot who had started is done at once. The race stops by itself
-// once every pilot who started is done, or 60 s after the time ran out
-// (someone crashed on the last lap).
-static const uint32_t TIME_UP_GRACE_MS = 60000;
+// every pilot who had started is done at once. The race keeps running (the
+// clock counts on below zero) until Stop is pressed.
 
 static void serviceTimedRace(uint32_t now) {
+    if (raceRules.rankMode != 2 && !timeUpHandled) return;   // not a timed race: nothing to do
     bool up, running;
     {
         Guard g;
@@ -248,7 +269,6 @@ static void serviceTimedRace(uint32_t now) {
     if (!running) return;
     if (up && !timeUpHandled) {
         timeUpHandled = true;
-        timeUpAt = now;
         Serial.println("[Race] time up");
         JsonDocument d;
         d["type"] = "time_up";
@@ -269,30 +289,53 @@ static void serviceTimedRace(uint32_t now) {
                 if (done[s]) elrsPilotDone(s, pos[s], tot[s]);
         }
     }
-    if (!timeUpHandled) return;
-    bool allDone = true;
-    {
-        Guard g;
-        for (int s = 0; s < MAX_ACTIVE; s++) {
-            const race::SlotState& st = raceCore.slot(s);
-            if (rosterValid(activePilots[s]) && st.lapCount > 0 && !st.finished) allDone = false;
-        }
-    }
-    if (allDone || now - timeUpAt >= TIME_UP_GRACE_MS) raceStop();
 }
 
-// ── Race director (ELRS TX switch) ─────────────────────────────────────────
-// Countdown run by the firmware itself when the race director starts the
-// race (no browser drives it): stage now, start 3.3 s later, the same
-// timing as the web UI's Start button.
+// ── Start / Stop (web buttons and the race director's TX switch) ───────────
+// The firmware runs the whole start sequence, whoever asked for it, so every
+// browser and every goggle follow one clock: race_ready (every browser says
+// "レディ"), then the stage (ARM NOW and 3-2-1 on the goggles, the 3-2-1
+// countdown on every browser), then the start 3.3 s later.
 static volatile int16_t rdPending = -1;   // switch state waiting for raceLoop
-static bool     rdCountdown = false;
-static uint32_t rdStartAt = 0;
-static const uint32_t RD_COUNTDOWN_MS = 3300;
+static volatile int8_t  webPending = -1;  // web Start (1) / Stop (0) waiting for raceLoop
+enum RdPhase : uint8_t { RD_IDLE, RD_READY, RD_COUNTDOWN };
+static RdPhase  rdPhase = RD_IDLE;
+static uint32_t rdNextAt = 0;
+static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
+static const uint32_t RD_COUNTDOWN_MS = 3300;   // stage -> start, as the web UI
 
-void raceDirectorSwitch(uint8_t state) { rdPending = state ? 1 : 0; }
+// Called from the ELRS link for each switch message.
+// Toggle (a switch that stays where it is put): only a change counts
+// (off -> on starts, on -> off stops). The TX may send its state again and
+// again; counting a repeat restarted a race stopped from the web while the
+// switch stayed on.
+// Push (a button that springs back): every "on" is a press, the "off" of
+// the release isn't needed. Waiting for off -> on missed every press after
+// a release that didn't arrive (the bridge is on a pilot's UID for a moment
+// while the OSD goes out), so a press needed doing twice. An "on" within
+// RD_PRESS_MS of the last press is that same press, sent again.
+static int8_t   rdLastState = -1;   // -1: nothing heard yet
+static uint32_t rdLastPressAt = 0;
+static bool     rdPressed = false;
+static const uint32_t RD_PRESS_MS = 1500;
 
-static bool raceBusy() { return rdCountdown || raceCore.running(); }
+void raceDirectorSwitch(uint8_t state) {
+    int8_t v = state ? 1 : 0;
+    if (elrsRdSwitch == 1) {   // push
+        if (!v) return;
+        uint32_t now = millis();
+        if (rdPressed && now - rdLastPressAt < RD_PRESS_MS) return;
+        rdPressed = true;
+        rdLastPressAt = now;
+        rdPending = 1;
+        return;
+    }
+    if (v == rdLastState) return;   // toggle
+    rdLastState = v;
+    rdPending = v;
+}
+
+static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
 
 static void rdStart() {
     if (raceBusy()) return;
@@ -300,31 +343,47 @@ static void rdStart() {
         raceResume();
         return;
     }
-    raceStage();
-    rdCountdown = true;
-    rdStartAt = millis() + RD_COUNTDOWN_MS;
+    JsonDocument d;
+    d["type"] = "race_ready";
+    wsJson(d);
+    rdPhase = RD_READY;
+    rdNextAt = millis() + RD_READY_MS;
 }
 
 static void rdStop() {
-    if (rdCountdown) rdCountdown = false;   // stopped during the countdown
-    else if (!raceCore.running()) return;
+    if (rdPhase == RD_IDLE && !raceCore.running()) return;
+    rdPhase = RD_IDLE;   // stopped before the start: drop it
     raceStop();
 }
 
+void raceRequestStart() { webPending = 1; }
+void raceRequestStop()  { webPending = 0; }
+
 static void serviceRaceDirector() {
+    int8_t w = webPending;
+    if (w >= 0) {
+        webPending = -1;
+        w ? rdStart() : rdStop();
+    }
     int16_t v = rdPending;
     if (v >= 0) {
         rdPending = -1;
-        Serial.printf("[RD] switch %s\n", v ? "on" : "off");
+        Serial.printf("[RD] switch %s (%s mode)\n", v ? "on" : "off", elrsRdSwitch == 1 ? "push" : "toggle");
         if (elrsRdSwitch == 1) {           // push: each press flips the race
             if (v == 1) raceBusy() ? rdStop() : rdStart();
         } else {                           // toggle: on = start, off = stop
             v ? rdStart() : rdStop();
         }
     }
-    if (rdCountdown && (int32_t)(millis() - rdStartAt) >= 0) {
-        rdCountdown = false;
-        raceStart();
+    if (rdPhase != RD_IDLE && (int32_t)(millis() - rdNextAt) >= 0) {
+        if (rdPhase == RD_READY) {
+            raceStage();
+            rdPhase = RD_COUNTDOWN;
+            rdNextAt = millis() + RD_COUNTDOWN_MS;
+        } else {
+            rdPhase = RD_IDLE;
+            raceStart();
+        }
     }
 }
 

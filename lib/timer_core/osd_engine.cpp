@@ -98,6 +98,31 @@ static uint32_t rowHash(const char* line) {
     return h;
 }
 
+void Engine::flushClock(int r) {
+    if (!rcpt_[r].enabled) return;
+    int row = opt_.raceClock.row;
+    if (row < 0 || row >= kRows) return;
+    uint8_t p[msp::kMaxPayload];
+    p[0] = 0x01;
+    memcpy(p + 1, rcpt_[r].uid, 6);
+    sendMsp(msp::kElrsSetSendUid, p, 7);
+    char line[kCols + 1];
+    composeRow(r, row, line);
+    sentHash_[r][row] = rowHash(line);
+    shown_[r][row] = frames_[r].rows[row].n != 0;
+    p[0] = 0x03;
+    p[1] = (uint8_t)row;
+    p[2] = 0;
+    p[3] = 0;
+    memcpy(p + 4, line, kCols);
+    sendMsp(msp::kElrsSetOsd, p, 4 + kCols);
+    p[0] = 0x04;   // display
+    sendMsp(msp::kElrsSetOsd, p, 1);
+    p[0] = 0x00;
+    sendMsp(msp::kElrsSetSendUid, p, 1);
+    out_.burstDone();
+}
+
 void Engine::flush(int r, bool hard, bool clockTick) {
     if (!rcpt_[r].enabled) return;
     bool changed = hard;
@@ -143,13 +168,17 @@ void Engine::flush(int r, bool hard, bool clockTick) {
     p[0] = 0x00;   // back to the bind-phrase UID
     sendMsp(msp::kElrsSetSendUid, p, 1);
     out_.burstDone();
+    lastFull_[r] = now_;
+    // The quick repeats (within a second) always go out. The slow settle
+    // repeats wait while the race clock runs: its ticks resend the whole
+    // screen every kFullFrameMs anyway.
     if (changed) {
         bool pending = refreshLeft_[r] > 0;
         int want = cleared ? kClearRepeats : kRefreshRepeats;
         if (refreshLeft_[r] < want) refreshLeft_[r] = (uint8_t)want;
         if (!pending) schedule(now_ + kRefreshMs, Act::Refresh, r, -1, -1, -1);
         bool settling = settleLeft_[r] > 0;
-        settleLeft_[r] = kSettleRepeats;
+        settleLeft_[r] = kSettleRepeats;   // still due once the clock stops
         if (!settling) schedule(now_ + kSettleFirstMs, Act::Settle, r, -1, -1, -1);
     }
 }
@@ -180,6 +209,7 @@ void Engine::runAction(uint32_t now, Action& a) {
         break;
     case Act::LapRedraw: {
         if (lap_[r].token != a.token) break;   // a newer lap took over
+        if (clockRunning_) break;   // the clock's whole-screen ticks repair it
         drawLap(r, false);
         uint32_t uptime = opt_.resultsUptimeDs * 100u;
         uint32_t next = (uint32_t)(a.repeat + 1) * kLapRepeatMs;
@@ -196,10 +226,13 @@ void Engine::runAction(uint32_t now, Action& a) {
     case Act::Settle:
         if (settleLeft_[r] == 0) break;
         --settleLeft_[r];
-        // While the race clock runs, its tick resends the whole frame every
-        // second already.
+        // While the race clock runs, its ticks resend the whole screen.
         if (!clockRunning_) flush(r);
         if (settleLeft_[r] > 0) schedule(now_ + kSettleMs, Act::Settle, r, -1, -1, -1);
+        break;
+    case Act::Count:
+        if (a.token != stageToken_ || clockRunning_) break;   // started or stopped meanwhile
+        showCount(a.repeat);
         break;
     case Act::ClearLapRow:
         // A newer lap has already redrawn the row: don't wipe it.
@@ -210,19 +243,49 @@ void Engine::runAction(uint32_t now, Action& a) {
     }
 }
 
+// The race clock for `ms` of race time, in whole seconds as the web UI
+// would show them (it cuts off the hundredths): counting up, or in a timed
+// race the time left down to 00:00 and then the time over as -mm:ss.
+void Engine::clockText(uint32_t ms, char* buf, size_t cap) const {
+    uint32_t show = ms / 1000;
+    const char* sign = "";
+    if (clockDownSec_) {
+        uint32_t limit = clockDownSec_ * 1000u;
+        if (ms <= limit) show = (limit - ms) / 1000;
+        else show = (ms - limit) / 1000, sign = "-";
+    }
+    snprintf(buf, cap, "%s%02lu:%02lu", sign, (unsigned long)(show / 60), (unsigned long)(show % 60));
+}
+
+void Engine::showCount(uint32_t n) {
+    char msg[12];
+    snprintf(msg, sizeof msg, "%lu", (unsigned long)n);
+    for (int r = 0; r < kRecipients; ++r) {
+        if (!isBroadcast(r)) continue;
+        clearRow(r, opt_.raceClock.row);
+        setText(r, opt_.raceClock, msg);
+        flush(r, false, true);   // like a clock tick: no extra repeats
+    }
+}
+
 void Engine::tick(uint32_t now) {
     now_ = now;
     if (clockRunning_) {
-        uint32_t sec = (now - clockBase_) / 1000;
-        if (sec != lastClockSec_) {
-            lastClockSec_ = sec;
-            char msg[12];
-            snprintf(msg, sizeof msg, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+        char msg[12];
+        clockText(now - clockBase_, msg, sizeof msg);
+        if (strcmp(msg, lastClock_) != 0) {
+            strcpy(lastClock_, msg);
             for (int r = 0; r < kRecipients; ++r) {
                 if (!isBroadcast(r)) continue;
                 clearRow(r, opt_.raceClock.row);   // "100:00" centres one column left
                 setText(r, opt_.raceClock, msg);
-                flush(r, false, true);
+                // The whole screen for a few seconds after a change (the
+                // settle window: repairs a lost write within a second) and
+                // every kFullFrameMs; otherwise just the clock row.
+                bool full = !lightClock_ || settleLeft_[r] > 0 ||
+                            (int32_t)(now - lastFull_[r]) >= (int32_t)kFullFrameMs;
+                if (!full) flushClock(r);
+                else flush(r, false, true);
             }
         }
     }
@@ -245,8 +308,9 @@ void Engine::posMessage(int laps, int position, char* buf, size_t cap) const {
     else snprintf(buf, cap, "LAP: %d", laps);
 }
 
-void Engine::onRaceStage(uint32_t now, const char* eventName) {
+void Engine::onRaceStage(uint32_t now, const char* eventName, uint32_t countdownSec) {
     now_ = now;
+    ++stageToken_;
     // Fresh race: drop pending clears and every per-pilot cache.
     for (auto& a : actions_) a.used = false;
     memset(refreshLeft_, 0, sizeof refreshLeft_);
@@ -264,34 +328,41 @@ void Engine::onRaceStage(uint32_t now, const char* eventName) {
         clearFrame(r);
         setText(r, opt_.status, opt_.stageMsg);
         if (ev[0]) setText(r, opt_.eventName, ev);
+        if (countdownSec) {
+            char n[12];
+            snprintf(n, sizeof n, "%lu", (unsigned long)countdownSec);
+            setText(r, opt_.raceClock, n);
+        }
         flush(r, true);
     }
+    // 3, 2, 1 a second apart, as the browsers count down.
+    for (uint32_t i = 1; i < countdownSec; ++i)
+        schedule(now + i * 1000u, Act::Count, -1, -1, -1, -1, stageToken_, (uint8_t)(countdownSec - i));
 }
 
-void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs) {
+void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec) {
     now_ = now;
+    ++stageToken_;
+    clockDownSec_ = countdownSec;
     if (opt_.showRaceClock) {
         clockRunning_ = true;
         clockBase_ = now - elapsedMs;
-        lastClockSec_ = elapsedMs / 1000;   // first tick at the next whole second
     }
     // A pending "GO!" clear from an earlier start must not cut this one short.
     for (auto& a : actions_)
         if (a.used && a.kind == Act::ClearStart) a.used = false;
     char clock[12] = "";
     if (opt_.showRaceClock) {
-        uint32_t sec = elapsedMs / 1000;
-        snprintf(clock, sizeof clock, "%02lu:%02lu", (unsigned long)(sec / 60), (unsigned long)(sec % 60));
+        clockText(elapsedMs, clock, sizeof clock);
+        strcpy(lastClock_, clock);
     }
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;
         if (elapsedMs == 0) clearFrame(r);   // a resumed race keeps its lap rows
         clearRow(r, opt_.status.row);
         setText(r, opt_.status, opt_.startMsg);
-        if (clock[0]) {
-            clearRow(r, opt_.raceClock.row);
-            setText(r, opt_.raceClock, clock);
-        }
+        clearRow(r, opt_.raceClock.row);   // the 3-2-1 countdown, if any
+        if (clock[0]) setText(r, opt_.raceClock, clock);
         flush(r);
         schedule(now + opt_.startUptimeDs * 100u, Act::ClearStart, r, opt_.status.row, -1, -1);
     }
@@ -372,16 +443,21 @@ void Engine::onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs)
     schedule(now + opt_.finishUptimeDs * 100u, Act::ClearRows, slot, opt_.status.row, r1, r2);
 }
 
-void Engine::onRaceStop(uint32_t now) {
+void Engine::onRaceStop(uint32_t now, int32_t finalMs) {
     now_ = now;
+    ++stageToken_;   // stopped during the 3-2-1: no more digits
     bool hadClock = clockRunning_;
+    char final[12] = "";
+    if (hadClock) clockText(finalMs >= 0 ? (uint32_t)finalMs : now - clockBase_, final, sizeof final);
     clockRunning_ = false;
     // A pending "GO!" clear would wipe LAND NOW! off the status row.
     for (auto& a : actions_)
         if (a.used && a.kind == Act::ClearStart) a.used = false;
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;
-        if (hadClock) clearRow(r, opt_.raceClock.row);
+        // The clock stops on the final time (the 3-2-1 goes, if stopped then).
+        clearRow(r, opt_.raceClock.row);
+        if (final[0]) setText(r, opt_.raceClock, final);
         if (r == kRd || !finished_[r]) setText(r, opt_.status, opt_.raceStopMsg);
         flush(r);
     }
@@ -389,6 +465,7 @@ void Engine::onRaceStop(uint32_t now) {
 
 void Engine::onLapsClear(uint32_t now) {
     now_ = now;
+    ++stageToken_;
     for (auto& a : actions_) a.used = false;
     memset(refreshLeft_, 0, sizeof refreshLeft_);
     memset(settleLeft_, 0, sizeof settleLeft_);
