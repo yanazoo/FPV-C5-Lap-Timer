@@ -305,23 +305,19 @@ static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
 static const uint32_t RD_COUNTDOWN_MS = 3300;   // stage -> start, as the web UI
 
 // Called from the ELRS link for each switch message. Only a change of the
-// switch counts: the TX may send its state more than once (and some setups
-// repeat it), which used to flip a push-mode race on and off again, or
-// restart a race that was stopped or cleared from the web while the switch
-// stayed on. A message after a gap of RD_EDGE_GAP_MS also counts, so one
-// lost message (the bridge was briefly on a pilot's UID) can't leave the
-// switch stuck.
-static int8_t   rdLastState = -1;   // -1: nothing heard yet
-static uint32_t rdLastMsgAt = 0;
-static const uint32_t RD_EDGE_GAP_MS = 1500;
+// switch counts (off -> on, on -> off). The TX may send its state again and
+// again while the switch stays put: counting a repeat as a new press made a
+// push-mode switch stop the race during its own start (ready -> stop, the
+// clock never ran), and in toggle mode restarted a race stopped from the
+// web while the switch stayed on. A TX that repeats its state also repairs
+// a lost message by itself.
+static int8_t rdLastState = -1;   // -1: nothing heard yet
 
 void raceDirectorSwitch(uint8_t state) {
     int8_t v = state ? 1 : 0;
-    uint32_t now = millis();
-    bool edge = v != rdLastState || now - rdLastMsgAt > RD_EDGE_GAP_MS;
+    if (v == rdLastState) return;
     rdLastState = v;
-    rdLastMsgAt = now;
-    if (edge) rdPending = v;
+    rdPending = v;
 }
 
 static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
