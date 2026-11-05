@@ -28,11 +28,32 @@ function raceClockText(el){
   if(left>=0)return fmtTimer(Math.ceil(left/10)*10);
   return '-'+fmtTimer(Math.floor(-left/10)*10);
 }
+// Timed race callouts on every browser, from the shared race clock: "残り
+// 30秒", "残り20秒", then 10, 9 ... 1 each second, and a fanfare at 0. Only
+// what is crossed while this browser's clock runs (opening or resuming
+// mid-race doesn't replay the earlier ones).
+var calloutPrevLeft=null;
+function timedCallouts(el){
+  if(rankMode!==2){calloutPrevLeft=null;return;}
+  var left=timeLimitSec*1000-el,prev=calloutPrevLeft;
+  calloutPrevLeft=left;
+  if(prev===null||left>=prev)return;
+  var crossed=t=>prev>t&&left<=t;
+  if(crossed(0)){ensureAudio();sfx.fanfare();return;}
+  for(var n=10;n>=1;n--)if(crossed(n*1000)){sayNow(String(n));return;}
+  if(crossed(20000)){sayNow('残り20秒');return;}
+  if(crossed(30000)&&timeLimitSec>30){sayNow('残り30秒');return;}
+}
 function runTimer(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}
   timerEl.classList.add('running');
   if(timerH)clearInterval(timerH);
-  var tick=()=>{var el=Math.max(0,serverNow()-raceStartSrv);timerEl.textContent=raceClockText(el);};
+  calloutPrevLeft=null;
+  var tick=()=>{
+    var el=Math.max(0,serverNow()-raceStartSrv);
+    timerEl.textContent=raceClockText(el);
+    timedCallouts(el);
+  };
   timerH=setInterval(tick,50);tick();
 }
 // startSrv: the race start on the timer's clock (race_start ts).
