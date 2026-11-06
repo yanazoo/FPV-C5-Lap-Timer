@@ -7,6 +7,7 @@ Serves data/ and answers /api/* from memory, with a WebSocket at /ws that
 broadcasts what the firmware does (init, race_*, lap, settings, calib,
 active_update, config_changed), so several browsers can be checked
 against each other. GET /mock/lap?slot=N records a pass for slot N.
+GET /mock/seed loads sample pilots and a stopped race (for screenshots).
 """
 import base64
 import hashlib
@@ -97,6 +98,36 @@ def init_msg():
                 now=now_ms(), sdPresent=True, pilots=pilots)
 
 
+SAMPLE = [  # name, yomi, freq, holeshot ms, lap times ms
+    ("Yana", "やな", 5658, 2100, [21340, 20480, 19870, 20110]),
+    ("Taro", "たろう", 5695, 2350, [22150, 21020, 21460, 20890]),
+    ("Hana", "はな", 5732, 2600, [23010, 22340, 21980]),
+    ("Ken", "けん", 5769, 2450, [21870, 22760, 21550, 21330]),
+    ("Mio", "みお", 5806, 2900, [24120, 23380, 22910]),
+    ("Sora", "そら", 5843, 3100, [25410, 24020]),
+]
+
+
+def seed():
+    """Sample pilots on Ch1-6 and a stopped race with their laps."""
+    state["pilots"] = [{"name": n, "yomi": y, "freq": f, "bind": "", "osd": True, "enter": 350, "exit": 280}
+                       for n, y, f, _, _ in SAMPLE]
+    state["active"] = list(range(len(SAMPLE))) + [-1] * (8 - len(SAMPLE))
+    state["elrs"]["enabled"] = True
+    t0 = now_ms() - 100000
+    laps = []
+    for slot, (_, _, _, hs, times) in enumerate(SAMPLE):
+        ts = t0 + hs
+        laps.append({"slot": slot, "lapTime": hs, "ts": ts})
+        for t in times:
+            ts += t
+            laps.append({"slot": slot, "lapTime": t, "ts": ts})
+    laps.sort(key=lambda l: l["ts"])
+    r = state["race"]
+    r.update(running=False, paused=True, t0=time.monotonic() - 96.4, elapsed=96.4, laps=laps, epoch=r["epoch"] + 1)
+    broadcast({"type": "active_update", "pilots": active_json()})
+
+
 def slot_of(pid):
     return state["active"].index(pid) if pid in state["active"] else -1
 
@@ -141,6 +172,9 @@ class Handler(SimpleHTTPRequestHandler):
             lap_ms = ts - (mine[-1]["ts"] if mine else int(r["t0"] * 1000))
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
+            return self.reply({"ok": True})
+        if p == "/mock/seed":
+            seed()
             return self.reply({"ok": True})
         if p == "/api/laps":
             return self.reply(state["race"]["laps"])
@@ -292,11 +326,26 @@ if __name__ == "__main__":
         n = 0
         while True:
             time.sleep(0.1)
-            broadcast({"type": "rssi_all", "ts": now_ms(), "p": []})
+            # Sample RSSI for the assigned slots: a floor with noise and a
+            # gate pass every few seconds (for the race cards and calibration).
+            t = time.monotonic()
+            p = []
+            for s, ri in enumerate(state["active"]):
+                if ri < 0:
+                    continue
+                phase = (t + s * 1.7) % 6.0
+                v = 120 + int(15 * ((n * 7 + s * 13) % 10) / 10)
+                if phase < 0.8:
+                    v += int(420 * (1 - abs(phase - 0.4) / 0.4))
+                p.append({"pilot": s, "rssi": v, "crossing": v > 350, "signal": True})
+            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p})
             n += 1
             if n % 10 == 0:
                 r = state["race"]
-                broadcast({"type": "c5", "online": True, "scanning": True, "state": "SCAN", "elrs": {"enabled": False},
+                act = sum(1 for a in state["active"] if a >= 0)
+                broadcast({"type": "c5", "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
+                           "records": n * 100 * act, "gaps": 0, "bad": 0,
+                           "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART"},
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"]}})
     threading.Thread(target=telemetry, daemon=True).start()

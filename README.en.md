@@ -30,14 +30,17 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
 
 The web UI in a phone or PC browser, shown here with sample pilots and laps.
 
-**Race (PC)**: one card per assigned channel (8 per row on a PC, 4 on a phone
-in landscape, 2 in portrait), each with RSSI, best lap, lap times and totals.
-The header lamps show the C5 receiver and OSD links (green: connected, red:
-not connected).
+**Race (PC)**: from the top, the race clock with Start / Stop / Clear /
+voice test, the **ranking table**, and one card per assigned channel (8 per
+row on a PC, 4 on a phone in landscape, 2 in portrait). The ranking table
+lists every pilot's best lap, laps and total time, ordered by the ranking
+rule in Settings. Each card shows RSSI, best lap, lap times and totals. The
+header lamps show the C5 receiver and OSD links (green: connected, red: not
+connected).
 
 ![Race tab (PC)](docs/images/race-pc.png)
 
-| Race (phone, portrait) | Settings (C5 receiver, pilots) |
+| Race (phone, portrait) | Settings (🏁 race content, C5 receiver, pilots) |
 |---|---|
 | <img src="docs/images/race-phone.png" alt="Race tab (phone)" width="320"> | <img src="docs/images/settings-pc.png" alt="Settings tab" width="480"> |
 
@@ -111,17 +114,65 @@ the netpack XIAO) and calibrate Enter/Exit in the Calib tab
 (C5 scale 0..1023, 16 counts per dB). The race tab shows only the assigned
 channels.
 
+**🏁 レース内容** (race content, top of the Settings tab): total laps (0 =
+no limit) and the ranking rule: total time (most laps, then fastest), best
+lap, or **laps within a time limit** (30 s to 30 min; choose whether the last
+lap after time-up counts).
+
+**Race director's switch** (optional): in 🥽 ELRS OSD, enter the race
+director's bind phrase ("ディレクターバインドフレーズ") and pick the switch
+kind: **toggle** (a switch that stays put: on starts, off stops) or **push**
+(a button: each press starts or stops; presses within 1.5 s count once). On
+the TX, assign the switch to Lua → Backpack → **DVR Rec**.
+
+## Racing
+
+- **Start** (or the race director's switch): "レディ" is said, then a 3 s
+  countdown (**ARM NOW** and 3, 2, 1 on the goggles), then **GO!**. The timer
+  runs this sequence, so every open browser and every goggle follow it at the
+  same moment.
+- Each gate pass records a lap: tones, Japanese TTS, the OSD, and the ranking
+  table update at once.
+- **Stop** pauses (**LAND NOW!**); the clock stays on the stopped time on the
+  timer and the goggles. **Start** again resumes (the pause is left out of
+  the laps).
+- **Laps within a time limit**: the timer and the goggles count the time left;
+  "残り30秒" / "残り20秒", then every second from 10, and a fanfare at 0 (ticks
+  with voice off). After time-up the clock shows the time over in red (minus)
+  until Stop.
+- **Clear** saves the race to SD as CSV and clears every browser and goggle.
+- "音声テスト" plays the gate tone and a sample call (voice settings are in
+  the Settings tab). Tap the page once after opening it so the browser may
+  play sound.
+- PC and phone browsers show the same race time: it runs on the timer's
+  clock, every button reaches every browser, and a browser that missed a
+  message catches up within a second.
+
 After `git pull`, run `git submodule update --init --recursive` and flash the
 S3 (`upload` and `uploadfs`) and, for the UART link, the ESP-NOW bridge again.
 
 ### Goggle OSD
 
-Every second the timer resends each pilot's whole screen, every row at its
-full width. The OSD "clear" command is only sent at ARM NOW and when laps are
-cleared, so a packet lost on the ESP-NOW hop leaves the previous text up
-instead of blanking the row. The lap time stays up for 5 s after the pass
-(redrawn twice, 0.8 s apart); the race clock starts at GO!. Passes after a
-pilot completes the total laps don't count.
+Rows are written at their full width. The OSD "clear" command is only sent
+at ARM NOW and when laps are cleared, so a packet lost on the ESP-NOW hop
+leaves the previous text up instead of blanking the row. The lap time stays
+up for 5 s after the pass. The race clock shows 3, 2, 1 during ARM NOW,
+starts at GO! (the time left in a timed race, then `-mm:ss`), and stays on
+the stopped time until the laps are cleared. Passes after a pilot completes
+the total laps don't count.
+
+To cover lost packets:
+
+- **Changes**: the whole screen goes out, again 0.2 s apart (2 times, 4 for
+  something removed), and 4 more times over 1–5.5 s. An emptied row is sent
+  as spaces for 8 s.
+- **Race clock**: each second only the clock row; the whole screen for a few
+  seconds after a change and every 2 s.
+- **ESP-NOW bridge**: **connectionless** (broadcast, no ACK wait, no retries),
+  each update sent **3 times** at least 3 ms apart. Goggles that are off
+  don't delay anyone; two goggles on one bind phrase both show the OSD.
+- In client mode, put the router on 2.4 GHz **channel 6–11** (ESP-NOW is
+  fixed to channel 1).
 
 ### WiFi modes (Settings → 📶 WiFi)
 
@@ -148,7 +199,9 @@ pilot completes the total laps don't count.
 `bash test/run.sh` runs the core unit tests, a simulated C5MK UART →
 c5host → gate detection → laps pipeline, and a cross-check that loads the real
 vrxc_elrs Python source and compares bind-phrase UIDs and OSD bytes with the
-firmware's, byte for byte. CI (`.github/workflows/ci.yml`) runs them and
+firmware's, byte for byte. The web UI runs against a mock server with no
+hardware: `python3 tools/mock_server.py`, then `http://localhost:8000`
+(`/mock/seed` loads sample pilots and a race). CI (`.github/workflows/ci.yml`) runs them and
 builds the S3 timer, the C5 firmware and the ESP-NOW bridge (Wrover-E and
 XIAO ESP32-C3).
 
