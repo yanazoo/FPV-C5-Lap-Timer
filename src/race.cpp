@@ -121,6 +121,28 @@ void raceStop() {
     wsJson(d);
 }
 
+bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
+    int positions[MAX_ACTIVE], laps[MAX_ACTIVE];
+    uint32_t best;
+    bool finished;
+    {
+        Guard g;
+        if (!raceCore.deleteLap(slot, index, lapMs)) return false;
+        for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = raceCore.position(s), laps[s] = raceCore.laps(s);
+        best = raceCore.slot(slot).bestLapMs;
+        finished = raceCore.slot(slot).finished;
+    }
+    Serial.printf("[Race] slot %d: pass %d (%lu ms) deleted\n", slot, index, (unsigned long)lapMs);
+    elrsLapEdit(slot, laps[slot], positions[slot], best, finished);
+    for (int s = 0; s < MAX_ACTIVE; s++)
+        if (s != slot && positions[s] > 0) elrsPosition(s, laps[s], positions[s]);
+    JsonDocument d;
+    d["type"] = "laps_changed";
+    d["pilot"] = slot;
+    wsJson(d);
+    return true;
+}
+
 String raceClear() {
     bool hadLaps, saved = false;
     const char* reason = "";

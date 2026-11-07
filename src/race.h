@@ -27,6 +27,10 @@ void raceRequestStop();
 // switch setting it starts the race (3 s countdown, as from the web UI),
 // resumes a stopped one, or stops it.
 void raceDirectorSwitch(uint8_t state);
+// Delete a wrong pass of a pilot (its time joins the next lap; see
+// race::Core::deleteLap). Every browser reloads the laps; the goggles get the
+// new lap count, positions and best lap. False if there is no such pass.
+bool raceDeleteLap(int slot, int index, uint32_t lapMs);
 // Clear button: optionally save to SD, then forget the race.
 // Returns the JSON response for /api/race/save.
 String raceClear();

@@ -87,6 +87,16 @@ public:
     // Returns true if they had started and weren't finished yet.
     bool finishSlot(int slot);
 
+    // Delete a wrong pass (a shortcut, a pass picked up by mistake): the
+    // pilot's pass number `index` (0 = their first pass, the holeshot in
+    // holeshot mode). Its time joins the next lap, so the total race time
+    // stays as it was; deleting the last pass just drops it. Best lap,
+    // total, finish and the cooldown reference are worked out again.
+    // expectLapMs != 0: only if that pass's lap time still is this (a
+    // browser that showed a stale list must not delete another pass).
+    // Returns false if there is no such pass.
+    bool deleteLap(int slot, int index, uint32_t expectLapMs = 0);
+
     // Completed laps (holeshot excluded).
     int laps(int slot) const;
     // 1-based race position by laps then time of the last pass; 0 if the
