@@ -177,6 +177,53 @@ void testUid() {
     CHECK(memcmp(uid, again, 6) != 0);
 }
 
+// Deleting a wrong pass (a shortcut): its time joins the next lap.
+void testRaceDeleteLap() {
+    race::PassResult r;
+    {   // holeshot mode: HS 2 s, laps 20 s, 8 s (shortcut), 22 s
+        race::Core c;
+        c.start(0);
+        for (uint32_t t : {2000u, 22000u, 30000u, 52000u}) CHECK(c.pass(0, 0, t, 600, &r));
+        CHECK(c.laps(0) == 3 && c.slot(0).bestLapMs == 8000);
+        CHECK(!c.deleteLap(0, 2, 9999));            // stale view: not that lap
+        CHECK(!c.deleteLap(0, 9) && !c.deleteLap(1, 0));
+        CHECK(c.deleteLap(0, 2, 8000));
+        CHECK(c.laps(0) == 2 && c.lapCount() == 3);
+        CHECK(c.lap(2).lapMs == 30000 && c.lap(2).ts == 52000);   // 8 + 22 s
+        CHECK(c.slot(0).bestLapMs == 20000 && c.slot(0).totalMs == 50000);
+        // Delete the last pass: the next lap counts from the pass before.
+        CHECK(c.deleteLap(0, 2));
+        CHECK(c.laps(0) == 1 && c.slot(0).lastLapTs == 22000 && c.slot(0).totalMs == 20000);
+        CHECK(c.pass(0, 0, 45000, 600, &r) && r.lapMs == 23000 && r.laps == 2);
+        // Delete the holeshot: the next pass becomes the holeshot.
+        CHECK(c.deleteLap(0, 0));
+        CHECK(c.laps(0) == 1 && c.lap(0).lapMs == 22000 && c.slot(0).hsTs == 22000);
+        CHECK(c.slot(0).totalMs == 23000 && c.slot(0).bestLapMs == 23000);
+    }
+    {   // a finished pilot back under the total laps races on
+        race::Core c;
+        c.totalLaps = 2;
+        c.start(0);
+        for (uint32_t t : {1000u, 11000u, 15000u}) CHECK(c.pass(0, 0, t, 600, &r));
+        CHECK(r.justFinished && c.slot(0).finished);
+        CHECK(c.deleteLap(0, 2));
+        CHECK(!c.slot(0).finished && c.laps(0) == 1);
+        CHECK(c.pass(0, 0, 21000, 600, &r) && r.lapMs == 10000 && r.justFinished);
+    }
+    {   // a pause in between: times already moved past it
+        race::Core c;
+        c.lapMode = race::LapMode::Immediate;
+        c.start(0);
+        CHECK(c.pass(0, 0, 10000, 600, &r));
+        c.stop(15000);
+        c.resume(25000);   // 10 s pause
+        CHECK(c.pass(0, 0, 32000, 600, &r) && r.lapMs == 12000);
+        CHECK(c.deleteLap(0, 1));
+        CHECK(c.pass(0, 0, 40000, 600, &r) && r.lapMs == 20000);   // 40 - 10 - 10 s pause
+        CHECK(c.slot(0).totalMs == 30000);
+    }
+}
+
 void testRaceHoleshot() {
     race::Core c;
     c.cooldownMs = 3000;
@@ -780,6 +827,30 @@ void testOsdStageCountAndStopTime() {
     CHECK(!g.shows(row, "1") && !g.shows(row, "2") && !g.shows(row, "3"));
 }
 
+// A deleted lap: the goggles show the new lap count, position and best,
+// and the (maybe deleted) last lap time goes; FINISHED! goes if unfinished.
+void testOsdLapEdit() {
+    Goggles g("p");
+    Capture cap;
+    osd::Engine e(cap);
+    e.setRecipient(0, true, g.uid);
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStage(0, "");
+    e.onRaceStart(3000, 0);
+    at(3600);   // GO! gone
+    e.onLap(10000, 0, {1, false, 7000, 7000, 7000, 1});
+    e.onLap(12000, 0, {2, false, 2000, 2000, 9000, 1});   // the shortcut
+    e.onPilotDone(12000, 0, 1, 9000);
+    at(12000);
+    CHECK(g.shows(12, "BEST: 0:02.0") && g.shows(5, "FINISHED"));
+    e.onLapEdit(13000, 0, 1, 1, 7000, false);
+    at(13000);
+    CHECK(g.shows(1, "POSN: 1 | LAP: 1") && g.shows(12, "BEST: 0:07.0"));
+    CHECK(!g.shows(8, "0:02.0") && !g.shows(5, "FINISHED"));
+    at(20000);   // the old lap's pending clear/redraw must not bring it back
+    CHECK(!g.shows(8, "0:02.0") && g.shows(12, "BEST: 0:07.0"));
+}
+
 void testFormat() {
     char b[16];
     osd::Engine::formatTime(1700, b, sizeof b);
@@ -794,6 +865,7 @@ int runTests() {
     testMsp();
     testUid();
     testRaceHoleshot();
+    testRaceDeleteLap();
     testRaceImmediatePauseFinish();
     testRaceTimed();
     testPositions();
@@ -807,6 +879,7 @@ int runTests() {
     testOsdSurvivesOutage();
     testOsdCountdownClock();
     testOsdStageCountAndStopTime();
+    testOsdLapEdit();
     testFormat();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;

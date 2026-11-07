@@ -161,9 +161,11 @@ function updateRaceCard(p){
   }
 }
 
-function lapRowEl(r,isBest){
+function lapRowEl(r,isBest,idx){
   var tr=document.createElement('tr');
   if(isBest)tr.className='best-row';
+  tr.dataset.idx=idx;
+  if(isAuthed)tr.classList.add('deletable');
   tr.innerHTML='<td>'+r.label+'</td><td class="lap-time">'+fmt(r.lapMs)+'</td><td>'+fmt(r.cum)+'</td>';
   return tr;
 }
@@ -183,7 +185,7 @@ function renderLapRows(p){
     var r=p.rows[i];
     var isBest=!bestDone&&r.lapMs>0&&r.lapMs===p.bestLapMs&&r.label!=='HS';
     if(isBest)bestDone=true;
-    tbody.appendChild(lapRowEl(r,isBest));
+    tbody.appendChild(lapRowEl(r,isBest,i));
   }
   var last=p.rows[p.rows.length-1];
   showDelta(p,last?last.lapMs:0);
@@ -195,13 +197,53 @@ function addLapRow(p, lapMs, cumMs, quiet){
   if(!tbody)return;   // channel not shown on the race tab
   var isBest=(p.bestLapMs===lapMs&&lapMs>0);
   if(isBest)tbody.querySelectorAll('tr.best-row').forEach(r=>r.classList.remove('best-row'));
-  tbody.insertBefore(lapRowEl(r,isBest),tbody.firstChild);
+  tbody.insertBefore(lapRowEl(r,isBest,p.rows.length-1),tbody.firstChild);
   showDelta(p,lapMs);
   if(quiet)return;
   var card=e?e.card:document.getElementById('rc-'+p.id);
   card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
   card.addEventListener('animationend',()=>card.classList.remove('flash'),{once:true});
 }
+// ── Deleting a wrong lap ────────────────────────────────────────────────
+// Tap a lap row (logged in): confirm, and the timer deletes that pass. Its
+// time joins the next lap (the total stays), the last pass is just dropped;
+// every browser reloads the laps, the goggles get the new lap count and best.
+var lapDel=null;
+function lapLabel(p,i){
+  if(lapMode==='immediate')return (i+1)+'周目';
+  return i===0?'ホールショット':i+'周目';
+}
+function openLapDelete(p,i){
+  var r=p.rows[i];if(!r)return;
+  if(!isAuthed){toast('🔒 ラップの削除にはログインが必要です');return;}
+  lapDel={slot:p.id,index:i,lapTime:r.lapMs};
+  var nm=p.name==='---'?'Ch'+(p.id+1):p.name;
+  document.getElementById('lapDelWhat').textContent=nm+'　'+lapLabel(p,i)+'　'+fmt(r.lapMs);
+  var next=p.rows[i+1],how;
+  if(!next)how='この周を取り消します。次の周は、ひとつ前の通過から数えます。';
+  else if(lapMode!=='immediate'&&i===0)how='この通過を取り消し、次の通過をホールショットにします。';
+  else how='この通過をなかったことにして、次の周（'+lapLabel(p,i+1)+' '+fmt(next.lapMs)+'）と合わせて 1 周 '+fmt(r.lapMs+next.lapMs)+' にします。トータルタイムは変わりません。';
+  document.getElementById('lapDelHow').textContent=how+' 全ブラウザ・順位表・ゴーグルの表示に反映します。';
+  document.getElementById('lapDelModal').style.display='flex';
+}
+function closeLapDelete(){lapDel=null;document.getElementById('lapDelModal').style.display='none';}
+async function confirmLapDelete(){
+  var d=lapDel;closeLapDelete();if(!d)return;
+  try{
+    var r=await fetch('/api/laps/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});
+    if(r.ok)toast('🗑 ラップを削除しました');
+    else{toast('⚠ ラップ一覧が更新されています。もう一度選んでください');syncLaps();}
+  }catch(e){toast('⚠ 接続エラー');}
+}
+// One listener per card body (rows are redrawn often).
+document.addEventListener('click',ev=>{
+  var tr=ev.target.closest&&ev.target.closest('tbody tr[data-idx]');if(!tr)return;
+  var m=tr.closest('[id^="lapBody"]');
+  var s=m?parseInt(m.id.slice(7)):-1;
+  if(s<0||!slots[s])return;
+  openLapDelete(slots[s],parseInt(tr.dataset.idx));
+});
+
 // ── Ranking table ───────────────────────────────────────────────────────
 // Every assigned pilot with best lap, laps and total time; rows ordered by
 // the ranking rule from settings (rankMode), its column highlighted.

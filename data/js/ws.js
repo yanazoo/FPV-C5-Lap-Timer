@@ -154,6 +154,7 @@ function onMsg(d){
   if(d.type==='race_ready'){if(!raceRunning)onRaceReady();return;}
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){onRaceClear();return;}
+  if(d.type==='laps_changed'){lapEpoch++;if(lapQueue)setTimeout(syncLaps,400);else syncLaps();return;}   // a lap was deleted
   if(d.type==='time_up'){toast('⏱ 時間切れ');return;}
   if(d.type==='race_start'){onRaceStart(d.ts);return;}
   if(d.type==='race_resume'){onRaceResume(d.ts);return;}

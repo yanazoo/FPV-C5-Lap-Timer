@@ -140,6 +140,11 @@ the TX, assign the switch to Lua → Backpack → **DVR Rec**.
   "残り30秒" / "残り20秒", then every second from 10, and a fanfare at 0 (ticks
   with voice off). After time-up the clock shows the time over in red (minus)
   until Stop.
+- **Deleting a wrong lap** (a shortcut): logged in, tap the lap's row on a race
+  card and confirm. The pass is taken out and its time joins the next lap (the
+  total stays); the last lap is just dropped, and deleting the holeshot makes
+  the next pass the holeshot. Every browser, the ranking, the goggles and the
+  SD record follow.
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

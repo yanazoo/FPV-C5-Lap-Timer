@@ -109,6 +109,53 @@ bool Core::finishSlot(int slot) {
     return true;
 }
 
+bool Core::deleteLap(int slot, int index, uint32_t expectLapMs) {
+    if (slot < 0 || slot >= kSlots || index < 0) return false;
+    // Where the slot's passes are in laps_.
+    static int at[kMaxLaps];
+    int n = 0;
+    for (int i = 0; i < lapCount_; ++i)
+        if (laps_[i].slot == slot) at[n++] = i;
+    if (index >= n) return false;
+    const Lap& del = laps_[at[index]];
+    if (expectLapMs && del.lapMs != expectLapMs) return false;
+    SlotState& s = slots_[slot];
+    uint32_t delMs = del.lapMs;
+    if (index < n - 1) {
+        // The next lap now runs from the pass before the deleted one.
+        Lap& next = laps_[at[index + 1]];
+        uint32_t nextMs = next.lapMs;
+        if (delMs && nextMs) next.lapMs = nextMs + delMs;
+        // Holeshot mode: the next pass becomes the holeshot, later by its lap.
+        if (lapMode == LapMode::Holeshot && index == 0 && s.hsTs) s.hsTs += nextMs;
+    } else {
+        // The last pass: the cooldown and the next lap count from the pass
+        // before (these times are already moved past any pause, as lapMs).
+        s.lastLapTs = (n > 1 && s.lastLapTs) ? s.lastLapTs - delMs : 0;
+    }
+    for (int i = at[index]; i + 1 < lapCount_; ++i) laps_[i] = laps_[i + 1];
+    --lapCount_;
+    s.lapCount = (uint32_t)(n - 1);
+    if (s.lapCount == 0) s.hsTs = s.lastLapTs = 0;
+    // Best lap and total from the laps that are left (holeshot mode: the
+    // holeshot is no lap, and the total counts from it).
+    s.bestLapMs = 0;
+    uint32_t total = 0;
+    int k = 0;
+    for (int i = 0; i < lapCount_; ++i) {
+        if (laps_[i].slot != slot) continue;
+        bool hs = lapMode == LapMode::Holeshot && k++ == 0;
+        if (hs) continue;
+        uint32_t ms = laps_[i].lapMs;
+        total += ms;
+        if (ms && (s.bestLapMs == 0 || ms < s.bestLapMs)) s.bestLapMs = ms;
+    }
+    s.totalMs = total;
+    // Back under the total laps: racing again (a timed race's finish stays).
+    if (s.finished && totalLaps > 0 && !timeLimitMs && laps(slot) < (int)totalLaps) s.finished = false;
+    return true;
+}
+
 int Core::laps(int slot) const {
     const SlotState& s = slots_[slot];
     if (lapMode == LapMode::Holeshot) return s.lapCount ? (int)s.lapCount - 1 : 0;
