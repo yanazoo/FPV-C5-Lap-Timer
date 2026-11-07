@@ -447,6 +447,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         </div>
       </div>
     </div>
+      <div class="config-row">
+        <label>読み上げの声</label>
+        <select id="voiceSelect" onchange="selectVoice(this.value)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="">自動（端末内蔵の声を優先）</option>
+        </select>
+      </div>
+      <p id="voiceInfo" class="section-desc" style="margin:4px 0 0"></p>
     <div class="voice-row" style="align-items:center">
       <label class="toggle-sw">
         <input type="checkbox" id="voiceToggle2" onchange="toggleVoice()" checked>
