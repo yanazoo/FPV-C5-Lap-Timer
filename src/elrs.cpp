@@ -49,29 +49,85 @@ bool    rdValid = false;
 uint8_t rdUid[6];
 bool    rdListenDue = false;   // OSD went out since the bridge last listened
 bool    rdListening = false;   // the bridge is on the RD's UID right now
+uint32_t rdListenAt = 0;       // when the bridge was last pointed at the RD
+// The bridge said it passes on only frames from the RD's UID (MSP
+// kBridgeSetListen answered). Then a switch frame is the RD's whenever it
+// arrives: over netpack it can take tens of ms to come back, by which time
+// the next OSD burst has already moved the bridge to a pilot's UID.
+bool    bridgeFilter = false;
+bool     listenCfgDue = false;
+uint32_t listenCfgAt = 0;
+const uint32_t RD_RELISTEN_MS = 2000;   // idle: point the bridge at the RD again
+const uint32_t LISTEN_CFG_MS  = 5000;   // resend the filter (a rebooted bridge)
+uint32_t uartParkAt = 0;
+bool     uartMode = false;   // the UART bridge is the selected transport
 
 portMUX_TYPE stMux = portMUX_INITIALIZER_UNLOCKED;
 ElrsStatus   st = {};
 
+// Send over TCP without giving up the connection when lwIP is short of
+// buffers. WiFiClient::write() closes the socket on any error but EAGAIN,
+// and ENOMEM (the send queue full of small segments) is what a burst of OSD
+// frames used to hit during a race: the netpack connection dropped and came
+// back every few seconds. Here a full queue is waited out (up to 1 s, then
+// the rest of this burst is dropped and the connection kept).
+bool tcpSend(const uint8_t* d, size_t n) {
+    int fd = client.fd();
+    if (fd < 0) return false;
+    uint32_t start = millis();
+    while (n) {
+        int r = send(fd, d, n, MSG_DONTWAIT);
+        if (r > 0) {
+            d += r;
+            n -= (size_t)r;
+            continue;
+        }
+        if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != ENOMEM) {
+            Serial.printf("[ELRS] netpack send error %d\n", errno);
+            client.stop();
+            return false;
+        }
+        if (millis() - start > 1000) return false;
+        vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    return true;
+}
+
+// Frames are collected and sent once per burst: one TCP segment instead of
+// a dozen tiny ones (or one UART write).
 struct TransportOut : osd::Output {
+    uint8_t buf[1536];
+    size_t  len = 0;
+
     void write(const uint8_t* d, size_t n) override {
         if (!enabled) return;
         rdListenDue = true;
         rdListening = false;
+        if (len + n > sizeof buf) flush();
+        if (n > sizeof buf) return;
+        memcpy(buf + len, d, n);
+        len += n;
+    }
+    void flush() {
+        if (!len) return;
+        size_t n = len;
+        len = 0;
         if (transport == 1) {
-            if (uartOpen) Serial2.write(d, n);
-        } else if (client.connected()) {
-            client.write(d, n);
-        } else {
+            if (!uartOpen) return;
+            Serial2.write(buf, n);
+        } else if (!client.connected() || !tcpSend(buf, n)) {
             return;
         }
         portENTER_CRITICAL(&stMux);
         st.bytesSent += n;
         portEXIT_CRITICAL(&stMux);
     }
-    // One recipient's burst: let the bridge switch UID (it re-inits ESP-NOW
-    // on a new UID) before the next one arrives.
-    void burstDone() override { vTaskDelay(pdMS_TO_TICKS(15)); }
+    // One recipient's burst: send it, and let the bridge switch UID (it
+    // re-inits ESP-NOW on a new UID) before the next one arrives.
+    void burstDone() override {
+        flush();
+        vTaskDelay(pdMS_TO_TICKS(15));
+    }
 };
 
 TransportOut out;
@@ -117,18 +173,59 @@ void refreshConfig() {
     rdValid = rd;
     if (rd) memcpy(rdUid, uid, 6);
     rdListenDue = rd;
+    listenCfgDue = true;   // the RD's UID may have changed
 }
 
-// Point the bridge at the race director's UID (see rdValid).
-void listenForRd() {
-    if (!rdValid || !rdListenDue || !st.connected) return;
+// Point the bridge at the race director's UID (see rdValid). Also again
+// every RD_RELISTEN_MS while idle: a bridge that was rebooted or powered up
+// after the timer would otherwise stay deaf to the switch until the next OSD.
+// And tell the bridge to pass on only frames from the RD (kBridgeSetListen).
+void listenForRd(uint32_t now) {
+    if (!st.connected) return;
+    if (listenCfgDue || now - listenCfgAt >= LISTEN_CFG_MS) {
+        uint8_t f[msp::kMaxFrame];
+        size_t n = msp::encode(msp::kBridgeSetListen, rdUid, rdValid ? 6 : 0, f, sizeof f);
+        out.write(f, n);
+        out.flush();
+        listenCfgDue = false;
+        listenCfgAt = now;
+        rdListenDue = rdValid;   // write() cleared listening; point it back
+    }
+    if (rdValid && rdListening && now - rdListenAt >= RD_RELISTEN_MS) rdListenDue = true;
+    if (!rdValid || !rdListenDue) return;
     uint8_t p[7] = {0x01};
     memcpy(p + 1, rdUid, 6);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
     out.write(f, n);
+    out.flush();
     rdListenDue = false;
     rdListening = true;
+    rdListenAt = now;
+}
+
+// A bridge wired to the UART while the netpack (WiFi) is selected: park it,
+// so it doesn't sit on the RD's or a pilot's UID next to the netpack's own
+// bridge, and passes nothing on (it would hear every broadcast OSD). Every
+// LISTEN_CFG_MS, in case it reboots. Its output is read and dropped.
+const uint8_t kParkUid[6] = {0x02, 0x00, 0x46, 0x43, 0x35, 0x4C};   // locally administered
+void parkUartBridge(uint32_t now) {
+    if (!uartOpen) {
+        Serial2.setRxBufferSize(1024);
+        Serial2.begin(ELRS_UART_BAUD, SERIAL_8N1, ELRS_UART_RX_PIN, ELRS_UART_TX_PIN);
+        uartOpen = true;
+        uartParkAt = now - LISTEN_CFG_MS;
+    }
+    while (Serial2.available()) Serial2.read();
+    if (now - uartParkAt < LISTEN_CFG_MS) return;
+    uartParkAt = now;
+    uint8_t f[msp::kMaxFrame];
+    size_t n = msp::encode(msp::kBridgeSetListen, kParkUid, 6, f, sizeof f);
+    Serial2.write(f, n);
+    uint8_t p[7] = {0x01};
+    memcpy(p + 1, kParkUid, 6);
+    n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
+    Serial2.write(f, n);
 }
 
 // A frame from the bridge / netpack: the backpack version, or the race
@@ -138,16 +235,22 @@ void onFrame() {
         portENTER_CRITICAL(&stMux);
         snprintf(st.version, sizeof st.version, "%u.%u", parser.payload()[0], parser.payload()[1]);
         portEXIT_CRITICAL(&stMux);
+    } else if (parser.function() == msp::kBridgeSetListen) {
+        bridgeFilter = parser.size() >= 1 && parser.payload()[0] == 1;
+        Serial.printf("[ELRS] bridge listen filter %s\n", bridgeFilter ? "on" : "off");
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
-        // Only while the bridge listens on the RD's UID: on a pilot's UID it
-        // would hear that pilot's own DVR switch.
-        if (rdValid && rdListening) raceDirectorSwitch(parser.payload()[0]);
+        // A filtering bridge passes on only the RD's frames. An older one
+        // passes on everything it hears: then only while it is on the RD's
+        // UID, since on a pilot's UID it would hear that pilot's DVR switch.
+        if (rdValid && (bridgeFilter || rdListening)) raceDirectorSwitch(parser.payload()[0]);
     }
 }
 
 void disconnect() {
     if (client.connected()) client.stop();
     if (uartOpen) Serial2.end(), uartOpen = false;
+    uartMode = false;
+    bridgeFilter = false;
     setStatus(false, "");
 }
 
@@ -167,6 +270,8 @@ bool tryConnect(IPAddress ip) {
     snprintf(peer, sizeof peer, "%s:%u", ip.toString().c_str(), port);
     setStatus(true, peer);
     rdListenDue = rdValid;
+    listenCfgDue = true;
+    bridgeFilter = false;
     Serial.printf("[ELRS] connected to elrs-netpack %s\n", peer);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsGetBackpackVersion, nullptr, 0, f, sizeof f);
@@ -219,14 +324,25 @@ void serviceTransport(uint32_t now) {
             Serial2.setRxBufferSize(1024);
             Serial2.begin(ELRS_UART_BAUD, SERIAL_8N1, ELRS_UART_RX_PIN, ELRS_UART_TX_PIN);
             uartOpen = true;
+        }
+        if (!uartMode) {   // just opened, or switched over from the netpack
+            uartMode = true;
             setStatus(true, "UART");
             rdListenDue = rdValid;
+            listenCfgDue = true;
+            bridgeFilter = false;
+            out.len = 0;
         }
         while (Serial2.available())
             if (parser.feed((uint8_t)Serial2.read())) onFrame();
         return;
     }
-    if (uartOpen) Serial2.end(), uartOpen = false;
+    if (uartMode) {   // switched over from the UART bridge: park it now
+        uartMode = false;
+        setStatus(false, "");
+        uartParkAt = now - LISTEN_CFG_MS;
+    }
+    parkUartBridge(now);
     if (!client.connected()) {
         if (st.connected) {
             Serial.println("[ELRS] netpack connection lost");
@@ -273,7 +389,8 @@ void elrsTask(void*) {
             while (xQueueReceive(evQ, &e, 0) == pdTRUE);
         }
         engine.tick(millis());
-        listenForRd();
+        listenForRd(millis());
+        out.flush();
     }
 }
 
