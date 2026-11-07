@@ -11,7 +11,7 @@
 
 namespace {
 
-enum class Ev : uint8_t { Config, Reconnect, Stage, Start, Lap, Position, Done, Stop, Clear, Announce, Test };
+enum class Ev : uint8_t { Config, Reconnect, Stage, Start, Lap, Position, Done, Stop, Clear, Announce, Test, LapEdit };
 
 struct Event {
     Ev           kind;
@@ -258,6 +258,7 @@ void handle(const Event& e, uint32_t now) {
     case Ev::Clear:     engine.onLapsClear(now); break;
     case Ev::Announce:  engine.onAnnounce(now, e.text); break;
     case Ev::Test:      engine.test(now, e.slot); break;
+    case Ev::LapEdit:   engine.onLapEdit(now, e.slot, e.laps, e.position, e.value, e.lap.holeshot); break;
     }
 }
 
@@ -337,6 +338,15 @@ void elrsAnnounce(const char* text) {
 }
 
 void elrsTest(int slot) { post(ev(Ev::Test, slot)); }
+
+void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finished) {
+    Event e = ev(Ev::LapEdit, slot);
+    e.laps = (int16_t)laps;
+    e.position = (int16_t)position;
+    e.value = bestMs;
+    e.lap.holeshot = finished;   // "still finished"
+    post(e);
+}
 
 ElrsStatus elrsStatus() {
     portENTER_CRITICAL(&stMux);

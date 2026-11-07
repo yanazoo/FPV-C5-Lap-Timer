@@ -309,6 +309,16 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/auth/login":
             ok = d.get("password") == state["password"]
             return self.reply({"ok": ok}, 200 if ok else 401)
+        if p == "/api/laps/delete":   # the timer's race::Core::deleteLap
+            mine = [l for l in r["laps"] if l["slot"] == d.get("slot")]
+            i = d.get("index", -1)
+            if not 0 <= i < len(mine) or (d.get("lapTime") and mine[i]["lapTime"] != d["lapTime"]):
+                return self.reply({"ok": False, "reason": "no such lap"}, 409)
+            if i + 1 < len(mine):
+                mine[i + 1]["lapTime"] += mine[i]["lapTime"]
+            r["laps"].remove(mine[i])
+            broadcast({"type": "laps_changed", "pilot": d["slot"]})
+            return self.reply({"ok": True})
         if p == "/api/race/save":
             had = bool(r["laps"])
             r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)

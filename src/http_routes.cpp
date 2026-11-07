@@ -224,6 +224,16 @@ void registerHttpRoutes() {
         req->send(200, "application/json", raceClear());
     });
 
+    // Delete a wrong pass (index = the pilot's pass number from 0, lapTime
+    // = its lap time as the browser showed it, so a stale list can't delete
+    // another pass).
+    onJson("/api/laps/delete", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        int slot = d["slot"] | -1, index = d["index"] | -1;
+        uint32_t lapMs = d["lapTime"] | 0u;
+        if (raceDeleteLap(slot, index, lapMs)) ok(req);
+        else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
+    });
+
     server.on("/api/laps", HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();

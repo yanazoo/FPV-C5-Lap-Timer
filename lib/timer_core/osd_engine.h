@@ -148,6 +148,10 @@ public:
     // Another pilot's position/lap count changed (vrxc_elrs update_pos).
     void onPosition(uint32_t now, int slot, int laps, int position);
     void onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs);
+    // A wrong lap was deleted: redraw the pilot's lap count, position and
+    // best lap, and take the last lap time off (it may be the deleted one).
+    // finished: still done after the delete (else racing again).
+    void onLapEdit(uint32_t now, int slot, int laps, int position, uint32_t bestMs, bool finished);
     // The race clock stays up showing the final time, as in the web UI:
     // finalMs (the timer's stopped race time), or the clock's own if < 0.
     void onRaceStop(uint32_t now, int32_t finalMs = -1);
