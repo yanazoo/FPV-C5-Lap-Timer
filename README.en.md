@@ -75,7 +75,9 @@ falls back below Exit.
   ESP-NOW bridge); the netpack XIAO joins the same WiFi as the timer (its AP
   in host mode, or the same router in client mode) and the timer finds it on
   port 8080 automatically (`auto` scans AP clients, or looks up
-  `elrs-netpack.local` in client mode).
+  `elrs-netpack.local` in client mode). A bridge wired to the UART may stay
+  connected: while WiFi is selected the timer parks it so it doesn't get in
+  the netpack's way.
 
 ## Build and flash
 
