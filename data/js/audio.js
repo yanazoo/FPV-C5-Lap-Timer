@@ -88,13 +88,18 @@ var sfx={
 };
 
 var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0;
+// The speech-engine workarounds below (resume a "paused" engine, the
+// keep-alive, the silent first utterance) are for iOS only: Chrome on a
+// PC can report paused just as an utterance starts and restarts it on
+// resume(), so レディ was said twice there.
+var IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
 // iOS Safari often fails to fire onend / reports speaking inconsistently
 // and rapid speak() calls can drop the second utterance. Poll frequently
 // and advance the queue whenever the engine is no longer speaking.
 setInterval(()=>{
   if(typeof speechSynthesis==='undefined')return;
-  if(speechSynthesis.paused)speechSynthesis.resume();
+  if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
   if(speechBusy&&!speechSynthesis.speaking&&Date.now()-lastSpeechStart>800){
     speechBusy=false;nextSpeech();
   }
@@ -103,7 +108,6 @@ setInterval(()=>{
 // silently stall (well-known iOS Safari TTS bug). iOS only: Chrome on a PC
 // restarts the utterance on resume(), and "レディ" (which the queue's
 // lastSpeechStart didn't cover) was then said twice.
-var IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 setInterval(()=>{
   if(typeof speechSynthesis==='undefined'||!IS_IOS)return;
   if(speechSynthesis.speaking&&Date.now()-lastSpeechStart>8000){
@@ -197,7 +201,7 @@ function inCaptiveSheet(){
 // iOS Safari speaks only after the page has spoken inside a tap: the Start
 // tap does that (silently), so "レディ" from race_ready is heard.
 function warmSpeech(){
-  if(speechWarmedUp||typeof speechSynthesis==='undefined')return;
+  if(!IS_IOS||speechWarmedUp||typeof speechSynthesis==='undefined')return;
   try{
     // A real (silent) word: iOS doesn't count an empty utterance.
     var u=new SpeechSynthesisUtterance('あ');u.lang='ja-JP';u.volume=0;u.rate=2;
@@ -205,9 +209,13 @@ function warmSpeech(){
     lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
   }catch(e){}
 }
+var lastReadyAt=-1e9;
 function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
+  // One レディ per start, whatever else asks for it within 3 s.
+  if(performance.now()-lastReadyAt<3000){go();return;}
+  lastReadyAt=performance.now();
   speechWarmedUp=true;
   var done=false,started=performance.now(),poll=null,cap=null;
   function finish(){if(done)return;done=true;clearInterval(poll);clearTimeout(cap);go();}
@@ -216,7 +224,7 @@ function announceStart(then){
     u.lang='ja-JP';u.rate=speechRate;
     var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
     u.onend=finish;u.onerror=finish;
-    if(speechSynthesis.paused)speechSynthesis.resume();
+    if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
     lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){finish();return;}
   poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
@@ -271,7 +279,7 @@ function nextSpeech(){
   u.onerror=()=>advance(false);
   lastSpeechStart=Date.now();
   try{
-    if(speechSynthesis.paused)speechSynthesis.resume();
+    if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
     lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){advance(false);}
 }
