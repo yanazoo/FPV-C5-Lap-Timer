@@ -58,6 +58,7 @@ def load_plugin():
 
     class Backpack:
         _backpack_connected = True
+        _bridge_filter = False  # vrxc_elrs v1.1.8+: no listen-filter answer here
 
         def __init__(self):
             self.sent = []
