@@ -1,6 +1,8 @@
 #include <ArduinoJson.h>
 #include <SD.h>
 #include <SPI.h>
+#include <sys/time.h>
+#include <time.h>
 #include "sd_store.h"
 #include "data_model.h"
 #include "nvs_store.h"
@@ -77,6 +79,31 @@ static void pruneRaceFiles(int keep) {
     }
 }
 
+// ── Wall clock ─────────────────────────────────────────────────────────────
+static bool   clockValid = false;
+static int    clockTzMin = 0;
+static time_t raceStartUtc = 0;    // 0 = clock unknown when the race started
+static int    raceStartTz = 0;
+static uint8_t raceStartRank = 0, raceStartLastLap = 1;
+
+void sdSetClock(int64_t epochMs, int tzMin) {
+    if (epochMs < 1600000000000LL) return;   // not a real date
+    struct timeval tv;
+    tv.tv_sec  = (time_t)(epochMs / 1000);
+    tv.tv_usec = (suseconds_t)((epochMs % 1000) * 1000);
+    settimeofday(&tv, nullptr);
+    clockTzMin = constrain(tzMin, -14 * 60, 14 * 60);
+    if (!clockValid) Serial.printf("[Clock] set from browser (UTC%+d min)\n", clockTzMin);
+    clockValid = true;
+}
+
+void sdNoteRaceStart() {
+    raceStartUtc     = clockValid ? time(nullptr) : 0;
+    raceStartTz      = clockTzMin;
+    raceStartRank    = raceRules.rankMode;
+    raceStartLastLap = raceRules.countLastLap ? 1 : 0;
+}
+
 // CSV cells: commas and line breaks would break the columns.
 static String cell(const char* s) {
     String o(s);
@@ -95,6 +122,21 @@ bool sdSaveRace() {
     File f = SD.open(path, FILE_WRITE);
     if (!f) return false;
     f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names
+    // One "#FPVC5" line with when the race started and its rules, for the
+    // results viewer (older files have none; readers skip lines with "#").
+    char when[40] = "";
+    if (raceStartUtc) {
+        time_t local = raceStartUtc + (time_t)raceStartTz * 60;
+        struct tm t;
+        gmtime_r(&local, &t);
+        int tz = raceStartTz < 0 ? -raceStartTz : raceStartTz;
+        snprintf(when, sizeof when, "%04d-%02d-%02dT%02d:%02d:%02d%c%02d:%02d", t.tm_year + 1900, t.tm_mon + 1,
+                 t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, raceStartTz < 0 ? '-' : '+', tz / 60, tz % 60);
+    }
+    f.printf("#FPVC5,v=1,start=%s,mode=%s,laps=%u,rank=%u,limit_s=%lu,lastlap=%u,elapsed_ms=%lu,event=%s\n", when,
+             raceCore.lapMode == race::LapMode::Holeshot ? "holeshot" : "immediate", raceCore.totalLaps,
+             raceStartRank, (unsigned long)(raceCore.timeLimitMs / 1000), raceStartLastLap,
+             (unsigned long)raceCore.elapsed(millis()), cell(elrsCfg.eventName).c_str());
     f.println("Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms");
     int perSlot[MAX_ACTIVE] = {0};
     // Holeshot mode: the first pass is the holeshot, lap 0 (as on the race tab).
@@ -190,6 +232,8 @@ String sdListJson() {
                     JsonObject o = arr.add<JsonObject>();
                     o["name"] = String(e.name());
                     o["size"] = (uint32_t)e.size();
+                    time_t t = e.getLastWrite();
+                    if (t > 1600000000) o["t"] = (uint32_t)t;   // only with the clock set
                 }
                 e.close();
             }
@@ -220,4 +264,45 @@ bool sdDeleteFile(const String& path) {
     if (!safePath(path)) return false;
     SdGuard g;
     return sdPresent && SD.remove(path);
+}
+
+// Remove a folder's contents (and the folder, unless it is the root).
+// Names are collected a few at a time with the folder closed before
+// deleting: removing entries while iterating skips some on FAT.
+static int eraseDir(const String& dir) {
+    int n = 0;
+    for (;;) {
+        String names[16];
+        bool isDir[16];
+        int k = 0;
+        File d = SD.open(dir);
+        if (!d) break;
+        for (File e = d.openNextFile(); e && k < 16; e = d.openNextFile()) {
+            names[k] = String(e.path());
+            isDir[k] = e.isDirectory();
+            e.close();
+            k++;
+        }
+        d.close();
+        if (!k) break;
+        int removed = 0;
+        for (int i = 0; i < k; i++) {
+            int before = n;
+            if (isDir[i]) n += eraseDir(names[i]);
+            else if (SD.remove(names[i])) n++;
+            if (!SD.exists(names[i])) removed++;
+            else if (n == before) Serial.printf("[SD] could not delete %s\n", names[i].c_str());
+        }
+        if (!removed) break;   // stuck (read-only card?): stop instead of looping
+    }
+    if (dir != "/" && SD.rmdir(dir)) n++;
+    return n;
+}
+
+int sdEraseAll() {
+    SdGuard g;
+    if (!sdPresent) return -1;
+    int n = eraseDir("/");
+    Serial.printf("[SD] erased %d entries\n", n);
+    return n;
 }

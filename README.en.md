@@ -60,6 +60,7 @@ falls back below Exit.
 | GND | — | GND |
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
+  Each race is saved on Clear as `race_NNN.csv`; the **SD tab** shows them (newest first; one race as results and a lap-time graph; per-pilot stats across all races after an estimate of how long reading them takes) and can format the card (delete every file, admin password asked again). The browser's clock is passed to the timer, so each file starts with a `#FPVC5,...` line holding the race's start time and rules.
 - Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
   (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
   straight to the S3 over UART; no netpack XIAO and no WiFi setup — see

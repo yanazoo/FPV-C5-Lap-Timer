@@ -10,6 +10,8 @@ async function refreshSdFiles(){
     if(!r.ok)throw 0;
     sdFileList=await r.json();
     renderSdFileList();
+    resPrune();
+    renderResList();
   }catch(e){toast('⚠️ ファイル一覧の取得に失敗しました');}
 }
 

@@ -423,6 +423,31 @@ void registerHttpRoutes() {
         bool done = sdDeleteFile(d["path"] | "");
         req->send(200, "application/json", done ? R"({"ok":true})" : R"({"ok":false})");
     });
+    // Format: delete every file on the card. Asks for the admin password
+    // again (it can't be undone) and refuses while a race is on.
+    onJson("/api/sd/erase", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (adminPassword != (d["password"] | "")) {
+            req->send(401, "application/json", R"({"ok":false,"reason":"password"})");
+            return;
+        }
+        bool busy;
+        {
+            Guard g;
+            busy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
+        }
+        if (busy) { req->send(409, "application/json", R"({"ok":false,"reason":"race"})"); return; }
+        int n = sdEraseAll();
+        if (n < 0) { req->send(503, "application/json", R"({"ok":false,"reason":"nosd"})"); return; }
+        char b[48];
+        snprintf(b, sizeof b, R"({"ok":true,"removed":%d})", n);
+        req->send(200, "application/json", b);
+    });
+
+    // The browser's clock (the S3 has no RTC): race files get their date.
+    onJson("/api/clock", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        sdSetClock(d["epoch"] | (int64_t)0, d["tz"] | 0);
+        ok(req);
+    });
 
     // ── Auth (soft: protects against accidental changes, not attacks) ──────
     onJson("/api/auth/login", [](AsyncWebServerRequest* req, JsonDocument& d) {

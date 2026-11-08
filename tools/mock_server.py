@@ -21,6 +21,35 @@ from urllib.parse import parse_qs, urlparse
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
+# Sample race files on the "SD card": the newest with the #FPVC5 line,
+# race_001 in the old format (no date, no rules).
+def _race_csv(no, pilots, laps, meta=True, rank=0, holeshot=True):
+    import random
+    rnd = random.Random(no)
+    out = "\ufeff"
+    if meta:
+        out += (f"#FPVC5,v=1,start=2026-11-{1 + no:02d}T14:{10 + no:02d}:05+09:00,mode="
+                f"{'holeshot' if holeshot else 'immediate'},laps={laps if rank != 2 else 0},rank={rank},"
+                f"limit_s={120 if rank == 2 else 0},lastlap=1,elapsed_ms=60000,event=サンプル大会\n")
+    out += "Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms\n"
+    ts = 0
+    for slot, (name, base) in enumerate(pilots):
+        n = laps - (1 if slot == len(pilots) - 1 else 0)
+        rows = [(0, 1800 + slot * 250)] if holeshot else []
+        rows += [(i + 1, int(base - no * 120 + rnd.uniform(-600, 900))) for i in range(n)]
+        for lap, ms in rows:
+            ts += ms
+            out += f"{slot},{name},{5658 + slot * 37},{lap},{ms},{rnd.randint(500, 800)},{ts}\n"
+    return out.encode()
+
+
+_PILOTS = [("たろう", 19200), ("はなこ", 19600), ("じろう", 20100), ("さくら", 20800)]
+SD_FILES = {"pilots.csv": ("\ufeffname,yomi,freq\n".encode(), 0)}
+SD_FILES["race_001.csv"] = (_race_csv(1, _PILOTS[:3], 3, meta=False), 0)
+for _no in range(2, 15):
+    SD_FILES[f"race_{_no:03d}.csv"] = (_race_csv(_no, _PILOTS, 3 if _no % 4 else 5, rank=2 if _no % 5 == 0 else 0),
+                                       1793000000 + _no * 900)
+
 state = {
     "pilots": [],
     "active": [-1] * 8,
@@ -193,10 +222,14 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":
-            return self.reply([{"name": "race_001.csv", "size": 2048}, {"name": "pilots.csv", "size": 300}])
+            return self.reply([{"name": n, "size": len(b), **({"t": t} if t else {})}
+                               for n, (b, t) in SD_FILES.items()])
         if p == "/api/sd/file":
             path = parse_qs(u.query).get("path", [""])[0]
-            body = f"﻿Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms\n# {path}\n".encode()
+            if path.lstrip("/") not in SD_FILES:
+                return self.reply({"error": "not found"}, 404)
+            time.sleep(0.15)   # a real card over SPI is not instant
+            body = SD_FILES[path.lstrip("/")][0]
             self.send_response(200)
             self.send_header("Content-Type", "text/csv; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -324,6 +357,14 @@ class Handler(SimpleHTTPRequestHandler):
             r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
+        if p == "/api/sd/erase":
+            if d.get("password") != state["password"]:
+                return self.reply({"ok": False, "reason": "password"}, 401)
+            n = len(SD_FILES)
+            SD_FILES.clear()
+            return self.reply({"ok": True, "removed": n})
+        if p == "/api/clock":
+            return self.reply({"ok": True})
         if p == "/api/sd/pilots/restore":
             return self.reply({"ok": True, "pilots": len(state["pilots"])})
         return self.reply({"ok": True})

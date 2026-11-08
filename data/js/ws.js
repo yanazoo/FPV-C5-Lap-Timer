@@ -6,7 +6,7 @@ var wsDot=document.getElementById('wsDot');
 function wsConnect(){
   var c=new WebSocket('ws://'+location.host+'/ws');
   wsConn=c;wsLastMsg=performance.now();
-  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';};
+  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';sendClock();};
   c.onerror=()=>c.close();
   c.onclose=()=>{
     if(wsConn!==c)return;   // replaced already
@@ -14,6 +14,11 @@ function wsConnect(){
     setTimeout(()=>{wsRetry=Math.min(wsRetry*2,4000);wsConnect();},wsRetry);
   };
   c.onmessage=e=>{wsLastMsg=performance.now();var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
+}
+// The timer has no clock: give it this browser's, so saved races get a date.
+function sendClock(){
+  fetch('/api/clock',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({epoch:Date.now(),tz:-new Date().getTimezoneOffset()})}).catch(()=>{});
 }
 // The timer sends its status every second: three seconds of silence means
 // the connection is stuck (WiFi hiccup, phone woke from sleep). Reconnect

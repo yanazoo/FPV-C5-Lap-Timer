@@ -189,6 +189,28 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 #statusMsg.err{color:var(--err)}
 
 /* ── Auth (soft login modal + locked tab indicator) ── */
+/* SD race results */
+#resDetail,#resPilots{scroll-margin-top:110px}
+.res-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:14px}
+.res-muted{color:var(--muted);font-size:12px}
+.res-btn{padding:4px 10px;font-size:12px}
+.res-item{display:flex;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;background:var(--sf2);cursor:pointer}
+.res-item.on{border-color:var(--accent)}
+.res-item .no{font-weight:700;color:var(--accent);font-size:15px;min-width:44px}
+.res-item .mid{flex:1;min-width:0}.res-item .t{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res-chip{display:inline-block;font-size:10px;border:1px solid var(--bd);border-radius:10px;padding:0 6px;color:var(--muted);margin:2px 3px 0 0}
+.res-seg{display:flex;gap:4px;margin:8px 0 10px}.res-seg button{flex:1;padding:6px;border-radius:6px;font-size:12px;background:var(--sf2);color:var(--muted);border:1px solid var(--bd);cursor:pointer}
+.res-seg button.on{background:var(--accent-d);color:#fff;border-color:var(--accent)}
+.res-table{width:100%;border-collapse:collapse;font-size:12px}
+.res-table th{color:var(--muted);font-weight:600;padding:4px;border-bottom:1px solid var(--bd);font-size:11px}
+.res-table td{padding:5px 4px;text-align:center;border-bottom:1px solid var(--sf2)}.res-table .l{text-align:left}
+.res-table .best{color:var(--ok);font-weight:700}.res-table tr.r1 .pos{color:#ffd700}.res-table tr.r2 .pos{color:#c0c0c0}.res-table tr.r3 .pos{color:#cd7f32}
+.res-wrap{overflow-x:auto}
+.res-legend{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:4px 0 10px}
+.res-legend button{font-size:12px;background:none;border:1px solid var(--bd);color:var(--tx);border-radius:12px;padding:2px 8px;cursor:pointer}
+.res-legend button.off{opacity:.35}
+.res-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
+.res-bar{height:8px;border-radius:4px;background:var(--accent)}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-box{background:var(--sf);border:1px solid var(--accent);border-radius:10px;padding:18px;width:100%;max-width:320px}
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
@@ -576,13 +598,26 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 
 <!-- ═══════════════════════════ SD ════════════════════════════ -->
 <section id="pane-sd" class="tab-pane">
-  <h2 class="section-title">💾 SDカード — ファイルブラウザ</h2>
+  <h2 class="section-title">💾 SDカード</h2>
   <div id="sdTabStatus"><p style="color:var(--muted);font-size:12px">状態を確認中...</p></div>
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-    <button onclick="refreshSdFiles()" class="btn-secondary" style="flex:1">🔄 ファイル一覧を更新</button>
+
+  <!-- Race results saved on the card: list, then one race (results / graph). -->
+  <div class="card">
+    <div class="res-head"><b>📜 レース結果</b><span id="resCount" class="res-muted"></span>
+      <span style="flex:1"></span>
+      <button onclick="openPilotScan()" class="btn-secondary res-btn">👤 パイロット別</button>
+      <button onclick="refreshSdFiles()" class="btn-secondary res-btn">🔄</button></div>
+    <div id="resList"><p class="res-muted">「🔄」を押してください</p></div>
   </div>
-  <div id="sdFileListWrap">
-    <p style="color:var(--muted);font-size:12px">「ファイル一覧を更新」を押してください</p>
+  <div class="card" id="resDetail" style="display:none"></div>
+  <div class="card" id="resPilots" style="display:none"></div>
+
+  <div class="card">
+    <div class="res-head"><b>📁 ファイル</b></div>
+    <div id="sdFileListWrap">
+      <p style="color:var(--muted);font-size:12px">「🔄」を押してください</p>
+    </div>
+    <button onclick="openSdErase()" class="btn-danger" style="width:100%;margin-top:12px">🧹 SDカードをフォーマット（全ファイル削除）</button>
   </div>
 </section>
 
@@ -600,6 +635,35 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="modal-actions">
       <button onclick="submitLogin()" class="btn-success">ログイン</button>
       <button onclick="cancelLogin()" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pilot stats read every race file: say how long that takes first. -->
+<div id="pilotScanModal" class="modal-overlay" onclick="if(event.target===this)closePilotScan()">
+  <div class="modal-box">
+    <h3>👤 パイロット別の成績</h3>
+    <p id="pilotScanWhat" style="color:var(--tx);font-size:13px"></p>
+    <p>読み込み中はタイマーの応答が少し遅くなります。レース中は使えません。</p>
+    <div class="modal-actions">
+      <button onclick="startPilotScan()" class="btn-success">表示する</button>
+      <button onclick="closePilotScan()" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Format the SD card: every file goes, so ask for the password again. -->
+<div id="sdEraseModal" class="modal-overlay" onclick="if(event.target===this)closeSdErase()">
+  <div class="modal-box" style="border-color:var(--err)">
+    <h3 style="color:var(--err)">🧹 SDカードのフォーマット</h3>
+    <p style="color:var(--tx);font-size:13px">SDカードの<b>すべてのファイル</b>（レース結果・パイロットのバックアップ）を削除します。元に戻せません。</p>
+    <p>必要なファイルは、先に「📁 ファイル」からダウンロードしてください。続けるには管理者パスワードを入力します。</p>
+    <input type="text" class="pw-mask" id="sdErasePw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="パスワード"
+      onkeydown="if(event.key==='Enter')confirmSdErase()">
+    <div id="sdEraseErr" class="modal-err"></div>
+    <div class="modal-actions">
+      <button onclick="confirmSdErase()" class="btn-danger">すべて削除する</button>
+      <button onclick="closeSdErase()" class="btn-secondary">キャンセル</button>
     </div>
   </div>
 </div>
@@ -626,7 +690,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 // the page dead (no tabs, no pilots). One at a time also keeps the timer's
 // web server from getting all the requests at once.
 (function(){
-  var files=['globals','audio','auth','race','config','calib','sd','ws'];
+  var files=['globals','audio','auth','race','config','calib','sd','results','ws'];
   function load(i,tries){
     if(i>=files.length)return;
     var s=document.createElement('script');
