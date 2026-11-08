@@ -209,13 +209,9 @@ function warmSpeech(){
     lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
   }catch(e){}
 }
-var lastReadyAt=-1e9;
 function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
-  // One レディ per start, whatever else asks for it within 3 s.
-  if(performance.now()-lastReadyAt<3000){go();return;}
-  lastReadyAt=performance.now();
   speechWarmedUp=true;
   var done=false,started=performance.now(),poll=null,cap=null;
   function finish(){if(done)return;done=true;clearInterval(poll);clearTimeout(cap);go();}
