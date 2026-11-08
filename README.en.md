@@ -2,7 +2,7 @@
 
 🌐 [日本語](README.md) | **English**
 
-An FPV drone lap timer built on [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer). No transponder on the
+An FPV drone lap timer. No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
 gate passes at the RSSI peak, and lap times go to the pilots' **HDZero**
@@ -15,6 +15,11 @@ ELRS backpack, using a firmware port of
 > **The goggle OSD works with HDZero goggles (with an ELRS backpack) only.**
 > Other goggles show no OSD; lap timing, the web UI and voice announcements
 > still work.
+
+> [!TIP]
+> **Sister project: [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer)**,
+> which times a small beacon (XIAO ESP32-C3/C6) carried on each quad. See
+> [Sister project](#sister-project-esp-now-lap-timer) for the differences.
 
 ```
 VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this firmware)
@@ -50,6 +55,31 @@ falls back below Exit.
 
 ![Calibration tab](docs/images/calib-pc.png)
 
+### 💾 SD card: look back at past races
+
+Every race is saved on the SD card when you press Clear (the file name holds
+the race's date and time), and the **SD tab** shows them any time. The files
+also open in Excel.
+
+- **📜 Race results**: newest first, with date, winner, event, pilots, laps
+  and best lap.
+- **Results** (結果): the ranking and lap table of one race; each pilot's best
+  lap in green.
+- **Graph** (グラフ): lap times lap by lap, and consistency (mean and spread);
+  tap the legend to show or hide a pilot.
+
+| Race list | Results | Graph |
+|---|---|---|
+| <img src="docs/images/sd-list.png" alt="Race list" width="260"> | <img src="docs/images/sd-race.png" alt="One race" width="260"> | <img src="docs/images/sd-graph.png" alt="Lap-time graph" width="260"> |
+
+- **👤 Per pilot** (パイロット別): totals over every saved race (races, wins,
+  personal best, and the best-lap trend). It reads every file, so it first
+  shows how many and **about how long that takes**.
+
+| Before reading | Per-pilot stats and trend |
+|---|---|
+| <img src="docs/images/sd-pilots-confirm.png" alt="Confirmation" width="300"> | <img src="docs/images/sd-pilots.png" alt="Per-pilot stats" width="300"> |
+
 ## Wiring
 
 | XIAO ESP32-S3 | | XIAO ESP32-C5 |
@@ -60,6 +90,7 @@ falls back below Exit.
 | GND | — | GND |
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
+  Each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv` (number, start date and time; `race_NNN.csv` when the timer has no date yet; numbers go 000–999 and start again; rotate mode keeps the last 20 races and deletes the oldest by the date in the name); the **SD tab** shows them (newest first; one race as results and a lap-time graph; per-pilot stats across all races after an estimate of how long reading them takes) and can format the card (under "⚠ その他の操作"; deletes every file, admin password asked again). The browser's clock is passed to the timer, so each file starts with a `#FPVC5,...` line holding the race's start time and rules.
 - Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
   (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
   straight to the S3 over UART; no netpack XIAO and no WiFi setup — see
@@ -211,6 +242,22 @@ hardware: `python3 tools/mock_server.py`, then `http://localhost:8000`
 (`/mock/seed` loads sample pilots and a race). CI (`.github/workflows/ci.yml`) runs them and
 builds the S3 timer, the C5 firmware and the ESP-NOW bridge (Wrover-E and
 XIAO ESP32-C3).
+
+## Sister project: ESP-NOW Lap Timer
+
+[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) is a sister
+project by the same author. It times passes differently; the web UI, voice
+announcements and SD logging work the same way. Pick the one that suits your
+gear.
+
+| | FPV C5 Lap Timer (this repository) | ESP-NOW Lap Timer |
+|---|---|---|
+| Signal timed | each pilot's **5.8 GHz VTX** (RSSI) | an **ESP-NOW beacon** on the quad (RSSI) |
+| On the quad | **nothing** (pilots told apart by VTX frequency) | a XIAO ESP32-C3/C6 beacon |
+| Gate receiver | XIAO ESP32-C5 + FPVGate C5MK | ESP32-WROVER-E |
+| Pass detection | XIAO ESP32-S3 (peak of the C5's raw RSSI) | the gate node |
+| Goggle display | OSD on HDZero goggles (via the ELRS backpack) | none |
+| Web UI / voice / SD log | yes | yes |
 
 ## Licences
 

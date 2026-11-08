@@ -16,6 +16,7 @@
 #include "msp_v2.h"
 #include "osd_engine.h"
 #include "race_core.h"
+#include "race_files.h"
 
 namespace {
 
@@ -861,6 +862,30 @@ void testFormat() {
     CHECK(osd::Engine::centerCol(80) == 0);
 }
 
+// Race file names: number, date, which is older (rotate mode).
+void testRaceFiles() {
+    using namespace racefiles;
+    CHECK(number("race_001.csv") == 1);
+    CHECK(number("race_000_20261108_1432.csv") == 0);
+    CHECK(number("race_012_20261108_1432.csv") == 12);
+    CHECK(number("race_.csv") == -1);
+    CHECK(number("race_12x.csv") == -1);
+    CHECK(number("pilots.csv") == -1);
+    CHECK(number("race_001.txt") == -1);
+    CHECK(dateOf("race_012_20261108_1432.csv") == "20261108_1432");
+    CHECK(dateOf("race_012.csv") == "");
+    CHECK(dateOf("race_012_2026110_1432.csv") == "");
+    // By date, whatever the numbers (999 -> 000 restart).
+    CHECK(older("race_999_20261108_1432.csv", "race_000_20261108_1435.csv"));
+    CHECK(!older("race_000_20261108_1435.csv", "race_999_20261108_1432.csv"));
+    CHECK(older("race_500_20261107_2359.csv", "race_001_20261108_0000.csv"));
+    // No date (before the clock was set) counts as older.
+    CHECK(older("race_998.csv", "race_001_20261108_0900.csv"));
+    // Same minute or no dates: by number.
+    CHECK(older("race_004_20261108_1432.csv", "race_005_20261108_1432.csv"));
+    CHECK(older("race_003.csv", "race_004.csv"));
+}
+
 int runTests() {
     testMsp();
     testUid();
@@ -881,6 +906,7 @@ int runTests() {
     testOsdStageCountAndStopTime();
     testOsdLapEdit();
     testFormat();
+    testRaceFiles();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;
 }

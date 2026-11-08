@@ -2,19 +2,19 @@
 
 🌐 **日本語** | [English](README.en.md)
 
-[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) をベースにした、**FPV ドローン用ラップ計測装置**です。
+**FPV ドローン用ラップ計測装置**です。
 機体側のビーコンは不要で、**各パイロットの 5.8GHz VTX 電波そのもの**の RSSI ピークで計測ラインの通過を検出し、ラップタイムを **ESP-NOW ブリッジ → ELRS バックパック経由で HDZero ゴーグルの OSD に表示**します。
 
 > [!IMPORTANT]
 > **ゴーグル OSD は HDZero ゴーグル（ELRS バックパック搭載）のみ対応**しています。それ以外のゴーグルでは OSD は表示されません（ラップ計測・Web UI・読み上げは使えます）。
 
-| 変更点 | ESP-NOW Lap Timer | FPV C5 Lap Timer |
-|---|---|---|
-| ゲート受信機 | ESP32-WROVER-E（ESP-NOW ビーコンの RSSI） | **XIAO ESP32-C5 + [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**（5GHz VTX の RSSI、1パイロット約1kHz） |
-| 機体側 | XIAO ESP32-C3/C6 ビーコンが必要 | **不要**（VTX の周波数でパイロットを識別） |
-| 通過判定 | ゲートノード | **XIAO ESP32-S3**（C5 の生 RSSI からピーク検出） |
-| ゴーグル表示 | なし | **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs) の OSD ロジックを S3 に移植**し、**[elrs-netpack](https://github.com/yanazoo/elrs-netpack) の ESP-NOW ブリッジ**経由で **HDZero ゴーグル**へ送信 |
-| Web UI / TTS / SD 記録 | あり | あり（VTX 周波数・C5 スケール・OSD 設定に対応） |
+- **ゲート受信機**：XIAO ESP32-C5 + [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)（5GHz VTX の RSSI を 1 パイロットあたり約 1kHz で測定）
+- **機体側**：何も載せません（VTX の周波数でパイロットを分けます）
+- **本体**：XIAO ESP32-S3（通過判定・ラップ計算・Web UI・読み上げ・SD 記録）
+- **ゴーグル表示**：[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs) の OSD ロジックを S3 に移植し、[elrs-netpack](https://github.com/yanazoo/elrs-netpack) の ESP-NOW ブリッジ経由で HDZero ゴーグルへ送ります
+
+> [!TIP]
+> **姉妹プロジェクト：[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer)** もあります。こちらは機体に小さなビーコン（XIAO ESP32-C3/C6）を載せて計測する方式です。違いは「[姉妹プロジェクト：ESP-NOW Lap Timer](#姉妹プロジェクトesp-now-lap-timer)」を参照してください。
 
 ## 画面イメージ（Web UI）
 
@@ -31,6 +31,26 @@
 **キャリブレーション**：パイロットごとの RSSI 波形と Enter（緑の点線）／Exit（赤の点線）の閾値です。ゲートを通過した山が、Enter を超えて Exit より下に戻るように調整します。
 
 ![キャリブレーション画面](docs/images/calib-pc.png)
+
+### 💾 SD カード：過去のレースを見返す
+
+クリアしたレースは SD カードに保存され、**SD タブでいつでも見返せます**（ファイル名にレースの日時が入ります）。保存したファイルは Excel でも開けます。
+
+- **📜 レース結果**：新しい順の一覧です。日時・優勝者・イベント名・人数・周回・最速ラップが一目で分かります。
+- **結果**：タップしたレースの順位表とラップ表です。各パイロットの最速ラップは緑で表示します。
+- **グラフ**：周ごとのラップタイムの推移と、安定度（平均とばらつき）です。凡例をタップすると表示を切り替えられます。
+
+| レース結果の一覧 | 結果（順位表・ラップ表） | グラフ（推移・安定度） |
+|---|---|---|
+| <img src="docs/images/sd-list.png" alt="レース結果の一覧" width="260"> | <img src="docs/images/sd-race.png" alt="1 レースの結果" width="260"> | <img src="docs/images/sd-graph.png" alt="ラップタイムのグラフ" width="260"> |
+
+- **👤 パイロット別**：保存されている全レースを集計して、出走数・1 位の回数・自己ベストと、最速ラップの推移を表示します。全ファイルを読むので、先に**件数とかかる時間の目安**を表示し、確認してから始めます。
+
+| 読み込む前の確認 | パイロット別の成績と推移 |
+|---|---|
+| <img src="docs/images/sd-pilots-confirm.png" alt="読み込み前の確認" width="300"> | <img src="docs/images/sd-pilots.png" alt="パイロット別の成績" width="300"> |
+
+SD カードの使い方（保存の方式・フォーマット）は「[microSD（任意）](#microsd任意)」を参照してください。
 
 ---
 
@@ -106,6 +126,14 @@
 ### microSD（任意）
 
 XIAO ESP32-S3 **Sense** の拡張ボードの SD スロットをそのまま使います（CS=GPIO21, SCK=GPIO7, MISO=GPIO8, MOSI=GPIO9）。通常の XIAO ESP32-S3 の場合は同じピンに SD モジュールを配線してください。ピンは `src/config.h` で変更できます。
+
+レースはクリアしたときに `race_001_20261108_1432.csv`（番号・レースの開始日・時刻）のような名前で保存されます。日時が分からないとき（電源を入れてからブラウザーが一度もつながっていない）は `race_001.csv` です（設定の「SDログ」で、毎回新規・古い順に上書き・保存しないを選べます。「上書き」は直近 20 レースを残し、ファイル名の日時が一番古いものから消します。番号は 999 の次は 000 に戻ります）。**SD タブ**で見返せます。
+
+- **📜 レース結果**：新しい順に一覧を表示します。タップすると、順位表とラップ表（**結果**）、周ごとのラップタイムの推移と安定度（**グラフ**）を表示します。
+- **👤 パイロット別**：全レースを集計して、出走数・1 位の回数・自己ベストと最速ラップの推移を表示します。全ファイルを読むので、件数と**かかる時間の目安**を表示してから始めます。
+- **🧹 フォーマット**（「⚠ その他の操作」を開いた中）：SD カードのファイルをすべて削除します（管理者パスワードの再入力が必要。レース中やクリア前のラップがあるときはできません）。
+
+タイマーには時計がないため、ブラウザーの時刻をタイマーに渡し、レースの開始日時と設定（総周回数・順位の決め方・制限時間・イベント名）を CSV の 1 行目（`#FPVC5,...`）に記録します。それより前のファイルは「日時不明」と表示します。
 
 ### ゴーグル OSD の接続方法
 
@@ -284,7 +312,7 @@ RSSI は C5 のスケール（0〜1023、**16 = 1dB**、ゲイン30でフロア�
 
 - **C5 リンク**（`src/c5_link.cpp`）：FPVGate C5MK のホストライブラリ `c5host`（サブモジュールを無改変で使用）が UART を解析し、C5 のタイムスタンプを S3 の時計に変換します。S3 は専用タスクで UART を一括読み出しし、全サンプル（約1kHz/人）でゲート検出を行います。
 - **ゲート検出**（`gate_tracker`）：`f = (3f + 値) / 4` で平滑化し、`f ≥ Enter` で通過開始、`f ≤ Exit` で終了、**通過時刻はピーク時刻**。FPVGate / c5host::GateDetector と同じアルゴリズムで、テストで一致を確認しています。
-- **ラップ計算**（`race_core`）：ESP-NOW Lap Timer の HS モード / 計測モード、クールダウン、一時停止・再開、ベストラップ（HS は対象外）、順位、完走判定（完走後の通過は数えません）。
+- **ラップ計算**（`race_core`）：HS モード / 計測モード（姉妹プロジェクトの ESP-NOW Lap Timer と同じ考え方）、クールダウン、一時停止・再開、ベストラップ（HS は対象外）、順位、完走判定（完走後の通過は数えません）。
 - **ELRS OSD**（`osd_engine` + `src/elrs.cpp`）：vrxc_elrs の各イベント処理を移植。パイロットごとの UID はバインドフレーズの MD5（ExpressLRS と同じ）。MSP v2 フレームを TCP（netpack XIAO）または UART（ESP-NOW ブリッジ：Wrover-E / XIAO C3）へ送ります。OSD を送り終えるたびにブリッジをレースディレクターの UID に戻し、送信機のスイッチ（`MSP_ELRS_BACKPACK_SET_RECORDING_STATE`）を受け取ります。
 - **スタートの流れ**（`src/race.cpp`）：Web のボタンでもレースディレクターのスイッチでも、本体が `race_ready`（全ブラウザが「レディ」）→ 1.5 秒後に `race_stage`（ARM NOW・3-2-1）→ 3.3 秒後に `race_start` の順に進めます。
 - **ブラウザの同期**（`data/js/`）：レース時間は、0.1 秒ごとのテレメトリに入っている本体の時刻から求めます。本体は 1 秒ごとにレースの状態（走行中・停止・経過時間・ラップ数）を送り、取りこぼしたブラウザはそれで追いつきます。
@@ -346,6 +374,19 @@ PC 上のテストと CI ビルドは通っていますが、初回は以下を�
 | OSD の行が一瞬消える・ちらつく・遅れる | タイマー（S3）とブリッジの両方を最新のファームウェアに書き込み直す（古いブリッジは受信確認を待つ方式で、電源の入っていないゴーグルがあると遅れました）。クライアントモードでは、ルーターの 2.4GHz チャンネルを 6〜11 にする |
 | レースディレクターのスイッチで反応しない | ディレクターバインドフレーズが送信機と一致しているか、送信機の Lua → Backpack → DVR Rec にスイッチが割り当てられているか、スイッチの種類（トグル／プッシュ）の設定。本体のシリアルログに `[RD] switch on (push mode)` などが出るか確認。ブリッジが新しい（受信フィルター対応）と、本体のログに `[ELRS] bridge listen filter on` と出ます |
 | OSD が出ない | パイロットの OSD チェック、バインドフレーズがゴーグル側と一致しているか、ESP-NOW ブリッジ（Wrover-E / XIAO C3）の電源とログ、ESP-NOW チャンネル（ch1 固定）。UART 直結は [docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md#4-うまく表示されないとき) も参照 |
+
+## 姉妹プロジェクト：ESP-NOW Lap Timer
+
+[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) は、同じ作者による姉妹プロジェクトです。計測の方式が違い、Web UI・読み上げ・SD 記録などの使い方は共通です。使う機材や目的に合わせて選んでください。
+
+| | FPV C5 Lap Timer（このリポジトリ） | ESP-NOW Lap Timer |
+|---|---|---|
+| 計測に使う電波 | 各パイロットの **5.8GHz VTX** の RSSI | 機体に載せた **ESP-NOW ビーコン**の RSSI |
+| 機体側 | **何も載せない**（VTX の周波数でパイロットを識別） | XIAO ESP32-C3/C6 のビーコンを載せる |
+| ゲート受信機 | XIAO ESP32-C5 + FPVGate C5MK | ESP32-WROVER-E |
+| 通過判定 | XIAO ESP32-S3（C5 の生 RSSI からピーク検出） | ゲートノード |
+| ゴーグル表示 | HDZero ゴーグルに OSD 表示（ELRS バックパック経由） | なし |
+| Web UI / 読み上げ / SD 記録 | あり | あり |
 
 ## ライセンスについて
 

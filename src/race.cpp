@@ -81,6 +81,7 @@ void raceStart() {
         Guard g;
         applyRaceRules();
         raceCore.start(now);
+        sdNoteRaceStart();
     }
     raceEpoch++;
     timeUpHandled = false;
