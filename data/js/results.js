@@ -208,10 +208,13 @@ function resGraphHtml(r){
   var ps=all.filter(p=>p.count);
   if(!ps.length)return '<p class="res-muted">ラップがありません</p>';
   var shown=ps.filter(p=>!resHidden[p.slot]);
-  var series=shown.map(p=>({color:resColor(p),pts:p.laps.map((v,i)=>[i+1,v])}));
+  var series=shown.map(p=>({color:resColor(p),name:resName(p),pts:p.laps.map((v,i)=>[i+1,v])}));
   var best=0,bestAt=null;
   shown.forEach(p=>p.laps.forEach((v,i)=>{if(v&&(!best||v<best)){best=v;bestAt=[i+1,v,resColor(p)];}}));
   var h=resChartSvg(series,{xLabel:x=>x+'周',mark:bestAt,markText:best?'最速 '+(best/1000).toFixed(2):''});
+  var same=resOverlaps(series);
+  if(same.length)h+='<p class="res-muted" style="text-align:center">線が重なっています：'
+    +same.map(g=>g.map(esc).join(' と ')).join('、')+'（同じタイムで記録されています）</p>';
   // Every pilot of the race; one with no lap after the holeshot has no line.
   h+='<div class="res-legend">'+all.map(p=>p.count
     ?'<button class="'+(resHidden[p.slot]?'off':'')+'" onclick="resToggle('+p.slot+')"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'</button>'
@@ -235,6 +238,27 @@ function resGraphHtml(r){
   return h+'</table>';
 }
 
+// Series whose laps are (almost) the same: two pilots on one channel, or
+// one quad seen by two slots, give identical lines that hide each other.
+// Two series overlap when every lap they share is within 1 % (and they
+// share at least two). Returns groups of pilot names.
+function resSame(a,b){
+  var n=Math.min(a.pts.length,b.pts.length);
+  if(n<2)return false;
+  for(var i=0;i<n;i++)if(Math.abs(a.pts[i][1]-b.pts[i][1])>Math.max(a.pts[i][1],b.pts[i][1])*0.01)return false;
+  return true;
+}
+function resOverlaps(series){
+  var groups=[],seen={};
+  series.forEach((a,i)=>{
+    if(seen[i])return;
+    var g=[a.name];
+    for(var j=i+1;j<series.length;j++)if(!seen[j]&&resSame(a,series[j])){g.push(series[j].name);seen[j]=1;}
+    if(g.length>1)groups.push(g);
+  });
+  return groups;
+}
+
 // Line chart: series [{color, pts:[[x, ms], ...]}]. A lap far slower than
 // the rest (a crash) would squash every other line, so the top of the
 // scale stops at 1.6x the median and slower points sit on the top edge.
@@ -255,11 +279,14 @@ function resChartSvg(series,o){
       +'<text x="2" y="'+(y+4)+'" style="fill:var(--muted)" font-size="10">'+(v/1000).toFixed(1)+'</text>';}
   var step=Math.max(1,Math.ceil((x1-x0+1)/8));
   for(var x=x0;x<=x1;x+=step)g+='<text x="'+X(x)+'" y="'+(H-8)+'" style="fill:var(--muted)" font-size="10" text-anchor="middle">'+o.xLabel(x)+'</text>';
-  series.forEach(s=>{
+  // A line that a later one covers is drawn wider, so both show (nested).
+  series.forEach((s,i)=>{
+    var under=0;
+    for(var j=i+1;j<series.length;j++)if(resSame(s,series[j]))under++;
     var pts=s.pts.map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
-    if(s.pts.length>1)g+='<polyline style="fill:none;stroke:'+s.color+'" stroke-width="2.5" stroke-linejoin="round" points="'+pts+'"/>';
+    if(s.pts.length>1)g+='<polyline style="fill:none;stroke:'+s.color+'" stroke-width="'+(2.5+under*3.5)+'" stroke-linejoin="round" stroke-linecap="round" points="'+pts+'"/>';
     // A single lap has no line: draw its point larger so it still shows.
-    var r0=s.pts.length>1?2.5:4.5;
+    var r0=(s.pts.length>1?2.5:4.5)+under*2;
     s.pts.forEach(p=>{g+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(p[1]>hi?4:r0)+'" style="fill:'+s.color+'"/>';});
   });
   if(o.mark){var mx=X(o.mark[0]),my=Y(o.mark[1]);
