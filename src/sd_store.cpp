@@ -55,27 +55,67 @@ void sdCheckHotplug(uint32_t now) {
     }
 }
 
-static int findNextRaceNum() {
-    char path[32];
-    for (int n = 1; n < 1000; n++) {
-        snprintf(path, sizeof path, "/race_%03d.csv", n);
-        if (!SD.exists(path)) return n;
+// Race files: race_NNN.csv, or race_NNN_YYYYMMDD_HHMM.csv once the timer
+// knew the date. Returns NNN, or -1 for any other name.
+static int raceNum(const char* name) {
+    if (strncmp(name, "race_", 5) != 0) return -1;
+    const char* p = name + 5;
+    int n = 0, digits = 0;
+    while (*p >= '0' && *p <= '9' && digits < 4) n = n * 10 + (*p++ - '0'), digits++;
+    if (!digits) return -1;
+    size_t len = strlen(p);
+    if (len < 4 || strcmp(p + len - 4, ".csv") != 0) return -1;
+    return (*p == '.' || *p == '_') ? n : -1;
+}
+
+// One pass over the card's root: how many race files, the highest and
+// lowest number, and the lowest one's path (the oldest, to rotate out).
+struct RaceFiles {
+    int count = 0, maxN = 0, minN = 1000;
+    String minPath;
+};
+static RaceFiles scanRaceFiles() {
+    RaceFiles r;
+    File root = SD.open("/");
+    for (File e = root ? root.openNextFile() : File(); e; e = root.openNextFile()) {
+        int n = e.isDirectory() ? -1 : raceNum(e.name());
+        if (n >= 0) {
+            r.count++;
+            if (n > r.maxN) r.maxN = n;
+            if (n < r.minN) r.minN = n, r.minPath = String(e.path());
+        }
+        e.close();
     }
+    if (root) root.close();
+    return r;
+}
+
+// Next number: one past the highest, so numbers follow the order of the
+// races (rotate mode deletes the lowest = oldest). After 999, start over
+// from the lowest number not on the card.
+static int findNextRaceNum() {
+    RaceFiles r = scanRaceFiles();
+    if (r.maxN < 999) return r.maxN + 1;
+    static bool used[1000];
+    memset(used, 0, sizeof used);
+    File root = SD.open("/");
+    for (File e = root ? root.openNextFile() : File(); e; e = root.openNextFile()) {
+        int n = raceNum(e.name());
+        if (n >= 0 && n < 1000) used[n] = true;
+        e.close();
+    }
+    if (root) root.close();
+    for (int n = 1; n < 1000; n++)
+        if (!used[n]) return n;
     return 999;
 }
 
-// Rotate mode: delete the oldest race_*.csv until fewer than keep remain.
+// Rotate mode: delete the oldest race file until fewer than keep remain.
 static void pruneRaceFiles(int keep) {
-    char path[32];
-    for (;;) {
-        int count = 0, minN = 1000;
-        for (int n = 1; n < 1000; n++) {
-            snprintf(path, sizeof path, "/race_%03d.csv", n);
-            if (SD.exists(path)) { count++; if (n < minN) minN = n; }
-        }
-        if (count < keep || minN == 1000) break;
-        snprintf(path, sizeof path, "/race_%03d.csv", minN);
-        SD.remove(path);
+    for (int guard = 0; guard < 1000; guard++) {
+        RaceFiles r = scanRaceFiles();
+        if (r.count < keep || r.minPath.isEmpty()) break;
+        if (!SD.remove(r.minPath)) break;
     }
 }
 
@@ -117,8 +157,20 @@ bool sdSaveRace() {
     SdGuard g;
     if (!sdPresent) return false;
     if (settings.sdLogMode == 1) pruneRaceFiles(SD_MAX_RACE_FILES);
-    char path[32];
-    snprintf(path, sizeof path, "/race_%03d.csv", findNextRaceNum());
+    // The race's local start time, when the timer knew the date: in the
+    // file name (race_012_20261108_1432.csv) and on the #FPVC5 line.
+    struct tm lt = {};
+    if (raceStartUtc) {
+        time_t local = raceStartUtc + (time_t)raceStartTz * 60;
+        gmtime_r(&local, &lt);
+    }
+    char path[48];
+    int no = findNextRaceNum();
+    if (raceStartUtc)
+        snprintf(path, sizeof path, "/race_%03d_%04d%02d%02d_%02d%02d.csv", no, lt.tm_year + 1900, lt.tm_mon + 1,
+                 lt.tm_mday, lt.tm_hour, lt.tm_min);
+    else
+        snprintf(path, sizeof path, "/race_%03d.csv", no);
     File f = SD.open(path, FILE_WRITE);
     if (!f) return false;
     f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names
@@ -126,9 +178,7 @@ bool sdSaveRace() {
     // results viewer (older files have none; readers skip lines with "#").
     char when[40] = "";
     if (raceStartUtc) {
-        time_t local = raceStartUtc + (time_t)raceStartTz * 60;
-        struct tm t;
-        gmtime_r(&local, &t);
+        const struct tm& t = lt;
         int tz = raceStartTz < 0 ? -raceStartTz : raceStartTz;
         snprintf(when, sizeof when, "%04d-%02d-%02dT%02d:%02d:%02d%c%02d:%02d", t.tm_year + 1900, t.tm_mon + 1,
                  t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, raceStartTz < 0 ? '-' : '+', tz / 60, tz % 60);

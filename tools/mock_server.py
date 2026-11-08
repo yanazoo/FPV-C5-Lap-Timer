@@ -47,7 +47,7 @@ _PILOTS = [("たろう", 19200), ("はなこ", 19600), ("じろう", 20100), ("�
 SD_FILES = {"pilots.csv": ("\ufeffname,yomi,freq\n".encode(), 0)}
 SD_FILES["race_001.csv"] = (_race_csv(1, _PILOTS[:3], 3, meta=False), 0)
 for _no in range(2, 15):
-    SD_FILES[f"race_{_no:03d}.csv"] = (_race_csv(_no, _PILOTS, 3 if _no % 4 else 5, rank=2 if _no % 5 == 0 else 0),
+    SD_FILES[f"race_{_no:03d}_202611{1 + _no:02d}_14{10 + _no:02d}.csv"] = (_race_csv(_no, _PILOTS, 3 if _no % 4 else 5, rank=2 if _no % 5 == 0 else 0),
                                        1793000000 + _no * 900)
 
 state = {

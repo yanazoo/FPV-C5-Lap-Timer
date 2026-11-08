@@ -16,11 +16,14 @@ var resFull = {};            // name -> parsed race (this page only)
 var resMsPerFile = 0, resSamples = 0;   // measured time to read one file
 var resBusy = false, resScanStop = false;
 
+// race_012.csv, or race_012_20261108_1432.csv (the race's date and time).
+var RES_NAME=/^race_(\d{1,4})(_\d{8}_\d{4})?\.csv$/;
+function resNum(name){return parseInt(RES_NAME.exec(name)[1],10);}
 function resFiles(){
-  return sdFileList.filter(f=>/^race_\d+\.csv$/.test(f.name)).sort((a,b)=>
-    ((b.t||0)-(a.t||0))||(parseInt(b.name.slice(5))-parseInt(a.name.slice(5))));
+  return sdFileList.filter(f=>RES_NAME.test(f.name)).sort((a,b)=>
+    ((b.t||0)-(a.t||0))||(resNum(b.name)-resNum(a.name)));
 }
-function resNo(name){return '#'+name.slice(5,-4);}
+function resNo(name){return '#'+RES_NAME.exec(name)[1];}
 function resKey(f){return 'res1:'+f.name+'|'+f.size+'|'+(f.t||0);}
 function resGet(f){try{var v=localStorage.getItem(resKey(f));return v?JSON.parse(v):null;}catch(e){return null;}}
 function resPut(f,s){try{localStorage.setItem(resKey(f),JSON.stringify(s));}catch(e){}}
@@ -307,7 +310,7 @@ function resPilotStats(){
       m.races++;
       if(i===0&&(lead.count||lead.best))m.wins++;
       if(p.best&&(!m.best||p.best<m.best)){m.best=p.best;m.bestRace=resNo(f.name);}
-      if(p.best)m.hist.push({key:s.sortKey||parseInt(f.name.slice(5)),no:resNo(f.name),best:p.best});
+      if(p.best)m.hist.push({key:s.sortKey||resNum(f.name),no:resNo(f.name),best:p.best});
     });
   });
   return Object.keys(map).map(k=>map[k]).sort((a,b)=>((a.best?0:1)-(b.best?0:1))||(a.best-b.best));
