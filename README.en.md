@@ -55,6 +55,31 @@ falls back below Exit.
 
 ![Calibration tab](docs/images/calib-pc.png)
 
+### 💾 SD card: look back at past races
+
+Every race is saved on the SD card when you press Clear (the file name holds
+the race's date and time), and the **SD tab** shows them any time. The files
+also open in Excel.
+
+- **📜 Race results**: newest first, with date, winner, event, pilots, laps
+  and best lap.
+- **Results** (結果): the ranking and lap table of one race; each pilot's best
+  lap in green.
+- **Graph** (グラフ): lap times lap by lap, and consistency (mean and spread);
+  tap the legend to show or hide a pilot.
+
+| Race list | Results | Graph |
+|---|---|---|
+| <img src="docs/images/sd-list.png" alt="Race list" width="260"> | <img src="docs/images/sd-race.png" alt="One race" width="260"> | <img src="docs/images/sd-graph.png" alt="Lap-time graph" width="260"> |
+
+- **👤 Per pilot** (パイロット別): totals over every saved race (races, wins,
+  personal best, and the best-lap trend). It reads every file, so it first
+  shows how many and **about how long that takes**.
+
+| Before reading | Per-pilot stats and trend |
+|---|---|
+| <img src="docs/images/sd-pilots-confirm.png" alt="Confirmation" width="300"> | <img src="docs/images/sd-pilots.png" alt="Per-pilot stats" width="300"> |
+
 ## Wiring
 
 | XIAO ESP32-S3 | | XIAO ESP32-C5 |

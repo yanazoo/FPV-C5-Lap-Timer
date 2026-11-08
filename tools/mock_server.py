@@ -61,13 +61,13 @@ SD_FILES["race_015_20261116_1500.csv"] = ((
               for lap, ms in [(0, 2000 + s * 100)] + list(enumerate(laps, 1)))).encode(), 1793020000)
 
 
-# Like a field test: mori and ASUMI recorded the same passes (one quad).
+# Like a field test: two pilots recorded the same passes (one quad).
 SD_FILES["race_016_20261116_1639.csv"] = ((
     "\ufeff#FPVC5,v=1,start=2026-11-16T16:39:05+09:00,mode=holeshot,laps=0,rank=1,limit_s=0,lastlap=1,"
     "elapsed_ms=60000,event=\nSlot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms\n"
     + "".join(f"{s},{n},{5658 + s * 37},{lap},{ms},700,0\n"
-              for s, (n, laps) in enumerate([("yanazoo", [11600, 18100, 8420]), ("TUYOPON", []),
-                                             ("mori", [13300, 11000, 9500]), ("ASUMI", [13300, 11000, 9500, 8900])])
+              for s, (n, laps) in enumerate([("そうた", [11600, 18100, 8420]), ("みお", []),
+                                             ("れん", [13300, 11000, 9500]), ("ひな", [13300, 11000, 9500, 8900])])
               for lap, ms in [(0, 2000)] + list(enumerate(laps, 1)))).encode(), 1793030000)
 state = {
     "pilots": [],
@@ -376,6 +376,9 @@ class Handler(SimpleHTTPRequestHandler):
             r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
+        if p == "/api/sd/files/delete":
+            gone = SD_FILES.pop(d.get("path", "").lstrip("/"), None)
+            return self.reply({"ok": gone is not None})
         if p == "/api/sd/erase":
             if d.get("password") != state["password"]:
                 return self.reply({"ok": False, "reason": "password"}, 401)
