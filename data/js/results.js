@@ -263,11 +263,30 @@ function resOverlaps(series){
   return groups;
 }
 
+// Width of the cards on the SD tab (the chart's drawing width).
+function resChartWidth(){
+  var pane=document.getElementById('pane-sd');
+  var w=pane&&pane.clientWidth?pane.clientWidth-34:340;
+  return Math.max(300,Math.min(1400,Math.round(w)));
+}
+// Redraw open charts when the window changes size (turning a phone, resizing).
+var resResizeH=null,resPilotSel=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(resResizeH);
+  resResizeH=setTimeout(()=>{
+    if(resSel&&resView==='graph')renderRace();
+    var pb=document.getElementById('resPilots');
+    if(pb&&pb.style.display!=='none'&&resPilotSel!==null)renderPilots(resPilotSel);
+  },250);
+});
+
 // Line chart: series [{color, pts:[[x, ms], ...]}]. A lap far slower than
 // the rest (a crash) would squash every other line, so the top of the
 // scale stops at 1.6x the median and slower points sit on the top edge.
 function resChartSvg(series,o){
-  var W=340,H=170,L=38,R=10,T=12,B=26;
+  // Drawn for the width it gets, so text stays small on a PC: a phone keeps
+  // the 2:1 shape, a wide screen gets a wide chart of fixed height.
+  var W=resChartWidth(),H=W>520?230:170,L=38,R=10,T=12,B=26;
   var all=[];series.forEach(s=>s.pts.forEach(p=>all.push(p[1])));
   if(!all.length)return '<p class="res-muted">表示するパイロットを選んでください</p>';
   var sorted=all.slice().sort((a,b)=>a-b),med=sorted[Math.floor(sorted.length/2)];
@@ -355,6 +374,7 @@ function resPilotStats(){
   return Object.keys(map).map(k=>map[k]).sort((a,b)=>((a.best?0:1)-(b.best?0:1))||(a.best-b.best));
 }
 function renderPilots(sel){   // sel: row index of the pilot whose trend is shown
+  resPilotSel=sel;
   var box=document.getElementById('resPilots');
   var all=resFiles(),read=all.filter(f=>resGet(f)).length;
   var st=resPilotStats();
