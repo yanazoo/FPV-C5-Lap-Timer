@@ -2,7 +2,7 @@
 
 🌐 [日本語](README.md) | **English**
 
-An FPV drone lap timer built on [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer). No transponder on the
+An FPV drone lap timer. No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
 gate passes at the RSSI peak, and lap times go to the pilots' **HDZero**
@@ -15,6 +15,11 @@ ELRS backpack, using a firmware port of
 > **The goggle OSD works with HDZero goggles (with an ELRS backpack) only.**
 > Other goggles show no OSD; lap timing, the web UI and voice announcements
 > still work.
+
+> [!TIP]
+> **Sister project: [ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer)**,
+> which times a small beacon (XIAO ESP32-C3/C6) carried on each quad. See
+> [Sister project](#sister-project-esp-now-lap-timer) for the differences.
 
 ```
 VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this firmware)
@@ -212,6 +217,22 @@ hardware: `python3 tools/mock_server.py`, then `http://localhost:8000`
 (`/mock/seed` loads sample pilots and a race). CI (`.github/workflows/ci.yml`) runs them and
 builds the S3 timer, the C5 firmware and the ESP-NOW bridge (Wrover-E and
 XIAO ESP32-C3).
+
+## Sister project: ESP-NOW Lap Timer
+
+[ESP-NOW Lap Timer](https://github.com/yanazoo/ESP-NOW-Lap-Timer) is a sister
+project by the same author. It times passes differently; the web UI, voice
+announcements and SD logging work the same way. Pick the one that suits your
+gear.
+
+| | FPV C5 Lap Timer (this repository) | ESP-NOW Lap Timer |
+|---|---|---|
+| Signal timed | each pilot's **5.8 GHz VTX** (RSSI) | an **ESP-NOW beacon** on the quad (RSSI) |
+| On the quad | **nothing** (pilots told apart by VTX frequency) | a XIAO ESP32-C3/C6 beacon |
+| Gate receiver | XIAO ESP32-C5 + FPVGate C5MK | ESP32-WROVER-E |
+| Pass detection | XIAO ESP32-S3 (peak of the C5's raw RSSI) | the gate node |
+| Goggle display | OSD on HDZero goggles (via the ELRS backpack) | none |
+| Web UI / voice / SD log | yes | yes |
 
 ## Licences
 
