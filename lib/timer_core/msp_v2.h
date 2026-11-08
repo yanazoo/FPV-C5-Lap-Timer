@@ -18,6 +18,10 @@ constexpr uint16_t kElrsSetSendUid         = 0x00B5;
 constexpr uint16_t kElrsSetOsd             = 0x00B6;
 // From a TX backpack when its DVR-record switch moves (payload[0] 1 = on).
 constexpr uint16_t kElrsBackpackSetRecordingState = 0x0305;
+// elrs-netpack's ESP-NOW bridge (v2.9+): pass on only what it hears from this
+// UID (payload: 6-byte UID; empty clears). The bridge answers with the same
+// function, payload 1 = filter on.
+constexpr uint16_t kBridgeSetListen = 0x0F01;
 
 constexpr uint8_t kCommand  = '<';
 constexpr uint8_t kResponse = '>';
