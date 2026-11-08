@@ -204,27 +204,33 @@ function resTableHtml(r){
 // ── Graph ───────────────────────────────────────────────────────────────
 function resToggle(slot){resHidden[slot]=!resHidden[slot];renderRace();}
 function resGraphHtml(r){
-  var ps=r.pilots.filter(p=>p.count).sort((a,b)=>a.slot-b.slot);
+  var all=r.pilots.slice().sort((a,b)=>a.slot-b.slot);
+  var ps=all.filter(p=>p.count);
   if(!ps.length)return '<p class="res-muted">ラップがありません</p>';
   var shown=ps.filter(p=>!resHidden[p.slot]);
   var series=shown.map(p=>({color:resColor(p),pts:p.laps.map((v,i)=>[i+1,v])}));
   var best=0,bestAt=null;
   shown.forEach(p=>p.laps.forEach((v,i)=>{if(v&&(!best||v<best)){best=v;bestAt=[i+1,v,resColor(p)];}}));
   var h=resChartSvg(series,{xLabel:x=>x+'周',mark:bestAt,markText:best?'最速 '+(best/1000).toFixed(2):''});
-  h+='<div class="res-legend">'+ps.map(p=>'<button class="'+(resHidden[p.slot]?'off':'')+'" onclick="resToggle('+p.slot+')"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'</button>').join('')+'</div>';
+  // Every pilot of the race; one with no lap after the holeshot has no line.
+  h+='<div class="res-legend">'+all.map(p=>p.count
+    ?'<button class="'+(resHidden[p.slot]?'off':'')+'" onclick="resToggle('+p.slot+')"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'</button>'
+    :'<button class="off" disabled title="ラップなし"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'（ラップなし）</button>').join('')+'</div>';
   // Consistency: mean lap and standard deviation (laps from 1).
   var stats=ps.map(p=>{
     var m=p.total/p.count,sd=Math.sqrt(p.laps.reduce((a,v)=>a+(v-m)*(v-m),0)/p.count);
     return {p:p,mean:m,sd:sd};
   });
-  var maxSd=Math.max.apply(null,stats.map(s=>s.sd))||1,minSd=Math.min.apply(null,stats.map(s=>s.sd));
+  // Spread needs two laps or more.
+  var multi=stats.filter(s=>s.p.count>1);
+  var maxSd=Math.max.apply(null,multi.map(s=>s.sd).concat([0]))||1,minSd=Math.min.apply(null,multi.map(s=>s.sd));
   h+='<div class="res-head" style="margin:6px 0"><b>安定度</b><span class="res-muted">ラップのばらつき（小さいほど安定）</span></div>'
     +'<table class="res-table"><tr><th class="l">パイロット</th><th>平均</th><th>ばらつき</th><th style="width:30%"></th></tr>';
   stats.forEach(s=>{
     var w=Math.max(4,Math.round(s.sd/maxSd*100));
     h+='<tr><td class="l"><span class="res-dot" style="background:'+resColor(s.p)+'"></span>'+esc(resName(s.p))+'</td>'
-      +'<td>'+(s.mean/1000).toFixed(2)+'</td><td>±'+(s.sd/1000).toFixed(2)+'</td>'
-      +'<td><div class="res-bar" style="width:'+w+'%;'+(s.p.count>1&&s.sd===minSd?'background:var(--ok)':'')+'"></div></td></tr>';
+      +'<td>'+(s.mean/1000).toFixed(2)+'</td><td>'+(s.p.count>1?'±'+(s.sd/1000).toFixed(2):'—')+'</td>'
+      +'<td>'+(s.p.count>1?'<div class="res-bar" style="width:'+w+'%;'+(s.sd===minSd?'background:var(--ok)':'')+'"></div>':'')+'</td></tr>';
   });
   return h+'</table>';
 }
@@ -245,18 +251,20 @@ function resChartSvg(series,o){
   var X=x=>L+(x-x0)/(x1-x0)*(W-L-R),Y=v=>T+(1-(Math.min(v,hi)-lo)/(hi-lo))*(H-T-B);
   var g='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block">';
   for(var k=0;k<=2;k++){var v=lo+(hi-lo)*k/2,y=Y(v);
-    g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" stroke="var(--bd)" stroke-dasharray="3 3"/>'
-      +'<text x="2" y="'+(y+4)+'" fill="var(--muted)" font-size="10">'+(v/1000).toFixed(1)+'</text>';}
+    g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y+'" y2="'+y+'" style="stroke:var(--bd)" stroke-dasharray="3 3"/>'
+      +'<text x="2" y="'+(y+4)+'" style="fill:var(--muted)" font-size="10">'+(v/1000).toFixed(1)+'</text>';}
   var step=Math.max(1,Math.ceil((x1-x0+1)/8));
-  for(var x=x0;x<=x1;x+=step)g+='<text x="'+X(x)+'" y="'+(H-8)+'" fill="var(--muted)" font-size="10" text-anchor="middle">'+o.xLabel(x)+'</text>';
+  for(var x=x0;x<=x1;x+=step)g+='<text x="'+X(x)+'" y="'+(H-8)+'" style="fill:var(--muted)" font-size="10" text-anchor="middle">'+o.xLabel(x)+'</text>';
   series.forEach(s=>{
     var pts=s.pts.map(p=>X(p[0]).toFixed(1)+','+Y(p[1]).toFixed(1)).join(' ');
-    if(s.pts.length>1)g+='<polyline fill="none" stroke="'+s.color+'" stroke-width="2.5" stroke-linejoin="round" points="'+pts+'"/>';
-    s.pts.forEach(p=>{g+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(p[1]>hi?4:2.5)+'" fill="'+s.color+'"/>';});
+    if(s.pts.length>1)g+='<polyline style="fill:none;stroke:'+s.color+'" stroke-width="2.5" stroke-linejoin="round" points="'+pts+'"/>';
+    // A single lap has no line: draw its point larger so it still shows.
+    var r0=s.pts.length>1?2.5:4.5;
+    s.pts.forEach(p=>{g+='<circle cx="'+X(p[0]).toFixed(1)+'" cy="'+Y(p[1]).toFixed(1)+'" r="'+(p[1]>hi?4:r0)+'" style="fill:'+s.color+'"/>';});
   });
   if(o.mark){var mx=X(o.mark[0]),my=Y(o.mark[1]);
-    g+='<circle cx="'+mx+'" cy="'+my+'" r="5" fill="'+o.mark[2]+'" stroke="#fff" stroke-width="1.5"/>'
-      +'<text x="'+Math.min(mx+7,W-70)+'" y="'+Math.min(my+14,H-B)+'" fill="var(--tx)" font-size="10">'+o.markText+'</text>';}
+    g+='<circle cx="'+mx+'" cy="'+my+'" r="5" style="fill:'+o.mark[2]+';stroke:#fff" stroke-width="1.5"/>'
+      +'<text x="'+Math.min(mx+7,W-70)+'" y="'+Math.min(my+14,H-B)+'" style="fill:var(--tx)" font-size="10">'+o.markText+'</text>';}
   return g+'</svg>';
 }
 

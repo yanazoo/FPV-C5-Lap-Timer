@@ -50,6 +50,16 @@ for _no in range(2, 15):
     SD_FILES[f"race_{_no:03d}_202611{1 + _no:02d}_14{10 + _no:02d}.csv"] = (_race_csv(_no, _PILOTS, 3 if _no % 4 else 5, rank=2 if _no % 5 == 0 else 0),
                                        1793000000 + _no * 900)
 
+# Six pilots: one with a single lap, one with only the holeshot.
+SD_FILES["race_015_20261116_1500.csv"] = ((
+    "\ufeff#FPVC5,v=1,start=2026-11-16T15:00:05+09:00,mode=holeshot,laps=3,rank=0,limit_s=0,lastlap=1,"
+    "elapsed_ms=60000,event=サンプル大会\nSlot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms\n"
+    + "".join(f"{s},{n},{5658 + s * 37},{lap},{ms},700,0\n"
+              for s, (n, laps) in enumerate([("たろう", [17800, 18100, 17600]), ("はなこ", [18300, 18000, 18400]),
+                                             ("じろう", [19000, 18700, 18900]), ("さくら", [19500, 19800, 19200]),
+                                             ("けんた", [21000]), ("ゆき", [])])
+              for lap, ms in [(0, 2000 + s * 100)] + list(enumerate(laps, 1)))).encode(), 1793020000)
+
 state = {
     "pilots": [],
     "active": [-1] * 8,
