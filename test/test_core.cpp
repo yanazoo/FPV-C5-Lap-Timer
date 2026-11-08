@@ -16,6 +16,7 @@
 #include "msp_v2.h"
 #include "osd_engine.h"
 #include "race_core.h"
+#include "race_files.h"
 
 namespace {
 
@@ -861,6 +862,50 @@ void testFormat() {
     CHECK(osd::Engine::centerCol(80) == 0);
 }
 
+// Race file names and renumbering after 999.
+void testRaceFiles() {
+    using namespace racefiles;
+    CHECK(number("race_001.csv") == 1);
+    CHECK(number("race_012_20261108_1432.csv") == 12);
+    CHECK(number("race_999_20261108_1432.csv") == 999);
+    CHECK(number("race_1000_20261108_1432.csv") == 1000);
+    CHECK(number("race_.csv") == -1);
+    CHECK(number("race_12x.csv") == -1);
+    CHECK(number("pilots.csv") == -1);
+    CHECK(number("race_001.txt") == -1);
+    CHECK(withNumber("race_997_20261108_1432.csv", 3) == "race_003_20261108_1432.csv");
+    CHECK(withNumber("race_42.csv", 1) == "race_001.csv");
+
+    // Rotate mode after many races: 20 files numbered 980..999 (with and
+    // without dates), plus other files. They become 1..20, oldest first.
+    std::vector<std::string> names = {"pilots.csv"};
+    for (int n = 999; n >= 980; n--) {
+        char b[40];
+        if (n % 2) snprintf(b, sizeof b, "race_%03d_20261108_1432.csv", n);
+        else snprintf(b, sizeof b, "race_%03d.csv", n);
+        names.push_back(b);
+    }
+    std::vector<Rename> plan = renumberPlan(names);
+    CHECK(plan.size() == 20);
+    CHECK(plan.front().from == "race_980.csv" && plan.front().to == "race_001.csv");
+    CHECK(plan.back().from == "race_999_20261108_1432.csv" && plan.back().to == "race_020_20261108_1432.csv");
+    // Applied in order, no rename lands on a name that still exists.
+    std::vector<std::string> disk = names;
+    bool clash = false;
+    for (const Rename& r : plan) {
+        for (const std::string& d : disk) clash |= d == r.to;
+        for (std::string& d : disk)
+            if (d == r.from) d = r.to;
+    }
+    CHECK(!clash);
+    // Numbers in order already: nothing to do.
+    CHECK(renumberPlan({"race_001.csv", "race_002_20261108_1432.csv", "pilots.csv"}).empty());
+    // Gaps close up in order.
+    plan = renumberPlan({"race_007.csv", "race_003.csv", "race_001.csv"});
+    CHECK(plan.size() == 2 && plan[0].from == "race_003.csv" && plan[0].to == "race_002.csv" &&
+          plan[1].from == "race_007.csv" && plan[1].to == "race_003.csv");
+}
+
 int runTests() {
     testMsp();
     testUid();
@@ -881,6 +926,7 @@ int runTests() {
     testOsdStageCountAndStopTime();
     testOsdLapEdit();
     testFormat();
+    testRaceFiles();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;
 }

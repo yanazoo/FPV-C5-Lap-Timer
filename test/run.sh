@@ -11,7 +11,7 @@ mkdir -p "$out"
 echo "== timer_core unit tests"
 g++ -std=c++17 -O1 -Wall -Wextra -Werror -I"$core" \
     "$here/test_core.cpp" "$core"/msp_v2.cpp "$core"/md5.cpp "$core"/race_core.cpp "$core"/osd_engine.cpp \
-    -o "$out/test_core"
+    "$core"/race_files.cpp -o "$out/test_core"
 "$out/test_core"
 
 echo "== C5MK link -> gate passes -> race core"

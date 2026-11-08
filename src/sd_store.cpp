@@ -4,6 +4,9 @@
 #include <sys/time.h>
 #include <time.h>
 #include "sd_store.h"
+#include <string>
+#include <vector>
+#include "race_files.h"
 #include "data_model.h"
 #include "nvs_store.h"
 #include "race.h"
@@ -56,22 +59,13 @@ void sdCheckHotplug(uint32_t now) {
 }
 
 // Race files: race_NNN.csv, or race_NNN_YYYYMMDD_HHMM.csv once the timer
-// knew the date. Returns NNN, or -1 for any other name.
-static int raceNum(const char* name) {
-    if (strncmp(name, "race_", 5) != 0) return -1;
-    const char* p = name + 5;
-    int n = 0, digits = 0;
-    while (*p >= '0' && *p <= '9' && digits < 4) n = n * 10 + (*p++ - '0'), digits++;
-    if (!digits) return -1;
-    size_t len = strlen(p);
-    if (len < 4 || strcmp(p + len - 4, ".csv") != 0) return -1;
-    return (*p == '.' || *p == '_') ? n : -1;
-}
+// knew the date (racefiles:: in timer_core).
+static int raceNum(const char* name) { return racefiles::number(name); }
 
 // One pass over the card's root: how many race files, the highest and
 // lowest number, and the lowest one's path (the oldest, to rotate out).
 struct RaceFiles {
-    int count = 0, maxN = 0, minN = 1000;
+    int count = 0, maxN = 0, minN = 100000;
     String minPath;
 };
 static RaceFiles scanRaceFiles() {
@@ -90,24 +84,33 @@ static RaceFiles scanRaceFiles() {
     return r;
 }
 
-// Next number: one past the highest, so numbers follow the order of the
-// races (rotate mode deletes the lowest = oldest). After 999, start over
-// from the lowest number not on the card.
-static int findNextRaceNum() {
-    RaceFiles r = scanRaceFiles();
-    if (r.maxN < 999) return r.maxN + 1;
-    static bool used[1000];
-    memset(used, 0, sizeof used);
+// Give the race files the numbers 1..N again, oldest first (after 999).
+static void renumberRaceFiles() {
+    std::vector<std::string> names;
     File root = SD.open("/");
     for (File e = root ? root.openNextFile() : File(); e; e = root.openNextFile()) {
-        int n = raceNum(e.name());
-        if (n >= 0 && n < 1000) used[n] = true;
+        if (!e.isDirectory() && raceNum(e.name()) >= 0) names.push_back(e.name());
         e.close();
     }
     if (root) root.close();
-    for (int n = 1; n < 1000; n++)
-        if (!used[n]) return n;
-    return 999;
+    int done = 0;
+    for (const racefiles::Rename& r : racefiles::renumberPlan(names)) {
+        String from = "/" + String(r.from.c_str()), to = "/" + String(r.to.c_str());
+        if (!SD.exists(to) && SD.rename(from, to)) done++;
+        else Serial.printf("[SD] could not rename %s\n", from.c_str());
+    }
+    Serial.printf("[SD] renumbered %d of %u race files\n", done, (unsigned)names.size());
+}
+
+// Next number: one past the highest, so numbers follow the order of the
+// races (rotate mode deletes the lowest = oldest). Past 999 the files are
+// renumbered 1..N first; with 999 files on the card numbering goes on at
+// 1000 (four digits).
+static int findNextRaceNum() {
+    RaceFiles r = scanRaceFiles();
+    if (r.maxN < racefiles::kMaxNum) return r.maxN + 1;
+    renumberRaceFiles();
+    return scanRaceFiles().maxN + 1;
 }
 
 // Rotate mode: delete the oldest race file until fewer than keep remain.
