@@ -204,8 +204,7 @@ function resTableHtml(r){
 // ── Graph ───────────────────────────────────────────────────────────────
 function resToggle(slot){resHidden[slot]=!resHidden[slot];renderRace();}
 function resGraphHtml(r){
-  var all=r.pilots.slice().sort((a,b)=>a.slot-b.slot);
-  var ps=all.filter(p=>p.count);
+  var ps=r.pilots.filter(p=>p.count).sort((a,b)=>a.slot-b.slot);
   if(!ps.length)return '<p class="res-muted">ラップがありません</p>';
   var shown=ps.filter(p=>!resHidden[p.slot]);
   var series=shown.map(p=>({color:resColor(p),name:resName(p),pts:p.laps.map((v,i)=>[i+1,v])}));
@@ -215,10 +214,8 @@ function resGraphHtml(r){
   var same=resOverlaps(series);
   if(same.length)h+='<p class="res-muted" style="text-align:center">線が重なっています：'
     +same.map(g=>g.map(esc).join(' と ')).join('、')+'（同じタイムで記録されています）</p>';
-  // Every pilot of the race; one with no lap after the holeshot has no line.
-  h+='<div class="res-legend">'+all.map(p=>p.count
-    ?'<button class="'+(resHidden[p.slot]?'off':'')+'" onclick="resToggle('+p.slot+')"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'</button>'
-    :'<button class="off" disabled title="ラップなし"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'（ラップなし）</button>').join('')+'</div>';
+  // Pilots with laps only (a holeshot alone draws no line).
+  h+='<div class="res-legend">'+ps.map(p=>'<button class="'+(resHidden[p.slot]?'off':'')+'" onclick="resToggle('+p.slot+')"><span class="res-dot" style="background:'+resColor(p)+'"></span>'+esc(resName(p))+'</button>').join('')+'</div>';
   // Consistency: mean lap and standard deviation (laps from 1).
   var stats=ps.map(p=>{
     var m=p.total/p.count,sd=Math.sqrt(p.laps.reduce((a,v)=>a+(v-m)*(v-m),0)/p.count);
