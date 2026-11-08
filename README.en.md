@@ -222,6 +222,15 @@ To cover lost packets:
   router password is stored on the device only and never sent back to the
   browser.
 
+## Connections and the spectator screen
+
+Browsers are **admins** (logged in) or **viewers**. Limits are in Settings → "👥 接続台数".
+
+- Admins: 1–3 (default 2). A login past the limit is refused with a message; admins are never disconnected. A login is released 60 s after its last browser leaves, or at once on logout.
+- Viewers: the light spectator screen (race clock, laps, ranking; no RSSI). Host mode 0–5 (default 3), client mode 0–8 (default 6); past the limit the oldest viewer is disconnected (a "再接続" button reconnects).
+- Host mode lets admins + viewers + 1 (the netpack) join the WiFi, from the next restart.
+- The timer's date (race file names) comes from logged-in browsers only.
+
 ## Layout
 
 - `lib/timer_core/` — platform-independent core: `race_core` (laps,

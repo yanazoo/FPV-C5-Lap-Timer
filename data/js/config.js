@@ -378,3 +378,34 @@ function updateSdSection(present){
     if(wrap)wrap.innerHTML='<p style="color:var(--muted);font-size:12px">SDカードが挿入されていません</p>';
   }
 }
+
+// ── 接続台数 ────────────────────────────────────────────────────────────
+// Limits per role and WiFi mode; the timer sends the allowed maxima.
+function fillConnSelect(id,min,max,val,unit){
+  var s=document.getElementById(id);if(!s)return;
+  var h='';
+  for(var i=min;i<=max;i++)h+='<option value="'+i+'"'+(i===val?' selected':'')+'>'+(i===0?'観戦なし（0 台）':i+' 台')+'</option>';
+  s.innerHTML=h;
+}
+async function loadConnLimits(){
+  try{
+    var r=await fetch('/api/conn');if(!r.ok)throw 0;
+    var c=await r.json();
+    fillConnSelect('connAdmin',1,c.adminLimit,c.adminMax);
+    fillConnSelect('connViewHost',0,c.viewHostLimit,c.viewHost);
+    fillConnSelect('connViewClient',0,c.viewClientLimit,c.viewClient);
+    var now=document.getElementById('connNow');
+    if(now)now.innerHTML='<span>現在（'+(c.ap?'ホスト':'クライアント')+'モード）</span><b>管理者 '+c.logins+' / '+c.adminMax
+      +' ・ 観戦 '+c.viewers+' / '+c.viewerLimit+'</b>';
+  }catch(e){}
+}
+async function saveConnLimits(){
+  var v=id=>parseInt(document.getElementById(id).value,10);
+  try{
+    var r=await fetch('/api/conn',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({adminMax:v('connAdmin'),viewHost:v('connViewHost'),viewClient:v('connViewClient')})});
+    if(!r.ok)throw 0;
+    toast('✅ 接続台数を保存しました');
+    loadConnLimits();
+  }catch(e){toast('⚠️ 保存エラー');}
+}

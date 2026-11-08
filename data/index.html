@@ -217,6 +217,10 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .res-legend button.off{opacity:.35}
 .res-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 .res-bar{height:8px;border-radius:4px;background:var(--accent)}
+/* Viewers (not logged in): the light spectator screen */
+#viewBadge{display:none;font-size:11px;color:var(--muted);border:1px solid var(--bd);border-radius:10px;padding:1px 8px;white-space:nowrap}
+body.viewer #viewBadge{display:inline-block}
+body.viewer .rssi-mini-bar,body.viewer .crossing-badge,body.viewer .race-buttons button:not(#btnVoiceTest){display:none!important}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-box{background:var(--sf);border:1px solid var(--accent);border-radius:10px;padding:18px;width:100%;max-width:320px}
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
@@ -313,6 +317,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="logo">
       <h1>FPV C5 Lap Timer</h1>
       <span id="wsDot" class="ws-dot disconnected"></span>
+      <span id="viewBadge" title="ログインしていない端末は、計測時間・ラップ・順位だけを表示します">👀 観戦</span>
       <span id="c5Badge" class="c5-badge ng" title="C5 受信機 / ELRS netpack"><span class="st ng">C5<i>●</i></span></span>
     </div>
     <span id="statusMsg"></span>
@@ -585,6 +590,19 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>
 
+  <!-- ── 接続台数 ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">👥 接続台数</h3>
+    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログインした端末）は接続が切られず、上限を超えるログインはお断りします。<b>観戦</b>（ログインしていない端末）は計測時間・ラップ・順位だけの軽い画面で、上限を超えると古い接続から切断します。上限は、計測に影響しないよう余裕を持たせています。ホストモードの WiFi 台数への反映は再起動後です。</p>
+    <div id="connNow" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">管理者（ログイン）</label>
+      <select id="connAdmin" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">観戦（ホストモード）</label>
+      <select id="connViewHost" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">観戦（クライアントモード）</label>
+      <select id="connViewClient" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+  </div>
+
   <!-- ── 管理者パスワード ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔒 管理者パスワード</h3>
@@ -677,6 +695,18 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="modal-actions">
       <button onclick="confirmSdErase()" class="btn-danger">すべて削除する</button>
       <button onclick="closeSdErase()" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- A viewer closed by the timer (too many viewers): no automatic reconnect. -->
+<div id="kickedModal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>📶 接続が切れました</h3>
+    <p id="kickedWhy" style="color:var(--tx);font-size:13px"></p>
+    <p>管理者としてログインすると、上限に関係なく接続できます（管理者の上限まで）。</p>
+    <div class="modal-actions">
+      <button onclick="wsReconnectNow()" class="btn-success">再接続</button>
     </div>
   </div>
 </div>

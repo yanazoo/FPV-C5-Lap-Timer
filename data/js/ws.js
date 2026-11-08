@@ -6,19 +6,33 @@ var wsDot=document.getElementById('wsDot');
 function wsConnect(){
   var c=new WebSocket('ws://'+location.host+'/ws');
   wsConn=c;wsLastMsg=performance.now();
-  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';sendClock();};
+  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';sendHello();};
   c.onerror=()=>c.close();
-  c.onclose=()=>{
+  c.onclose=ev=>{
     if(wsConn!==c)return;   // replaced already
     wsDot.className='ws-dot disconnected';
+    // 4001: the timer closed this viewer (more viewers than allowed). Don't
+    // come straight back (that would push another viewer out): ask first.
+    if(ev&&ev.code===4001){wsConn=null;showKicked();return;}
     setTimeout(()=>{wsRetry=Math.min(wsRetry*2,4000);wsConnect();},wsRetry);
   };
   c.onmessage=e=>{wsLastMsg=performance.now();var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
 }
-// The timer has no clock: give it this browser's, so saved races get a date.
-function sendClock(){
-  fetch('/api/clock',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({epoch:Date.now(),tz:-new Date().getTimezoneOffset()})}).catch(()=>{});
+// Tell the timer who this browser is: a logged-in admin (token) gets RSSI
+// telemetry and keeps its connection; the timer takes its date from admins
+// only (it has no clock of its own).
+function sendHello(){
+  if(!wsConn||wsConn.readyState!==1)return;
+  try{wsConn.send(JSON.stringify({type:'hello',token:authToken,epoch:Date.now(),tz:-new Date().getTimezoneOffset()}));}catch(e){}
+}
+function showKicked(){
+  var w=document.getElementById('kickedWhy');
+  if(w)w.textContent='観戦の接続台数が上限に達したため、古い接続から切断しました。';
+  var m=document.getElementById('kickedModal');if(m)m.style.display='flex';
+}
+function wsReconnectNow(){
+  var m=document.getElementById('kickedModal');if(m)m.style.display='none';
+  wsRetry=1000;wsConnect();
 }
 // The timer sends its status every second: three seconds of silence means
 // the connection is stuck (WiFi hiccup, phone woke from sleep). Reconnect
@@ -26,6 +40,14 @@ function sendClock(){
 setInterval(()=>{
   if(wsConn&&wsConn.readyState===1&&performance.now()-wsLastMsg>3000){try{wsConn.close();}catch(e){}}
 },1000);
+// The timer's answer to hello: a token it doesn't know (it restarted, or the
+// login lapsed) leaves this tab a viewer.
+function onHelloReply(d){
+  if(d.admin||!isAuthed)return;
+  dropAuth();
+  if(activeTab!=='race')switchTab('race');
+  toast('🔒 ログインが切れました。もう一度ログインしてください');
+}
 
 // The race as the timer sees it (1 Hz status): put this browser right if it
 // missed a start, stop, clear or lap.
@@ -76,6 +98,7 @@ function onMsg(d){
     return;
   }
   if(d.type==='settings'){applySettings(d);return;}
+  if(d.type==='hello'){onHelloReply(d);return;}
   if(d.type==='calib'){
     // Thresholds saved on some browser (this one included).
     var rd=rosterById[d.id];if(rd){rd.enter=d.enter;rd.exit=d.exit;}

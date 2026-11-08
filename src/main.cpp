@@ -52,7 +52,10 @@ void setup() {
 
 void loop() {
     netLoop();
-    ws.cleanupClients();
+    // Frees closed clients only: the limits are wsLoop's (the library's own
+    // default closes the oldest past 8, admins included).
+    ws.cleanupClients(24);
+    wsLoop(millis());
     raceLoop();
     if (sdPollEnabled && !raceCore.running()) sdCheckHotplug(millis());
     delay(2);

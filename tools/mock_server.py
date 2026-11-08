@@ -10,6 +10,7 @@ against each other. GET /mock/lap?slot=N records a pass for slot N.
 GET /mock/seed loads sample pilots and a stopped race (for screenshots).
 """
 import base64
+import random
 import hashlib
 import json
 import os
@@ -93,6 +94,39 @@ state = {
 
 ws_clients = []
 ws_lock = threading.Lock()
+# As the firmware (ws_handler.cpp): browsers are viewers until their hello
+# carries an admin token; admins get rssi_all; the oldest viewers over the
+# limit are closed with code 4001; admin logins are limited.
+ws_role = {}        # wfile -> {"since": s, "admin": bool}
+sessions = {}       # token -> last seen (s)
+SESSION_GRACE = 60.0
+CONN = {"adminMax": 2, "viewHost": 3, "viewClient": 6}
+CONN_LIMITS = {"adminLimit": 3, "viewHostLimit": 5, "viewClientLimit": 8}
+
+
+def live_sessions():
+    now = time.monotonic()
+    held = {r.get("token") for r in ws_role.values() if r.get("admin")}
+    return [t for t, seen in sessions.items() if t in held or now - seen < SESSION_GRACE]
+
+
+def ws_close(wfile, code):
+    try:
+        wfile.write(bytes([0x88, 2]) + code.to_bytes(2, "big"))
+        wfile.flush()
+    except OSError:
+        pass
+
+
+def enforce_viewers():
+    now = time.monotonic()
+    with ws_lock:
+        viewers = sorted((r["since"], w) for w, r in ws_role.items()
+                         if not r.get("admin") and now - r["since"] >= 3 and w in ws_clients)
+        extra = len(viewers) - CONN["viewHost"]
+        for _, w in viewers[:max(0, extra)]:
+            ws_close(w, 4001)
+            ws_clients.remove(w)
 
 
 def now_ms():
@@ -120,9 +154,11 @@ def ws_send(wfile, obj):
         return False
 
 
-def broadcast(obj):
+def broadcast(obj, admins_only=False):
     with ws_lock:
         for w in list(ws_clients):
+            if admins_only and not ws_role.get(w, {}).get("admin"):
+                continue
             if not ws_send(w, obj):
                 ws_clients.remove(w)
 
@@ -238,6 +274,13 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(state["elrs"])
         if p == "/api/net":
             return self.reply(state["net"])
+        if p == "/api/conn":
+            with ws_lock:
+                admins = sum(1 for w, r in ws_role.items() if r.get("admin"))
+                viewers = sum(1 for w, r in ws_role.items() if not r.get("admin"))
+                logins = len(live_sessions())
+            return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
+                               "viewers": viewers, "viewerLimit": CONN["viewHost"]})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":
@@ -270,12 +313,38 @@ class Handler(SimpleHTTPRequestHandler):
         with ws_lock:
             ws_send(self.wfile, init_msg())
             ws_clients.append(self.wfile)
+            ws_role[self.wfile] = {"since": time.monotonic(), "admin": False}
         try:
-            while self.rfile.read(1):   # the page never sends; wait for it to go
-                pass
+            while True:   # client frames (masked): hello, or close
+                h = self.rfile.read(2)
+                if len(h) < 2:
+                    break
+                op, n = h[0] & 0x0F, h[1] & 0x7F
+                if n == 126:
+                    n = int.from_bytes(self.rfile.read(2), "big")
+                elif n == 127:
+                    n = int.from_bytes(self.rfile.read(8), "big")
+                mask = self.rfile.read(4) if h[1] & 0x80 else b"\0\0\0\0"
+                data = bytes(b ^ mask[i % 4] for i, b in enumerate(self.rfile.read(n)))
+                if op == 8:
+                    break
+                if op == 1:
+                    msg = json.loads(data or b"{}")
+                    if msg.get("type") == "hello":
+                        tok = msg.get("token", "")
+                        admin = tok in live_sessions()
+                        with ws_lock:
+                            ws_role[self.wfile].update(admin=admin, token=tok)
+                            if admin:
+                                sessions[tok] = time.monotonic()
+                                state["clock"] = [msg.get("epoch"), msg.get("tz")]
+                            ws_send(self.wfile, {"type": "hello", "admin": admin})
         except OSError:
             pass
         with ws_lock:
+            r = ws_role.pop(self.wfile, {})
+            if r.get("admin"):
+                sessions[r["token"]] = time.monotonic()
             if self.wfile in ws_clients:
                 ws_clients.remove(self.wfile)
         self.close_connection = True
@@ -359,8 +428,27 @@ class Handler(SimpleHTTPRequestHandler):
             state["password"] = d.get("password", state["password"])
             return self.reply({"ok": True})
         if p == "/api/auth/login":
-            ok = d.get("password") == state["password"]
-            return self.reply({"ok": ok}, 200 if ok else 401)
+            if d.get("password") != state["password"]:
+                return self.reply({"ok": False, "error": "bad password"}, 401)
+            with ws_lock:
+                if len(live_sessions()) >= CONN["adminMax"]:
+                    return self.reply({"ok": False, "reason": "full", "max": CONN["adminMax"]}, 409)
+                tok = "%016x" % random.getrandbits(64)
+                sessions[tok] = time.monotonic()
+            return self.reply({"ok": True, "token": tok})
+        if p == "/api/auth/logout":
+            with ws_lock:
+                sessions.pop(d.get("token", ""), None)
+                for w, r in ws_role.items():
+                    if r.get("token") == d.get("token") and r.get("admin"):
+                        r["admin"] = False
+                        ws_send(w, {"type": "hello", "admin": False})
+            return self.reply({"ok": True})
+        if p == "/api/conn":
+            for k in CONN:
+                if k in d:
+                    CONN[k] = int(d[k])
+            return self.reply({"ok": True})
         if p == "/api/laps/delete":   # the timer's race::Core::deleteLap
             mine = [l for l in r["laps"] if l["slot"] == d.get("slot")]
             i = d.get("index", -1)
@@ -411,8 +499,10 @@ if __name__ == "__main__":
                 if phase < 0.8:
                     v += int(420 * (1 - abs(phase - 0.4) / 0.4))
                 p.append({"pilot": s, "rssi": v, "crossing": v > 350, "signal": True})
-            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p})
+            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p}, admins_only=True)
             n += 1
+            if n % 5 == 0:
+                enforce_viewers()
             if n % 10 == 0:
                 r = state["race"]
                 act = sum(1 for a in state["active"] if a >= 0)

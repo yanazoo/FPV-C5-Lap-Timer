@@ -443,16 +443,60 @@ void registerHttpRoutes() {
         req->send(200, "application/json", b);
     });
 
-    // The browser's clock (the S3 has no RTC): race files get their date.
+    // The clock of a logged-in browser (the S3 has no RTC): race files get
+    // their date. Browsers also send it in their WebSocket hello.
     onJson("/api/clock", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!wsTokenValid(String(d["token"] | ""))) {
+            req->send(403, "application/json", R"({"ok":false,"reason":"login"})");
+            return;
+        }
         sdSetClock(d["epoch"] | (int64_t)0, d["tz"] | 0);
         ok(req);
     });
 
     // ── Auth (soft: protects against accidental changes, not attacks) ──────
+    // Login: a token for this browser, unless as many admins as allowed are
+    // logged in already (the browser says so and stays a viewer).
     onJson("/api/auth/login", [](AsyncWebServerRequest* req, JsonDocument& d) {
-        if (adminPassword == (d["password"] | "")) ok(req);
-        else req->send(401, "application/json", R"({"ok":false,"error":"bad password"})");
+        if (adminPassword != (d["password"] | "")) {
+            req->send(401, "application/json", R"({"ok":false,"error":"bad password"})");
+            return;
+        }
+        String token;
+        char b[96];
+        if (!wsLogin(token)) {
+            snprintf(b, sizeof b, R"({"ok":false,"reason":"full","max":%u})", connLimits.adminMax);
+            req->send(409, "application/json", b);
+            return;
+        }
+        snprintf(b, sizeof b, R"({"ok":true,"token":"%s"})", token.c_str());
+        req->send(200, "application/json", b);
+    });
+    onJson("/api/auth/logout", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        wsLogout(String(d["token"] | ""));
+        ok(req);
+    });
+
+    // Connection limits (settings) and who is connected now.
+    server.on("/api/conn", HTTP_GET, [](AsyncWebServerRequest* req) {
+        int admins, viewers;
+        wsCounts(admins, viewers);
+        char b[256];
+        snprintf(b, sizeof b,
+                 R"({"adminMax":%u,"viewHost":%u,"viewClient":%u,"adminLimit":%u,"viewHostLimit":%u,)"
+                 R"("viewClientLimit":%u,"ap":%s,"admins":%d,"logins":%d,"viewers":%d,"viewerLimit":%d})",
+                 connLimits.adminMax, connLimits.viewHost, connLimits.viewClient, CONN_ADMIN_MAX, CONN_VIEW_HOST_MAX,
+                 CONN_VIEW_CLIENT_MAX, netIsAp() ? "true" : "false", admins, wsAdminLogins(), viewers,
+                 wsViewerLimit());
+        req->send(200, "application/json", b);
+    });
+    onJson("/api/conn", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!d["adminMax"].isNull()) connLimits.adminMax = constrain((int)d["adminMax"], 1, (int)CONN_ADMIN_MAX);
+        if (!d["viewHost"].isNull()) connLimits.viewHost = constrain((int)d["viewHost"], 0, (int)CONN_VIEW_HOST_MAX);
+        if (!d["viewClient"].isNull())
+            connLimits.viewClient = constrain((int)d["viewClient"], 0, (int)CONN_VIEW_CLIENT_MAX);
+        saveConnLimits();
+        ok(req);
     });
     onJson("/api/auth/password", [](AsyncWebServerRequest* req, JsonDocument& d) {
         const char* pw = d["password"] | "";

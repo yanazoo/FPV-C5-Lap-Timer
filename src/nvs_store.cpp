@@ -9,6 +9,7 @@ int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
 RaceRules    raceRules;
+ConnLimits   connLimits;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -91,6 +92,12 @@ void saveSettings() {
     prefs.end();
 }
 
+void saveConnLimits() {
+    prefs.begin("settings", false);
+    prefs.putBytes("c", &connLimits, sizeof connLimits);
+    prefs.end();
+}
+
 void saveElrs() {
     prefs.begin("elrs", false);
     prefs.putUInt("ver", kElrsVer);
@@ -158,7 +165,12 @@ void loadAll() {
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
     RaceRules rr;
     if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
+    ConnLimits cl;
+    if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     prefs.end();
+    connLimits.adminMax   = constrain(connLimits.adminMax, (uint8_t)1, CONN_ADMIN_MAX);
+    connLimits.viewHost   = min(connLimits.viewHost, CONN_VIEW_HOST_MAX);
+    connLimits.viewClient = min(connLimits.viewClient, CONN_VIEW_CLIENT_MAX);
     raceRules.rankMode     = raceRules.rankMode <= 2 ? raceRules.rankMode : 0;
     raceRules.timeLimitSec = constrain(raceRules.timeLimitSec, (uint16_t)30, (uint16_t)1800);
     // Raw bytes from flash: keep them in the ranges the API enforces.

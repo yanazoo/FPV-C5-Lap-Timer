@@ -39,6 +39,21 @@ struct RaceRules {
     bool     countLastLap = true;  // rankMode 2: the lap flown when time runs out counts
 };
 
+// How many browsers may connect (web UI). Admins (logged in) keep their
+// connection; viewers (not logged in) get the light spectator screen and the
+// oldest viewer is disconnected when there are too many. Limits per WiFi mode
+// leave headroom: admins get 10 Hz RSSI telemetry, viewers only race events.
+//   host mode (our access point, 10 stations at most): admins 1-3, viewers
+//     0-5, so with the netpack XIAO at most 9 stations;
+//   client mode (a router): admins 1-3, viewers 0-8 (lwIP has 16 TCP
+//     connections: admins + viewers + netpack + page loads).
+struct ConnLimits {
+    uint8_t adminMax   = 2;
+    uint8_t viewHost   = 3;
+    uint8_t viewClient = 6;
+};
+constexpr uint8_t CONN_ADMIN_MAX = 3, CONN_VIEW_HOST_MAX = 5, CONN_VIEW_CLIENT_MAX = 8;
+
 struct ElrsSettings {
     bool     enabled   = false;
     uint8_t  transport = 1;       // 1 UART straight to the ESP-NOW bridge (default), 0 TCP (elrs-netpack XIAO)
@@ -55,6 +70,7 @@ extern int          rosterCount;
 extern int          activePilots[MAX_ACTIVE];
 extern Settings     settings;
 extern RaceRules    raceRules;
+extern ConnLimits   connLimits;
 extern ElrsSettings elrsCfg;
 // Race director's TX switch: 0 toggle (on = start, off = stop), 1 push
 // (each press starts or stops). Its own NVS key, so ElrsSettings' stored

@@ -28,7 +28,10 @@ static void startAp() {
     }
     WiFi.mode(WIFI_AP);
     bool ok = WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
-    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL) && ok;
+    // Stations: admins + viewers + 1 (the netpack XIAO, or a spare); the
+    // limits are set in the web UI and apply from the next start.
+    int stations = min(10, connLimits.adminMax + connLimits.viewHost + 1);
+    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL, 0, stations) && ok;
     if (!ok) Serial.println("[WiFi] AP start failed");
     // Wildcard DNS for the captive portal.
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);

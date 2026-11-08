@@ -60,7 +60,10 @@ var editingRosterId = null;
 // password, default "admin") get access to Config/Calib/SD + race controls.
 // Session-scoped: clears on tab close so a shared device doesn't stay
 // authed forever.
-var isAuthed = sessionStorage.getItem('authed')==='1';
+// Admin login: the timer's token for this tab (sessionStorage). Without
+// one the page is a viewer (light spectator screen).
+var authToken = sessionStorage.getItem('authToken')||'';
+var isAuthed = !!authToken;
 var pendingTab = null;       // tab the user is trying to reach via login
 var sdPresent = false;
 var sdFileList = [];
@@ -113,6 +116,6 @@ function switchTab(tab){
   if(tab==='sd') refreshSdFiles();
   if(tab==='config'){
     if(typeof loadPasswordField==='function')loadPasswordField();
-    loadElrsSettings();loadNetSettings();renderC5Status();renderVoiceInfo();
+    loadElrsSettings();loadNetSettings();loadConnLimits();renderC5Status();renderVoiceInfo();
   }
 }
