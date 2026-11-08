@@ -133,9 +133,23 @@ function pickJaVoice(){
   }
   return local.find(v=>v.default)||local[0]||null;
 }
+// Every utterance gets the same voice. Without one, iPhone guesses the
+// language of each sentence, and a call that starts with a pilot's name in
+// letters ("Yana、1周…") was read by an English voice: the voice changed
+// from pilot to pilot. The voice list can still be empty when the page
+// opens (and iPhone may never fire voiceschanged), so a miss is not
+// remembered: the next call looks again. The voice is kept by name and
+// looked up in the current list each time (an old voice object can stop
+// working after the list is reloaded).
 function getJaVoice(){
-  if(cachedJaVoice===null)cachedJaVoice=pickJaVoice()||false;
-  return cachedJaVoice||null;
+  var vs=jaVoices();
+  if(cachedJaVoice){
+    var keep=vs.find(v=>v.name===cachedJaVoice);
+    if(keep)return keep;
+  }
+  var v=pickJaVoice();
+  cachedJaVoice=v?v.name:null;
+  return v;
 }
 if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
   speechSynthesis.onvoiceschanged=function(){cachedJaVoice=null;renderVoiceInfo();};
