@@ -19,9 +19,16 @@ var resBusy = false, resScanStop = false;
 // race_012.csv, or race_012_20261108_1432.csv (the race's date and time).
 var RES_NAME=/^race_(\d{1,4})(_\d{8}_\d{4})?\.csv$/;
 function resNum(name){return parseInt(RES_NAME.exec(name)[1],10);}
+// Newest first: by the date in the name (numbers restart at 000 after 999),
+// else the file's time; files with neither come last, by number.
+function resAge(f){
+  var m=/_(\d{4})(\d\d)(\d\d)_(\d\d)(\d\d)\.csv$/.exec(f.name);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5]).getTime();
+  return f.t?f.t*1000:0;
+}
 function resFiles(){
   return sdFileList.filter(f=>RES_NAME.test(f.name)).sort((a,b)=>
-    ((b.t||0)-(a.t||0))||(resNum(b.name)-resNum(a.name)));
+    (resAge(b)-resAge(a))||(resNum(b.name)-resNum(a.name)));
 }
 function resNo(name){return '#'+RES_NAME.exec(name)[1];}
 function resKey(f){return 'res1:'+f.name+'|'+f.size+'|'+(f.t||0);}

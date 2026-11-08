@@ -4,8 +4,6 @@
 #include <sys/time.h>
 #include <time.h>
 #include "sd_store.h"
-#include <string>
-#include <vector>
 #include "race_files.h"
 #include "data_model.h"
 #include "nvs_store.h"
@@ -59,24 +57,25 @@ void sdCheckHotplug(uint32_t now) {
 }
 
 // Race files: race_NNN.csv, or race_NNN_YYYYMMDD_HHMM.csv once the timer
-// knew the date (racefiles:: in timer_core).
+// knew the date (racefiles:: in timer_core). The oldest is found by the date
+// in the name, so numbers can start again at 000 after 999.
 static int raceNum(const char* name) { return racefiles::number(name); }
 
-// One pass over the card's root: how many race files, the highest and
-// lowest number, and the lowest one's path (the oldest, to rotate out).
+// One pass over the card's root: how many race files, the newest one's
+// number and the oldest one's path.
 struct RaceFiles {
-    int count = 0, maxN = 0, minN = 100000;
-    String minPath;
+    int count = 0, newestN = -1;
+    String newest, oldest;
 };
 static RaceFiles scanRaceFiles() {
     RaceFiles r;
     File root = SD.open("/");
     for (File e = root ? root.openNextFile() : File(); e; e = root.openNextFile()) {
-        int n = e.isDirectory() ? -1 : raceNum(e.name());
-        if (n >= 0) {
+        const char* name = e.name();
+        if (!e.isDirectory() && raceNum(name) >= 0) {
             r.count++;
-            if (n > r.maxN) r.maxN = n;
-            if (n < r.minN) r.minN = n, r.minPath = String(e.path());
+            if (r.newest.isEmpty() || racefiles::older(r.newest.c_str(), name)) r.newest = name, r.newestN = raceNum(name);
+            if (r.oldest.isEmpty() || racefiles::older(name, r.oldest.c_str() + 1)) r.oldest = String(e.path());
         }
         e.close();
     }
@@ -84,41 +83,20 @@ static RaceFiles scanRaceFiles() {
     return r;
 }
 
-// Give the race files the numbers 1..N again, oldest first (after 999).
-static void renumberRaceFiles() {
-    std::vector<std::string> names;
-    File root = SD.open("/");
-    for (File e = root ? root.openNextFile() : File(); e; e = root.openNextFile()) {
-        if (!e.isDirectory() && raceNum(e.name()) >= 0) names.push_back(e.name());
-        e.close();
-    }
-    if (root) root.close();
-    int done = 0;
-    for (const racefiles::Rename& r : racefiles::renumberPlan(names)) {
-        String from = "/" + String(r.from.c_str()), to = "/" + String(r.to.c_str());
-        if (!SD.exists(to) && SD.rename(from, to)) done++;
-        else Serial.printf("[SD] could not rename %s\n", from.c_str());
-    }
-    Serial.printf("[SD] renumbered %d of %u race files\n", done, (unsigned)names.size());
-}
-
-// Next number: one past the highest, so numbers follow the order of the
-// races (rotate mode deletes the lowest = oldest). Past 999 the files are
-// renumbered 1..N first; with 999 files on the card numbering goes on at
-// 1000 (four digits).
+// Next number: one past the newest race's, 999 -> 000.
 static int findNextRaceNum() {
     RaceFiles r = scanRaceFiles();
-    if (r.maxN < racefiles::kMaxNum) return r.maxN + 1;
-    renumberRaceFiles();
-    return scanRaceFiles().maxN + 1;
+    return (r.newestN + 1) % racefiles::kNumbers;
 }
 
-// Rotate mode: delete the oldest race file until fewer than keep remain.
+// Rotate mode: delete the oldest race (by the date in its name) until fewer
+// than keep remain.
 static void pruneRaceFiles(int keep) {
     for (int guard = 0; guard < 1000; guard++) {
         RaceFiles r = scanRaceFiles();
-        if (r.count < keep || r.minPath.isEmpty()) break;
-        if (!SD.remove(r.minPath)) break;
+        if (r.count < keep || r.oldest.isEmpty()) break;
+        Serial.printf("[SD] rotate: delete %s\n", r.oldest.c_str());
+        if (!SD.remove(r.oldest)) break;
     }
 }
 
@@ -174,6 +152,16 @@ bool sdSaveRace() {
                  lt.tm_mday, lt.tm_hour, lt.tm_min);
     else
         snprintf(path, sizeof path, "/race_%03d.csv", no);
+    // A file of that name already there (numbers restart at 000): take the
+    // next free number instead of overwriting it.
+    for (int i = 0; i < racefiles::kNumbers && SD.exists(path); i++) {
+        no = (no + 1) % racefiles::kNumbers;
+        if (raceStartUtc)
+            snprintf(path, sizeof path, "/race_%03d_%04d%02d%02d_%02d%02d.csv", no, lt.tm_year + 1900,
+                     lt.tm_mon + 1, lt.tm_mday, lt.tm_hour, lt.tm_min);
+        else
+            snprintf(path, sizeof path, "/race_%03d.csv", no);
+    }
     File f = SD.open(path, FILE_WRITE);
     if (!f) return false;
     f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names

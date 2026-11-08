@@ -3,30 +3,23 @@
 // so they run in the PC tests.
 #pragma once
 #include <string>
-#include <vector>
 
 namespace racefiles {
 
-// Numbers run 1..kMaxNum. When the next one would pass it, the files on the
-// card are renumbered 1..N (oldest first) and numbering goes on from N+1.
-constexpr int kMaxNum = 999;
+// Numbers run 000..999 and then start again at 000; the date in the name,
+// not the number, tells which race is older.
+constexpr int kNumbers = 1000;
 
 // NNN of a race file name ("race_012_20261108_1432.csv" -> 12), -1 for any
-// other name. Up to 4 digits are read.
+// other name.
 int number(const char* name);
 
-// The same name with another number ("race_012_x.csv", 3 -> "race_003_x.csv").
-std::string withNumber(const std::string& name, int n);
+// "YYYYMMDD_HHMM" from a race file name, "" when it has no date.
+std::string dateOf(const char* name);
 
-struct Rename {
-    std::string from, to;
-};
-// Renames that give the race files (names without a folder) the numbers
-// 1..N in their current order (by number, then name). In the returned
-// order each target number is at most the file's own and the lower ones
-// are already done, so no rename meets an existing name (two files with
-// one number, possible only from older firmware, may move one up; a rename
-// that would overwrite fails on FAT and is skipped).
-std::vector<Rename> renumberPlan(std::vector<std::string> names);
+// True if race file a is older than b: files with a date by the date, those
+// without (saved before the timer had a clock) count as older than any with
+// one; then by number.
+bool older(const char* a, const char* b);
 
 }  // namespace racefiles
