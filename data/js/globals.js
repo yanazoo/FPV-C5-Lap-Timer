@@ -113,6 +113,6 @@ function switchTab(tab){
   if(tab==='sd') refreshSdFiles();
   if(tab==='config'){
     if(typeof loadPasswordField==='function')loadPasswordField();
-    loadElrsSettings();loadNetSettings();renderC5Status();
+    loadElrsSettings();loadNetSettings();renderC5Status();renderVoiceInfo();
   }
 }

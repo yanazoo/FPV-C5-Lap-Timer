@@ -88,35 +88,107 @@ var sfx={
 };
 
 var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0;
+// The speech-engine workarounds below (resume a "paused" engine, the
+// keep-alive, the silent first utterance) are for iOS only: Chrome on a
+// PC can report paused just as an utterance starts and restarts it on
+// resume(), so レディ was said twice there.
+var IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
 // iOS Safari often fails to fire onend / reports speaking inconsistently
 // and rapid speak() calls can drop the second utterance. Poll frequently
 // and advance the queue whenever the engine is no longer speaking.
 setInterval(()=>{
   if(typeof speechSynthesis==='undefined')return;
-  if(speechSynthesis.paused)speechSynthesis.resume();
+  if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
   if(speechBusy&&!speechSynthesis.speaking&&Date.now()-lastSpeechStart>800){
     speechBusy=false;nextSpeech();
   }
 },250);
 // iOS keep-alive: nudge a long-running utterance so the engine doesn't
-// silently stall (well-known iOS Safari TTS bug).
+// silently stall (well-known iOS Safari TTS bug). iOS only: Chrome on a PC
+// restarts the utterance on resume(), and "レディ" (which the queue's
+// lastSpeechStart didn't cover) was then said twice.
 setInterval(()=>{
-  if(typeof speechSynthesis==='undefined')return;
+  if(typeof speechSynthesis==='undefined'||!IS_IOS)return;
   if(speechSynthesis.speaking&&Date.now()-lastSpeechStart>8000){
     try{speechSynthesis.pause();speechSynthesis.resume();}catch(e){}
   }
 },5000);
 var cachedJaVoice=null;
 
+// The Japanese voice to speak with. A voice that is not on the device (an
+// online voice such as Chrome's "Google 日本語", or an iPhone voice that was
+// never downloaded) says nothing at a field with no internet, so the voice
+// picked in Settings is used if set, else a voice built into the device:
+// the usual system voices by name first (Kyoko on iPhone / Mac, Haruka /
+// Ayumi on Windows, ...), then the device's default, then any local one.
+// With none of those, the online Japanese voice (the same one every time).
+var BUILTIN_JA=['Kyoko','Otoya','Haruka','Ayumi','Ichiro','Sayaka','Nanami','Keita'];
+function jaVoices(){
+  if(typeof speechSynthesis==='undefined')return [];
+  return speechSynthesis.getVoices().filter(v=>v.lang&&v.lang.replace('_','-').toLowerCase().startsWith('ja'));
+}
+function pickJaVoice(){
+  var vs=jaVoices();if(!vs.length)return null;
+  var want='';try{want=localStorage.getItem('voiceName')||'';}catch(e){}
+  if(want){var c=vs.find(v=>v.name===want);if(c)return c;}
+  var local=vs.filter(v=>v.localService!==false);
+  for(var i=0;i<BUILTIN_JA.length;i++){
+    var b=local.find(v=>v.name.indexOf(BUILTIN_JA[i])>=0&&!/enhanced|premium|拡張/i.test(v.name));
+    if(b)return b;
+  }
+  // No built-in Japanese voice: still always the same one (an online voice,
+  // which needs internet), rather than letting the browser choose per call.
+  return local.find(v=>v.default)||local[0]||vs.find(v=>v.default)||vs[0];
+}
+// Every utterance gets the same voice. Without one, iPhone guesses the
+// language of each sentence, and a call that starts with a pilot's name in
+// letters ("Yana、1周…") was read by an English voice: the voice changed
+// from pilot to pilot. The voice list can still be empty when the page
+// opens (and iPhone may never fire voiceschanged), so a miss is not
+// remembered: the next call looks again. The voice is kept by name and
+// looked up in the current list each time (an old voice object can stop
+// working after the list is reloaded).
 function getJaVoice(){
-  if(cachedJaVoice)return cachedJaVoice;
-  var voices=speechSynthesis.getVoices();
-  cachedJaVoice=voices.find(v=>v.lang&&v.lang.startsWith('ja'))||null;
-  return cachedJaVoice;
+  var vs=jaVoices();
+  if(cachedJaVoice){
+    var keep=vs.find(v=>v.name===cachedJaVoice);
+    if(keep)return keep;
+  }
+  var v=pickJaVoice();
+  cachedJaVoice=v?v.name:null;
+  return v;
 }
 if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
-  speechSynthesis.onvoiceschanged=function(){cachedJaVoice=null;};
+  speechSynthesis.onvoiceschanged=function(){cachedJaVoice=null;renderVoiceInfo();};
+}
+// Settings: the voice list and which one speaks.
+function renderVoiceInfo(){
+  var sel=document.getElementById('voiceSelect'),info=document.getElementById('voiceInfo');
+  if(!sel||!info)return;
+  if(typeof speechSynthesis==='undefined'){
+    sel.innerHTML='<option>（このブラウザは読み上げに対応していません）</option>';sel.disabled=true;
+    info.textContent=inCaptiveSheet()?'⚠ 簡易ブラウザで開いています。Safari で http://'+location.host+' を開いてください':'⚠ このブラウザでは読み上げできません（通過音などの効果音は鳴ります）';
+    return;
+  }
+  var vs=jaVoices(),want='';try{want=localStorage.getItem('voiceName')||'';}catch(e){}
+  var h='<option value="">自動（端末内蔵の声を優先）</option>';
+  vs.forEach(v=>{h+='<option value="'+esc(v.name)+'"'+(v.name===want?' selected':'')+'>'+esc(v.name)+(v.localService===false?'（ネット必要）':'（端末内蔵）')+'</option>';});
+  sel.innerHTML=h;sel.disabled=false;
+  var v=getJaVoice();
+  if(!vs.length)info.textContent='日本語の声が見つかりません。端末の言語・読み上げの設定で日本語の音声を追加してください';
+  else if(!v)info.textContent='⚠ 端末内蔵の日本語の声がありません。インターネットがない場所では読み上げられない場合があります';
+  else info.textContent='使用中の声：'+v.name+(v.localService===false?'（⚠ インターネットが必要。ネットのない場所では読み上げられません）':'（端末内蔵・ネット不要）');
+}
+function selectVoice(name){
+  try{if(name)localStorage.setItem('voiceName',name);else localStorage.removeItem('voiceName');}catch(e){}
+  cachedJaVoice=null;renderVoiceInfo();testVoice();
+}
+// iPhone opens the timer's page in its captive-portal sheet when it joins
+// the timer's WiFi. That sheet can't speak: open it in Safari instead.
+function inCaptiveSheet(){
+  var ua=navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua)&&!/Safari\//.test(ua);
 }
 
 // Say "レディ" when Start is pressed, then call `then` (the countdown) once
@@ -129,8 +201,13 @@ if(typeof speechSynthesis!=='undefined'&&'onvoiceschanged' in speechSynthesis){
 // iOS Safari speaks only after the page has spoken inside a tap: the Start
 // tap does that (silently), so "レディ" from race_ready is heard.
 function warmSpeech(){
-  if(speechWarmedUp||typeof speechSynthesis==='undefined')return;
-  try{var u=new SpeechSynthesisUtterance(' ');u.volume=0;speechSynthesis.speak(u);speechWarmedUp=true;}catch(e){}
+  if(!IS_IOS||speechWarmedUp||typeof speechSynthesis==='undefined')return;
+  try{
+    // A real (silent) word: iOS doesn't count an empty utterance.
+    var u=new SpeechSynthesisUtterance('あ');u.lang='ja-JP';u.volume=0;u.rate=2;
+    var v=getJaVoice();if(v)u.voice=v;
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
+  }catch(e){}
 }
 function announceStart(then){
   var go=then||function(){};
@@ -143,8 +220,8 @@ function announceStart(then){
     u.lang='ja-JP';u.rate=speechRate;
     var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
     u.onend=finish;u.onerror=finish;
-    if(speechSynthesis.paused)speechSynthesis.resume();
-    speechSynthesis.speak(u);
+    if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){finish();return;}
   poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
   cap=setTimeout(finish,2500);
@@ -198,8 +275,8 @@ function nextSpeech(){
   u.onerror=()=>advance(false);
   lastSpeechStart=Date.now();
   try{
-    if(speechSynthesis.paused)speechSynthesis.resume();
-    speechSynthesis.speak(u);
+    if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){advance(false);}
 }
 function getSpokenName(p){return (p.yomi&&p.yomi!=='')?p.yomi:p.name;}
@@ -220,10 +297,9 @@ function testVoice(){
   if(announceMode!=='beep'){
     speechWarmedUp=true;
     var u=new SpeechSynthesisUtterance('テスト、1分23秒4');u.lang='ja-JP';u.rate=speechRate;
-    var voices=speechSynthesis.getVoices();
-    var jaVoice=voices.find(v=>v.lang&&v.lang.startsWith('ja'));
+    var jaVoice=getJaVoice();
     if(jaVoice)u.voice=jaVoice;
-    speechSynthesis.speak(u);
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }
 }
 function toggleVoice(){
@@ -240,7 +316,7 @@ function toggleVoice(){
       var u=new SpeechSynthesisUtterance('音声オン');
       u.lang='ja-JP';u.rate=speechRate;u.volume=0.5;
       var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
-      speechSynthesis.speak(u);
+      lastSpeechStart=Date.now();speechSynthesis.speak(u);
       speechWarmedUp=true;
     }catch(e){}
   }else{
@@ -258,6 +334,9 @@ function refreshVoiceBtns(){
 // Browsers only allow sound after a tap or key press on the page. Unlock it
 // on the first one, so a start or stop from the race director or another
 // browser is heard even when this one never pressed a race button.
+// Speech too (iOS speaks only after the page has spoken inside a tap).
 ['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,function un(){
-  ensureAudio();document.removeEventListener(ev,un,true);
+  ensureAudio();warmSpeech();document.removeEventListener(ev,un,true);
 },true));
+// Opened in the iPhone's captive-portal sheet: say how to get speech.
+if(inCaptiveSheet())setTimeout(()=>{if(typeof toast==='function')toast('⚠ 簡易ブラウザでは読み上げできません。Safari で http://'+location.host+' を開いてください',8000);},1500);
