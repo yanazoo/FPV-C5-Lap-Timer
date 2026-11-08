@@ -192,14 +192,14 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 /* SD race results */
 #resDetail,#resPilots{scroll-margin-top:110px}
 .sd-danger{margin-top:14px;border-top:1px solid var(--bd);padding-top:8px}
-.sd-danger summary{cursor:pointer;color:var(--muted);font-size:12px;list-style:none;user-select:none}
-.sd-danger summary::-webkit-details-marker{display:none}
-.sd-danger[open] summary{margin-bottom:8px}
+.sd-danger-title{color:var(--muted);font-size:12px;margin-bottom:8px}
 .sd-danger-body{display:flex;align-items:center;gap:10px;justify-content:space-between}
 .sd-erase-btn{flex-shrink:0;background:transparent;color:var(--err);border:1px solid var(--err);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
 .res-head{display:flex;align-items:center;gap:6px;margin-bottom:10px;font-size:14px}
 .res-muted{color:var(--muted);font-size:12px}
 .res-btn{padding:4px 10px;font-size:12px}
+.res-head-btn{width:96px;height:30px;padding:0 4px;font-size:11px;white-space:nowrap;flex-shrink:0}
+.res-head b,.res-head .res-muted{white-space:nowrap}
 .res-item{display:flex;gap:10px;align-items:center;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;margin-bottom:6px;background:var(--sf2);cursor:pointer}
 .res-item.on{border-color:var(--accent)}
 .res-item .no{font-weight:700;color:var(--accent);font-size:15px;min-width:44px}
@@ -611,9 +611,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div class="card">
     <div class="res-head"><b>📜 レース結果</b><span id="resCount" class="res-muted"></span>
       <span style="flex:1"></span>
-      <button onclick="openPilotScan()" class="btn-secondary res-btn">👤 パイロット別</button>
-      <button onclick="refreshSdFiles()" class="btn-secondary res-btn">🔄</button></div>
-    <div id="resList"><p class="res-muted">「🔄」を押してください</p></div>
+      <button onclick="openPilotScan()" class="btn-secondary res-btn res-head-btn">👤 パイロット別</button>
+      <button onclick="refreshSdFiles()" class="btn-secondary res-btn res-head-btn">🔄 更新</button></div>
+    <div id="resList"><p class="res-muted">「🔄 更新」を押してください</p></div>
   </div>
   <div class="card" id="resDetail" style="display:none"></div>
   <div class="card" id="resPilots" style="display:none"></div>
@@ -621,16 +621,16 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div class="card">
     <div class="res-head"><b>📁 ファイル</b></div>
     <div id="sdFileListWrap">
-      <p style="color:var(--muted);font-size:12px">「🔄」を押してください</p>
+      <p style="color:var(--muted);font-size:12px">「🔄 更新」を押してください</p>
     </div>
-    <!-- Kept folded and small, so it is not pressed by mistake. -->
-    <details class="sd-danger">
-      <summary>⚠ その他の操作</summary>
+    <!-- Small and set apart, so it is not pressed by mistake. -->
+    <div class="sd-danger">
+      <div class="sd-danger-title">⚠ その他の操作</div>
       <div class="sd-danger-body">
         <span class="res-muted">SDカードのファイルをすべて削除します（元に戻せません）</span>
         <button onclick="openSdErase()" class="sd-erase-btn">🧹 フォーマット…</button>
       </div>
-    </details>
+    </div>
   </div>
 </section>
 
