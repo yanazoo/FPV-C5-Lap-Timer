@@ -32,6 +32,9 @@ jobs:
       # pioarduino 55.03.x is built for platformio-core 6.1.18; 6.2.x ships an
       # SCons without SCons.Tool.FortranCommon and the build stops there.
       - run: pip install "platformio==6.1.18"
+      # pioarduino's Python env from PyPI (its own setup downloads a GitHub zip
+      # that sometimes fails); see tools/ci_penv.sh.
+      - run: bash tools/ci_penv.sh
       - name: Firmware
         run: pio run -e xiao_esp32s3
       - name: Web UI filesystem (LittleFS)
@@ -62,6 +65,7 @@ jobs:
       # pioarduino 55.03.x is built for platformio-core 6.1.18; 6.2.x ships an
       # SCons without SCons.Tool.FortranCommon and the build stops there.
       - run: pip install "platformio==6.1.18"
+      - run: bash tools/ci_penv.sh
       - run: pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
       - uses: actions/upload-artifact@v4
         with:

@@ -60,6 +60,7 @@ jobs:
         if: steps.params.outputs.skip == 'false'
         run: |
           pip install "platformio==6.1.18"
+          bash tools/ci_penv.sh
           pio run -e xiao_esp32s3
           pio run -e xiao_esp32s3 -t buildfs
           pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
