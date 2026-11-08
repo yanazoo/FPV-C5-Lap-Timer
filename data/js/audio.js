@@ -100,9 +100,12 @@ setInterval(()=>{
   }
 },250);
 // iOS keep-alive: nudge a long-running utterance so the engine doesn't
-// silently stall (well-known iOS Safari TTS bug).
+// silently stall (well-known iOS Safari TTS bug). iOS only: Chrome on a PC
+// restarts the utterance on resume(), and "レディ" (which the queue's
+// lastSpeechStart didn't cover) was then said twice.
+var IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 setInterval(()=>{
-  if(typeof speechSynthesis==='undefined')return;
+  if(typeof speechSynthesis==='undefined'||!IS_IOS)return;
   if(speechSynthesis.speaking&&Date.now()-lastSpeechStart>8000){
     try{speechSynthesis.pause();speechSynthesis.resume();}catch(e){}
   }
@@ -199,7 +202,7 @@ function warmSpeech(){
     // A real (silent) word: iOS doesn't count an empty utterance.
     var u=new SpeechSynthesisUtterance('あ');u.lang='ja-JP';u.volume=0;u.rate=2;
     var v=getJaVoice();if(v)u.voice=v;
-    speechSynthesis.speak(u);speechWarmedUp=true;
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
   }catch(e){}
 }
 function announceStart(then){
@@ -214,7 +217,7 @@ function announceStart(then){
     var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
     u.onend=finish;u.onerror=finish;
     if(speechSynthesis.paused)speechSynthesis.resume();
-    speechSynthesis.speak(u);
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){finish();return;}
   poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
   cap=setTimeout(finish,2500);
@@ -269,7 +272,7 @@ function nextSpeech(){
   lastSpeechStart=Date.now();
   try{
     if(speechSynthesis.paused)speechSynthesis.resume();
-    speechSynthesis.speak(u);
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }catch(e){advance(false);}
 }
 function getSpokenName(p){return (p.yomi&&p.yomi!=='')?p.yomi:p.name;}
@@ -292,7 +295,7 @@ function testVoice(){
     var u=new SpeechSynthesisUtterance('テスト、1分23秒4');u.lang='ja-JP';u.rate=speechRate;
     var jaVoice=getJaVoice();
     if(jaVoice)u.voice=jaVoice;
-    speechSynthesis.speak(u);
+    lastSpeechStart=Date.now();speechSynthesis.speak(u);
   }
 }
 function toggleVoice(){
@@ -309,7 +312,7 @@ function toggleVoice(){
       var u=new SpeechSynthesisUtterance('音声オン');
       u.lang='ja-JP';u.rate=speechRate;u.volume=0.5;
       var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
-      speechSynthesis.speak(u);
+      lastSpeechStart=Date.now();speechSynthesis.speak(u);
       speechWarmedUp=true;
     }catch(e){}
   }else{
