@@ -115,8 +115,7 @@ var cachedJaVoice=null;
 // picked in Settings is used if set, else a voice built into the device:
 // the usual system voices by name first (Kyoko on iPhone / Mac, Haruka /
 // Ayumi on Windows, ...), then the device's default, then any local one.
-// With none of those, no voice is set and the system's default Japanese
-// voice speaks (lang ja-JP).
+// With none of those, the online Japanese voice (the same one every time).
 var BUILTIN_JA=['Kyoko','Otoya','Haruka','Ayumi','Ichiro','Sayaka','Nanami','Keita'];
 function jaVoices(){
   if(typeof speechSynthesis==='undefined')return [];
@@ -131,7 +130,9 @@ function pickJaVoice(){
     var b=local.find(v=>v.name.indexOf(BUILTIN_JA[i])>=0&&!/enhanced|premium|拡張/i.test(v.name));
     if(b)return b;
   }
-  return local.find(v=>v.default)||local[0]||null;
+  // No built-in Japanese voice: still always the same one (an online voice,
+  // which needs internet), rather than letting the browser choose per call.
+  return local.find(v=>v.default)||local[0]||vs.find(v=>v.default)||vs[0];
 }
 // Every utterance gets the same voice. Without one, iPhone guesses the
 // language of each sentence, and a call that starts with a pilot's name in
