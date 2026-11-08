@@ -5,6 +5,9 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "race.h"
+#include <esp_netif.h>
+#include <esp_wifi.h>
+#include "elrs.h"
 #include "sd_store.h"
 #include "wifi_mgr.h"
 
@@ -157,9 +160,12 @@ static void onHello(AsyncWebSocketClient* client, JsonDocument& d) {
     client->text(admin ? R"({"type":"hello","admin":true})" : R"({"type":"hello","admin":false})");
 }
 
+static void keepRoomForNetpack(uint32_t now);
+
 // Called from loop(): keep logins of connected admins fresh and close the
 // oldest viewers over the limit.
 void wsLoop(uint32_t now) {
+    keepRoomForNetpack(now);
     static uint32_t last = 0;
     if (now - last < 500) return;
     last = now;
@@ -193,6 +199,57 @@ void wsLoop(uint32_t now) {
             Serial.printf("[WS] viewer #%lu closed (more than %d viewers)\n", (unsigned long)kick[i], limit);
             c->close(4001, "viewers full");
         }
+    }
+}
+
+// Host mode with the netpack over WiFi: the netpack XIAO must always be able
+// to join this access point. When it is not connected and all stations are
+// taken, one station is sent off: never the netpack's last address or an
+// admin's device; first a device with no page open, else a viewer.
+static void keepRoomForNetpack(uint32_t now) {
+    static uint32_t last = 0;
+    if (now - last < 3000 || !netIsAp() || !elrsWantsNetpack()) return;
+    last = now;
+    wifi_sta_list_t sl;
+    if (esp_wifi_ap_get_sta_list(&sl) != ESP_OK || sl.num < AP_MAX_STATIONS) return;
+    esp_netif_pair_mac_ip_t pairs[ESP_WIFI_MAX_CONN_NUM] = {};
+    int n = sl.num < ESP_WIFI_MAX_CONN_NUM ? sl.num : ESP_WIFI_MAX_CONN_NUM;
+    for (int i = 0; i < n; i++) memcpy(pairs[i].mac, sl.sta[i].mac, 6);
+    esp_netif_t* ap = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
+    if (!ap || esp_netif_dhcps_get_clients_by_mac(ap, n, pairs) != ESP_OK) return;
+    // Browser addresses: admins (kept) and viewers.
+    uint32_t ids[kMaxClients];
+    bool adminOf[kMaxClients];
+    int nc = 0;
+    portENTER_CRITICAL(&idMux);
+    for (int c = 0; c < wsIdCount; c++) ids[nc] = wsClients[c].id, adminOf[nc++] = wsClients[c].session >= 0;
+    portEXIT_CRITICAL(&idMux);
+    uint32_t adminIp[kMaxClients], viewerIp[kMaxClients];
+    int na = 0, nv = 0;
+    for (int c = 0; c < nc; c++) {
+        AsyncWebSocketClient* cl = ws.client(ids[c]);
+        if (!cl) continue;
+        uint32_t ip = (uint32_t)cl->remoteIP();
+        if (adminOf[c]) adminIp[na++] = ip;
+        else viewerIp[nv++] = ip;
+    }
+    uint32_t netpack = elrsNetpackIp();
+    int pick = -1;
+    bool pickIsViewer = true;
+    for (int i = 0; i < n; i++) {
+        uint32_t ip = pairs[i].ip.addr;
+        if (ip == 0 || ip == netpack) continue;
+        bool isAdmin = false, isViewer = false;
+        for (int k = 0; k < na; k++) isAdmin |= adminIp[k] == ip;
+        for (int k = 0; k < nv; k++) isViewer |= viewerIp[k] == ip;
+        if (isAdmin) continue;
+        if (pick < 0 || (pickIsViewer && !isViewer)) pick = i, pickIsViewer = isViewer;
+    }
+    if (pick < 0) return;
+    uint16_t aid = 0;
+    if (esp_wifi_ap_get_sta_aid(pairs[pick].mac, &aid) == ESP_OK && aid) {
+        Serial.printf("[WiFi] access point full: station %u sent off to make room for the netpack\n", aid);
+        esp_wifi_deauth_sta(aid);
     }
 }
 

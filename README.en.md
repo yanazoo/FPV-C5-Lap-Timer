@@ -228,7 +228,7 @@ Browsers are **admins** (logged in) or **viewers**. Limits are in Settings → "
 
 - Admins: 1–3 (default 2). A login past the limit is refused with a message; admins are never disconnected. A login is released 60 s after its last browser leaves, or at once on logout.
 - Viewers: the light spectator screen (race clock, laps, ranking; no RSSI). Host mode 0–5 (default 3), client mode 0–8 (default 6); past the limit the oldest viewer is disconnected (a "再接続" button reconnects).
-- Host mode lets admins + viewers + 1 (the netpack) join the WiFi, from the next restart.
+- The netpack (WiFi) is not counted and never disconnected. In host mode, when the timer's WiFi is full (10 stations) and the netpack is not connected, one station is sent off to make room: a device with no page open first, then a viewer, never an admin.
 - The timer's date (race file names) comes from logged-in browsers only.
 
 ## Layout

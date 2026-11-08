@@ -593,7 +593,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 接続台数 ── -->
   <div class="global-config-card">
     <h3 class="global-title">👥 接続台数</h3>
-    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログインした端末）は接続が切られず、上限を超えるログインはお断りします。<b>観戦</b>（ログインしていない端末）は計測時間・ラップ・順位だけの軽い画面で、上限を超えると古い接続から切断します。上限は、計測に影響しないよう余裕を持たせています。ホストモードの WiFi 台数への反映は再起動後です。</p>
+    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログインした端末）は接続が切られず、上限を超えるログインはお断りします。<b>観戦</b>（ログインしていない端末）は計測時間・ラップ・順位だけの軽い画面で、上限を超えると古い接続から切断します。上限は、計測に影響しないよう余裕を持たせています。netpack（WiFi 接続）は台数に含まず、切断もしません。</p>
     <div id="connNow" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
     <div class="config-row" style="gap:8px"><label style="width:150px">管理者（ログイン）</label>
       <select id="connAdmin" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>

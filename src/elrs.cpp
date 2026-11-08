@@ -38,6 +38,7 @@ uint16_t port = ELRS_TCP_PORT;
 
 uint32_t  lastAttempt = 0;
 IPAddress lastGood;
+volatile uint32_t netpackAddr = 0;   // lastGood, for the web task
 
 // Race director: the bridge only hears what is sent to the MAC it has at
 // the moment, and a TX backpack sends its DVR-record switch to the
@@ -266,6 +267,7 @@ bool tryConnect(IPAddress ip) {
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof intvl);
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof cnt);
     lastGood = ip;
+    netpackAddr = (uint32_t)ip;
     char peer[40];
     snprintf(peer, sizeof peer, "%s:%u", ip.toString().c_str(), port);
     setStatus(true, peer);
@@ -403,6 +405,9 @@ void elrsBegin() {
 }
 
 void elrsConfigChanged() { post(ev(Ev::Config)); }
+
+bool elrsWantsNetpack() { return enabled && transport == 0 && !elrsStatus().connected; }
+uint32_t elrsNetpackIp() { return netpackAddr; }
 void elrsReconnect()     { post(ev(Ev::Reconnect)); }
 
 void elrsRaceStage() {
