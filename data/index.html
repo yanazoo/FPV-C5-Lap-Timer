@@ -203,6 +203,8 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .modal-err{color:var(--err);font-size:11px;margin-top:6px;display:none}
 .modal-actions{display:flex;gap:6px;margin-top:12px}
 .modal-actions button{flex:1}
+.lapTable tbody tr.deletable{cursor:pointer}
+.lapTable tbody tr.deletable:hover td{background:rgba(255,255,255,.05)}
 .tab-btn.locked::before{content:'🔒 ';font-size:10px}
 #authHint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;display:none}
 #authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
@@ -598,6 +600,19 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="modal-actions">
       <button onclick="submitLogin()" class="btn-success">ログイン</button>
       <button onclick="cancelLogin()" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete a wrong lap (a shortcut): tap its row on a race card. -->
+<div id="lapDelModal" class="modal-overlay" onclick="if(event.target===this)closeLapDelete()">
+  <div class="modal-box">
+    <h3>🗑 ラップの削除</h3>
+    <p id="lapDelWhat" style="color:var(--tx);font-size:14px;margin-bottom:6px"></p>
+    <p id="lapDelHow"></p>
+    <div class="modal-actions">
+      <button onclick="confirmLapDelete()" class="btn-danger">削除する</button>
+      <button onclick="closeLapDelete()" class="btn-secondary">キャンセル</button>
     </div>
   </div>
 </div>

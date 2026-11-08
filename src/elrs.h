@@ -33,6 +33,8 @@ void elrsPilotDone(int slot, int position, uint32_t totalMs);
 void elrsRaceStop(uint32_t elapsedMs);
 void elrsLapsClear();
 void elrsAnnounce(const char* text);
-void elrsTest(int slot);   // -1 = every OSD recipient
+void elrsTest(int slot);
+// A lap was deleted: the pilot's lap count, position and best lap again.
+void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finished);   // -1 = every OSD recipient
 
 ElrsStatus elrsStatus();

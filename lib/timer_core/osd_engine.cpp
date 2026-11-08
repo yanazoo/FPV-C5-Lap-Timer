@@ -420,6 +420,35 @@ void Engine::onPosition(uint32_t now, int slot, int laps, int position) {
     flush(slot);
 }
 
+void Engine::onLapEdit(uint32_t now, int slot, int laps, int position, uint32_t bestMs, bool finished) {
+    now_ = now;
+    if (slot < 0 || slot >= kPilots || !rcpt_[slot].enabled) return;
+    lap_[slot].token++;   // pending redraws / clears of the old last lap
+    lap_[slot].info.bestMs = bestMs;
+    if (!finished && finished_[slot]) {
+        finished_[slot] = false;
+        clearRow(slot, opt_.status.row);
+        clearRow(slot, opt_.results.row);
+        clearRow(slot, opt_.results.row + 1);
+    }
+    clearRow(slot, opt_.lapResults.row);
+    clearRow(slot, opt_.currentLap.row);
+    if (position > 0) {
+        posMessage(laps, position, lastPos_[slot], sizeof lastPos_[slot]);
+        setText(slot, opt_.currentLap, lastPos_[slot]);
+    } else {
+        lastPos_[slot][0] = '\0';
+    }
+    clearRow(slot, opt_.bestLap.row);
+    if (opt_.showBestLap && bestMs) {
+        char t[16], msg[kTextMax + 1];
+        formatTime(bestMs, t, sizeof t);
+        snprintf(msg, sizeof msg, "BEST: %s", t);
+        setText(slot, opt_.bestLap, msg);
+    }
+    flush(slot);
+}
+
 void Engine::onPilotDone(uint32_t now, int slot, int position, uint32_t totalMs) {
     now_ = now;
     if (slot < 0 || slot >= kPilots || !rcpt_[slot].enabled) return;
