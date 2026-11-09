@@ -595,14 +595,12 @@ void registerHttpRoutes() {
         ok(req);
         wsText(R"({"type":"config_changed","what":"net"})");
     });
-    // Restart button: the C5 and the ESP-NOW bridge first (their firmware
-    // must know the command), then the timer itself.
+    // Restart button: the timer (the C5 and the bridge keep running; their
+    // links come back on their own).
     server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest* req) {
-        c5Restart();
-        elrsRestartBridge();
         ok(req);
-        Serial.println("[Sys] restart: C5, bridge, then the timer");
-        static TimerHandle_t t = xTimerCreate("restart", pdMS_TO_TICKS(1500), pdFALSE, nullptr,
+        Serial.println("[Sys] restart requested");
+        static TimerHandle_t t = xTimerCreate("restart", pdMS_TO_TICKS(1000), pdFALSE, nullptr,
                                               [](TimerHandle_t) { ESP.restart(); });
         xTimerStart(t, 0);
     });

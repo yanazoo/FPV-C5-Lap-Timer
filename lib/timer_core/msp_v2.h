@@ -22,8 +22,6 @@ constexpr uint16_t kElrsBackpackSetRecordingState = 0x0305;
 // UID (payload: 6-byte UID; empty clears). The bridge answers with the same
 // function, payload 1 = filter on.
 constexpr uint16_t kBridgeSetListen = 0x0F01;
-// elrs-netpack bridge: restart (empty payload).
-constexpr uint16_t kBridgeRestart = 0x0F02;
 
 constexpr uint8_t kCommand  = '<';
 constexpr uint8_t kResponse = '>';

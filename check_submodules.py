@@ -12,7 +12,7 @@ Import("env")  # noqa: F821  (provided by PlatformIO)
 # Keep in step with the submodule pointer (`git ls-tree HEAD third_party/FPVGateC5MK`);
 # test/run.sh checks they match.
 C5MK_URL = "https://github.com/yanazoo/FPVGateC5MK.git"
-C5MK_COMMIT = "e46d4d2fbf133d78c1d8887945a18a35d6ce93a3"
+C5MK_COMMIT = "e62a63595994e583e6b12c7703fa1d71b858fb4e"
 
 project = env.subst("$PROJECT_DIR")  # noqa: F821
 root = os.path.normpath(project)

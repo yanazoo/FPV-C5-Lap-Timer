@@ -11,7 +11,7 @@ portMUX_TYPE  mux = portMUX_INITIALIZER_UNLOCKED;
 // Requested configuration, written by any task under mux, applied by the link task.
 uint16_t wantMhz[8], wantEnter[8], wantExit[8];
 int      wantGain = C5_DEFAULT_GAIN;
-bool     cfgDirty = false, gainDirty = true, resetReq = false, restartReq = false;
+bool     cfgDirty = false, gainDirty = true, resetReq = false;
 
 // Owned by the link task; read (racily but harmlessly) for telemetry.
 gate::Tracker     trackers[8];
@@ -46,11 +46,10 @@ c5host::Link c5(writeToC5, onSample, nullptr);
 
 void applyConfig() {
     uint16_t mhz[8], en[8], ex[8];
-    bool dirty, gDirty, reset, restart;
+    bool dirty, gDirty, reset;
     int gain;
     portENTER_CRITICAL(&mux);
-    dirty = cfgDirty, gDirty = gainDirty, reset = resetReq, gain = wantGain, restart = restartReq;
-    restartReq = false;
+    dirty = cfgDirty, gDirty = gainDirty, reset = resetReq, gain = wantGain;
     memcpy(mhz, wantMhz, sizeof mhz);
     memcpy(en, wantEnter, sizeof en);
     memcpy(ex, wantExit, sizeof ex);
@@ -66,11 +65,6 @@ void applyConfig() {
         else Serial.println("[C5] slot list rejected (frequency out of 5180-5917 MHz)");
     }
     if (gDirty) c5.setGain(gain);
-    if (restart) {
-        c5.restart();   // C5MK firmware with the R command
-        Serial1.flush();
-        Serial.println("[C5] restart sent");
-    }
     if (reset)
         for (auto& t : trackers) t.reset();
 }
@@ -126,12 +120,6 @@ void c5SetGain(int gain) {
     portENTER_CRITICAL(&mux);
     wantGain = constrain(gain, 0, c5host::kMaxGain);
     gainDirty = true;
-    portEXIT_CRITICAL(&mux);
-}
-
-void c5Restart() {
-    portENTER_CRITICAL(&mux);
-    restartReq = true;
     portEXIT_CRITICAL(&mux);
 }
 

@@ -434,7 +434,7 @@ async function saveConnLimits(){
 // ── 再起動 ──────────────────────────────────────────────────────────────
 async function restartAll(){
   if(raceRunning){toast('レース中は再起動できません');return;}
-  if(!confirm('タイマー・C5 受信機・ESP-NOW ブリッジを再起動します。よろしいですか？\n（再起動後はログインし直してください）'))return;
+  if(!confirm('タイマーを再起動します。よろしいですか？\n（再起動後はログインし直してください）'))return;
   try{
     var r=await fetch('/api/restart',{method:'POST'});
     if(!r.ok)throw 0;

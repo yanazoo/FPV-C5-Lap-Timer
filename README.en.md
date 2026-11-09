@@ -226,7 +226,7 @@ To cover lost packets:
 
 ## Restart and a fixed IP address
 
-- Settings → "🔄 再起動" → "すべて再起動" restarts the timer and asks the C5 receiver (FPVGate C5MK with the `R` command) and the ESP-NOW bridge (elrs-netpack with MSP `0x0F02`) to restart too; older firmware there just stays up.
+- Settings → "🔄 再起動" → "タイマーを再起動" restarts the timer (XIAO ESP32-S3); the C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart.
 - Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
 
 ## Connections and the spectator screen
