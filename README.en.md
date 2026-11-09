@@ -224,6 +224,11 @@ To cover lost packets:
   router password is stored on the device only and never sent back to the
   browser.
 
+## Restart and a fixed IP address
+
+- Settings → "🔄 再起動" → "すべて再起動" restarts the timer and asks the C5 receiver (FPVGate C5MK with the `R` command) and the ESP-NOW bridge (elrs-netpack with MSP `0x0F02`) to restart too; older firmware there just stays up.
+- Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
+
 ## Connections and the spectator screen
 
 Browsers are **admins** (logged in) or **viewers**. Limits are in Settings → "👥 接続台数".

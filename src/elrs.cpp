@@ -11,7 +11,7 @@
 
 namespace {
 
-enum class Ev : uint8_t { Config, Reconnect, Stage, Start, Lap, Position, Done, Stop, Clear, Announce, Test, LapEdit };
+enum class Ev : uint8_t { Config, Reconnect, Stage, Start, Lap, Position, Done, Stop, Clear, Announce, Test, LapEdit, Restart };
 
 struct Event {
     Ev           kind;
@@ -376,6 +376,18 @@ void handle(const Event& e, uint32_t now) {
     case Ev::Clear:     engine.onLapsClear(now); break;
     case Ev::Announce:  engine.onAnnounce(now, e.text); break;
     case Ev::Test:      engine.test(now, e.slot); break;
+    case Ev::Restart: {   // the restart button: restart the bridge(s) too
+        uint8_t f[msp::kMaxFrame];
+        size_t n = msp::encode(msp::kBridgeRestart, nullptr, 0, f, sizeof f);
+        if (st.connected) {
+            out.write(f, n);
+            out.flush();
+        }
+        if (transport != 1 && uartOpen) Serial2.write(f, n);   // a parked UART bridge as well
+        if (uartOpen) Serial2.flush();
+        Serial.println("[ELRS] bridge restart sent");
+        break;
+    }
     case Ev::LapEdit:   engine.onLapEdit(now, e.slot, e.laps, e.position, e.value, e.lap.holeshot); break;
     }
 }
@@ -460,6 +472,7 @@ void elrsAnnounce(const char* text) {
 }
 
 void elrsTest(int slot) { post(ev(Ev::Test, slot)); }
+void elrsRestartBridge() { post(ev(Ev::Restart)); }
 
 void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finished) {
     Event e = ev(Ev::LapEdit, slot);

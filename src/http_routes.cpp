@@ -546,6 +546,11 @@ void registerHttpRoutes() {
         d["staSsid"]   = staSsid;
         d["staPassSet"] = staPass.length() > 0;
         d["fallbackSec"] = netFallbackSec;
+        d["ipFixed"] = staIp.fixed != 0;
+        d["ip"]      = staIp.ip ? IPAddress(staIp.ip).toString() : String();
+        d["mask"]    = staIp.mask ? IPAddress(staIp.mask).toString() : String();
+        d["gw"]      = staIp.gw ? IPAddress(staIp.gw).toString() : String();
+        d["dns"]     = staIp.dns ? IPAddress(staIp.dns).toString() : String();
         NetStatus st = netStatus();
         JsonObject o = d["status"].to<JsonObject>();
         o["ap"]        = st.ap;
@@ -568,9 +573,38 @@ void registerHttpRoutes() {
         // "staPassClear" switches to an open network.
         if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
         if (staP.length() && (staP.length() < 8 || staP.length() > 63)) { bad(req, "client password 8..63"); return; }
+        // Client mode address: DHCP, or fixed (address, mask, gateway; DNS
+        // defaults to the gateway).
+        StaIpConfig ipc = staIp;
+        if (!d["ipFixed"].isNull()) {
+            ipc.fixed = (d["ipFixed"] | false) ? 1 : 0;
+            if (ipc.fixed) {
+                IPAddress ip, mask, gw, dns;
+                if (!ip.fromString(d["ip"] | "") || (uint32_t)ip == 0) { bad(req, "IP address"); return; }
+                if (!mask.fromString(d["mask"] | "") || (uint32_t)mask == 0) { bad(req, "subnet mask"); return; }
+                if (!gw.fromString(d["gw"] | "")) { bad(req, "gateway"); return; }
+                const char* dnsS = d["dns"] | "";
+                if (*dnsS && !dns.fromString(dnsS)) { bad(req, "DNS"); return; }
+                ipc.ip = (uint32_t)ip, ipc.mask = (uint32_t)mask, ipc.gw = (uint32_t)gw;
+                ipc.dns = *dnsS ? (uint32_t)dns : 0;
+            }
+        }
         saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec);
+        staIp = ipc;
+        saveStaIp();
         ok(req);
         wsText(R"({"type":"config_changed","what":"net"})");
+    });
+    // Restart button: the C5 and the ESP-NOW bridge first (their firmware
+    // must know the command), then the timer itself.
+    server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest* req) {
+        c5Restart();
+        elrsRestartBridge();
+        ok(req);
+        Serial.println("[Sys] restart: C5, bridge, then the timer");
+        static TimerHandle_t t = xTimerCreate("restart", pdMS_TO_TICKS(1500), pdFALSE, nullptr,
+                                              [](TimerHandle_t) { ESP.restart(); });
+        xTimerStart(t, 0);
     });
     server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);

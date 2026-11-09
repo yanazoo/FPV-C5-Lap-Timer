@@ -580,6 +580,22 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="30">30 秒接続できなければ</option>
           <option value="60">60 秒接続できなければ</option>
         </select></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
+        <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="0">自動（DHCP）</option>
+          <option value="1">固定</option>
+        </select></div>
+      <div class="net-ip-fixed">
+        <div class="config-row" style="gap:8px"><label style="width:110px">IP</label>
+          <input type="text" id="netIp" inputmode="decimal" placeholder="例 192.168.1.200" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">サブネットマスク</label>
+          <input type="text" id="netMask" inputmode="decimal" placeholder="255.255.255.0" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">ゲートウェイ</label>
+          <input type="text" id="netGw" inputmode="decimal" placeholder="例 192.168.1.1（ルーター）" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">DNS（任意）</label>
+          <input type="text" id="netDns" inputmode="decimal" placeholder="空欄ならゲートウェイ" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <p class="section-desc" style="margin-top:2px">ルーターの DHCP で配る範囲の外で、ほかの機器と重ならないアドレスにしてください。</p>
+      </div>
     </div>
     <p class="section-desc" style="margin-top:6px">ホスト（およびクライアント接続失敗時）のアクセスポイント</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">SSID</label>
@@ -607,6 +623,14 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="600">10 分</option><option value="1800">30 分</option>
       </select></div>
     <p class="section-desc" style="margin-top:4px">ログインの保持：ブラウザーを閉じたり、スマホの画面が消えて接続が切れたりしてから、この時間がたつとログアウトと同じ扱いになり、管理者の枠が空きます（その間に戻ればログインのまま）。「ログアウト」を押せばすぐ空きます。</p>
+  </div>
+
+  <!-- ── 再起動 ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">🔄 再起動</h3>
+    <p class="section-desc">タイマーを再起動します。C5 受信機と ESP-NOW ブリッジ（UART 直結・netpack）にも再起動を指示します（C5・ブリッジは再起動に対応したファームウェアが必要です）。設定はそのまま残ります。再起動するとログインし直しになります。</p>
+    <div style="display:flex;justify-content:flex-end">
+      <button onclick="restartAll()" class="btn-secondary">🔄 すべて再起動</button></div>
   </div>
 
   <!-- ── 管理者パスワード ── -->

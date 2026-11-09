@@ -86,6 +86,7 @@ state = {
                 "raceClock": "2,-1"},
     },
     "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30,
+            "ipFixed": False, "ip": "", "mask": "", "gw": "", "dns": "",
             "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
     "password": "admin",
     "posts": [],   # every POST, for tests
@@ -415,6 +416,7 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast({"type": "race_stop", "elapsed": int(race_elapsed() * 1000)})
             return self.reply({"ok": True})
         if p == "/api/net":
+            state["net"].update({k: d[k] for k in ("ipFixed", "ip", "mask", "gw", "dns") if k in d})
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
                                 staSsid=d.get("staSsid", ""), fallbackSec=d.get("fallbackSec", 30))
             if d.get("staPass"):

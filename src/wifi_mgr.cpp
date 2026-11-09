@@ -62,6 +62,11 @@ void netBegin() {
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
         WiFi.setAutoReconnect(true);
+        if (staIp.fixed) {
+            IPAddress ip(staIp.ip), gw(staIp.gw), mask(staIp.mask), dns(staIp.dns ? staIp.dns : staIp.gw);
+            if (!WiFi.config(ip, gw, mask, dns)) Serial.println("[WiFi] fixed address rejected, using DHCP");
+            else Serial.printf("[WiFi] client: fixed address %s\n", ip.toString().c_str());
+        }
         WiFi.begin(staSsid.c_str(), staPass.c_str());
         // No modem sleep as a client: with it the radio dozes between beacons,
         // and the burst of requests for the web UI's page and scripts stalls

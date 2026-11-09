@@ -308,7 +308,13 @@ function elrsAnnounce(){
 function onNetMode(){
   var sta=document.getElementById('netMode').value==='1';
   document.querySelectorAll('.net-sta').forEach(e=>e.style.display=sta?'':'none');
+  onNetIpMode();
 }
+function onNetIpMode(){
+  var fixed=document.getElementById('netIpMode').value==='1';
+  document.querySelectorAll('.net-ip-fixed').forEach(e=>e.style.display=fixed?'':'none');
+}
+var IPV4=/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 async function loadNetSettings(){
   try{
     var r=await fetch('/api/net');if(!r.ok)return;
@@ -317,6 +323,11 @@ async function loadNetSettings(){
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
     document.getElementById('netStaSsid').value=d.staSsid||'';
     document.getElementById('netFallback').value=String(d.fallbackSec||30);
+    document.getElementById('netIpMode').value=d.ipFixed?'1':'0';
+    document.getElementById('netIp').value=d.ip||'';
+    document.getElementById('netMask').value=d.mask||'255.255.255.0';
+    document.getElementById('netGw').value=d.gw||'';
+    document.getElementById('netDns').value=d.dns||'';
     var sp=document.getElementById('netStaPass');sp.value='';
     sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
@@ -331,12 +342,21 @@ async function saveNetSettings(){
   var d={mode:parseInt(document.getElementById('netMode').value)||0,
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
     staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
-    fallbackSec:parseInt(document.getElementById('netFallback').value)||30};
+    fallbackSec:parseInt(document.getElementById('netFallback').value)||30,
+    ipFixed:document.getElementById('netIpMode').value==='1',
+    ip:document.getElementById('netIp').value.trim(),mask:document.getElementById('netMask').value.trim(),
+    gw:document.getElementById('netGw').value.trim(),dns:document.getElementById('netDns').value.trim()};
+  if(d.mode===1&&d.ipFixed){
+    if(!IPV4.test(d.ip)){toast('⚠️ IP アドレスを正しく入力してください');return;}
+    if(!IPV4.test(d.mask)){toast('⚠️ サブネットマスクを正しく入力してください');return;}
+    if(!IPV4.test(d.gw)){toast('⚠️ ゲートウェイを正しく入力してください');return;}
+    if(d.dns&&!IPV4.test(d.dns)){toast('⚠️ DNS を正しく入力してください');return;}
+  }
   if(d.apPass.length<8){toast('⚠️ アクセスポイントのパスワードは8文字以上');return;}
   if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
   if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
   var msg=d.mode===1
-    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は http://fpv-c5-lt.local（またはルーターが割り当てた IP）で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
+    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
     :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
   if(!confirm(msg))return;
   try{
@@ -409,4 +429,15 @@ async function saveConnLimits(){
     toast('✅ 接続台数を保存しました');
     loadConnLimits();
   }catch(e){toast('⚠️ 保存エラー');}
+}
+
+// ── 再起動 ──────────────────────────────────────────────────────────────
+async function restartAll(){
+  if(raceRunning){toast('レース中は再起動できません');return;}
+  if(!confirm('タイマー・C5 受信機・ESP-NOW ブリッジを再起動します。よろしいですか？\n（再起動後はログインし直してください）'))return;
+  try{
+    var r=await fetch('/api/restart',{method:'POST'});
+    if(!r.ok)throw 0;
+    toast('🔄 再起動しています…（20 秒ほどで戻ります）',8000);
+  }catch(e){toast('⚠️ 接続エラー');}
 }

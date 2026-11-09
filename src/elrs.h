@@ -37,6 +37,8 @@ void elrsTest(int slot);
 // A lap was deleted: the pilot's lap count, position and best lap again.
 void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finished);   // -1 = every OSD recipient
 
+// Restart button: ask the ESP-NOW bridge to restart (elrs-netpack 0x0F02).
+void elrsRestartBridge();
 ElrsStatus elrsStatus();
 // WiFi transport chosen but the netpack XIAO not connected (it may need a
 // free place on this timer's access point), and its last address (0: none).

@@ -65,6 +65,14 @@ inline bool loginHoldValid(int s) {
 }
 extern uint16_t loginHoldSec;
 
+// Client mode: the timer's address. DHCP (default) or fixed. Addresses as
+// IPAddress's uint32 (network byte order, as lwIP keeps them).
+struct StaIpConfig {
+    uint8_t  fixed = 0;
+    uint32_t ip = 0, mask = 0, gw = 0, dns = 0;
+};
+extern StaIpConfig staIp;
+
 struct ElrsSettings {
     bool     enabled   = false;
     uint8_t  transport = 1;       // 1 UART straight to the ESP-NOW bridge (default), 0 TCP (elrs-netpack XIAO)

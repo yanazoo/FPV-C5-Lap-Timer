@@ -11,6 +11,7 @@ Settings     settings;
 RaceRules    raceRules;
 ConnLimits   connLimits;
 uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
+StaIpConfig  staIp;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -115,6 +116,12 @@ void saveAdminPassword(const String& pw) {
     prefs.end();
 }
 
+void saveStaIp() {
+    prefs.begin("net", false);
+    prefs.putBytes("ipcfg", &staIp, sizeof staIp);
+    prefs.end();
+}
+
 void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP,
              uint8_t fallbackSec) {
     netMode = mode;
@@ -204,6 +211,9 @@ void loadAll() {
     staSsid = prefs.getString("stassid", "");
     staPass = prefs.getString("stapass", "");
     netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
+    StaIpConfig ipc;
+    if (prefs.getBytes("ipcfg", &ipc, sizeof ipc) == sizeof ipc) staIp = ipc;
+    if (staIp.fixed && (!staIp.ip || !staIp.mask)) staIp.fixed = 0;
     if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
     prefs.end();
 }

@@ -38,6 +38,7 @@ void c5Begin();
 void c5Configure(const uint16_t mhz[8], const uint16_t enter[8], const uint16_t exit[8]);
 void c5SetGain(int gain);
 void c5ResetDetectors();             // race start
+void c5Restart();                    // ask the C5 to restart (C5MK with the R command)
 bool c5PopPass(C5Pass* out);
 C5SlotLive c5Live(int slot);
 C5Status c5Status();
