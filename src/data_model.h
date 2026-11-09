@@ -43,17 +43,17 @@ struct RaceRules {
 // connection; viewers (not logged in) get the light spectator screen and the
 // oldest viewer is disconnected when there are too many. Limits per WiFi mode
 // leave headroom: admins get 10 Hz RSSI telemetry, viewers only race events.
-//   host mode (our access point, 10 stations at most): admins 1-3, viewers
-//     0-5, so with the netpack XIAO at most 9 stations (the netpack is not
+//   host mode (our access point, 10 stations at most): admins 1-4, viewers
+//     0-5, so with the netpack XIAO at most 10 stations (the netpack is not
 //     counted, and a full access point makes room for it: ws_handler);
-//   client mode (a router): admins 1-3, viewers 0-8 (lwIP has 16 TCP
+//   client mode (a router): admins 1-4, viewers 0-8 (lwIP has 16 TCP
 //     connections: admins + viewers + netpack + page loads).
 struct ConnLimits {
     uint8_t adminMax   = 2;
     uint8_t viewHost   = 3;
     uint8_t viewClient = 6;
 };
-constexpr uint8_t CONN_ADMIN_MAX = 3, CONN_VIEW_HOST_MAX = 5, CONN_VIEW_CLIENT_MAX = 8;
+constexpr uint8_t CONN_ADMIN_MAX = 4, CONN_VIEW_HOST_MAX = 5, CONN_VIEW_CLIENT_MAX = 8;
 constexpr int     AP_MAX_STATIONS = 10;   // ESP32-S3 access point
 
 struct ElrsSettings {

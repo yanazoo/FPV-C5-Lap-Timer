@@ -101,7 +101,7 @@ ws_role = {}        # wfile -> {"since": s, "admin": bool}
 sessions = {}       # token -> last seen (s)
 SESSION_GRACE = 60.0
 CONN = {"adminMax": 2, "viewHost": 3, "viewClient": 6}
-CONN_LIMITS = {"adminLimit": 3, "viewHostLimit": 5, "viewClientLimit": 8}
+CONN_LIMITS = {"adminLimit": 4, "viewHostLimit": 5, "viewClientLimit": 8}
 
 
 def live_sessions():
