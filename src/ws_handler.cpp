@@ -7,6 +7,7 @@
 #include "race.h"
 #include <esp_netif.h>
 #include <esp_wifi.h>
+#include <WiFi.h>
 #include "elrs.h"
 #include "sd_store.h"
 #include "wifi_mgr.h"
@@ -206,6 +207,54 @@ void wsLoop(uint32_t now) {
 // to join this access point. When it is not connected and all stations are
 // taken, one station is sent off: never the netpack's last address or an
 // admin's device; first a device with no page open, else a viewer.
+//
+// A phone that is sent off joins again within seconds and would take the
+// place back before the netpack. So a station sent off is kept out for
+// kHoldOffMs (sent off again as soon as it joins) while the netpack is still
+// missing.
+static constexpr uint32_t kHoldOffMs = 60000;
+static constexpr int      kHeldMax   = 4;
+struct HeldStation {
+    uint8_t  mac[6];
+    uint32_t since;
+    bool     used;
+};
+static HeldStation held[kHeldMax];
+static portMUX_TYPE heldMux = portMUX_INITIALIZER_UNLOCKED;
+
+static void holdOff(const uint8_t mac[6]) {
+    portENTER_CRITICAL(&heldMux);
+    int slot = 0;
+    for (int i = 0; i < kHeldMax; i++) {   // a free place, else the oldest
+        if (!held[i].used) { slot = i; break; }
+        if ((int32_t)(held[i].since - held[slot].since) < 0) slot = i;
+    }
+    memcpy(held[slot].mac, mac, 6);
+    held[slot].since = millis();
+    held[slot].used = true;
+    portEXIT_CRITICAL(&heldMux);
+}
+
+// WiFi event (event task): a held station joined again. Send it off again
+// while the hold lasts and the netpack is still missing.
+static void onStationJoined(arduino_event_id_t, arduino_event_info_t info) {
+    const uint8_t* mac = info.wifi_ap_staconnected.mac;
+    uint16_t aid = info.wifi_ap_staconnected.aid;
+    bool keepOut = false;
+    uint32_t now = millis();
+    portENTER_CRITICAL(&heldMux);
+    for (int i = 0; i < kHeldMax; i++) {
+        if (!held[i].used) continue;
+        if (now - held[i].since >= kHoldOffMs) { held[i].used = false; continue; }
+        if (memcmp(held[i].mac, mac, 6) == 0) keepOut = true;
+    }
+    portEXIT_CRITICAL(&heldMux);
+    if (keepOut && elrsWantsNetpack()) {
+        Serial.printf("[WiFi] station %u kept out (room held for the netpack)\n", aid);
+        esp_wifi_deauth_sta(aid);
+    }
+}
+
 static void keepRoomForNetpack(uint32_t now) {
     static uint32_t last = 0;
     if (now - last < 3000 || !netIsAp() || !elrsWantsNetpack()) return;
@@ -248,7 +297,9 @@ static void keepRoomForNetpack(uint32_t now) {
     if (pick < 0) return;
     uint16_t aid = 0;
     if (esp_wifi_ap_get_sta_aid(pairs[pick].mac, &aid) == ESP_OK && aid) {
-        Serial.printf("[WiFi] access point full: station %u sent off to make room for the netpack\n", aid);
+        Serial.printf("[WiFi] access point full: station %u sent off for %lu s to make room for the netpack\n", aid,
+                      (unsigned long)(kHoldOffMs / 1000));
+        holdOff(pairs[pick].mac);
         esp_wifi_deauth_sta(aid);
     }
 }
@@ -370,6 +421,7 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
 }
 
 void initWsHandler() {
+    WiFi.onEvent(onStationJoined, ARDUINO_EVENT_WIFI_AP_STACONNECTED);
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);
 }
