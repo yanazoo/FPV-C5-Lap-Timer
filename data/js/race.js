@@ -115,7 +115,6 @@ function buildRaceCards(){
       +'<div class="pilot-best-row">'
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
-        +'<span class="pilot-delta" id="rcDelta'+p.id+'"></span>'
         +'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>'
       +'</div>'
       +'<div class="lap-table-wrap">'
@@ -132,7 +131,6 @@ function buildRaceCards(){
       val  : document.getElementById('rssiVal'+p.id),
       best : document.getElementById('rcBest'+p.id),
       badge: document.getElementById('rcBadge'+p.id),
-      delta: document.getElementById('rcDelta'+p.id),
       body : document.getElementById('lapBody'+p.id)
     };
   });
@@ -171,12 +169,6 @@ function lapRowEl(r,isBest,idx){
   tr.innerHTML='<td>'+r.label+'</td><td class="lap-time">'+fmt(r.lapMs)+'</td><td>'+fmt(r.cum)+'</td>';
   return tr;
 }
-function showDelta(p,lapMs){
-  var e=p.el,delta=e?e.delta:document.getElementById('rcDelta'+p.id);
-  if(!delta)return;
-  if(p.bestLapMs&&lapMs){var d=lapMs-p.bestLapMs;if(d===0){delta.textContent='★ BEST';delta.className='pilot-delta faster';}else{delta.textContent=fmtDelta(d);delta.className='pilot-delta '+(d<0?'faster':'slower');}}
-  else{delta.textContent='';delta.className='pilot-delta';}
-}
 // Redraw a card's lap table from the slot's lap history (p.rows).
 function renderLapRows(p){
   var e=p.el,tbody=e?e.body:document.getElementById('lapBody'+p.id);
@@ -190,7 +182,6 @@ function renderLapRows(p){
     tbody.appendChild(lapRowEl(r,isBest,i));
   }
   var last=p.rows[p.rows.length-1];
-  showDelta(p,last?last.lapMs:0);
 }
 function addLapRow(p, lapMs, cumMs, quiet){
   var r={label:lapMode==='immediate'?p.lapCount:(p.lapCount===1?'HS':(p.lapCount-1)),lapMs:lapMs,cum:cumMs};
@@ -200,7 +191,6 @@ function addLapRow(p, lapMs, cumMs, quiet){
   var isBest=(p.bestLapMs===lapMs&&lapMs>0);
   if(isBest)tbody.querySelectorAll('tr.best-row').forEach(r=>r.classList.remove('best-row'));
   tbody.insertBefore(lapRowEl(r,isBest,p.rows.length-1),tbody.firstChild);
-  showDelta(p,lapMs);
   if(quiet)return;
   var card=e?e.card:document.getElementById('rc-'+p.id);
   card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
@@ -299,7 +289,6 @@ function resetLaps(){
     p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;p.rows=[];p.lastTs=0;p.done=false;
     var e=p.el;
     var b=e?e.body:document.getElementById('lapBody'+p.id);if(b)b.innerHTML='';
-    var d=e?e.delta:document.getElementById('rcDelta'+p.id);if(d)d.textContent='';
     updateRaceCard(p);
   });
   renderRanking();

@@ -91,7 +91,6 @@ function fmtTimer(ms){var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/600
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // RSSI bar: floor (~100) to a strong close pass (~900).
 function rssiPct(v){return Math.max(0,Math.min(100,((v-100)/(900-100))*100));}
-function fmtDelta(ms){return(ms>0?'+':'')+(ms/1000).toFixed(3)+'s';}
 
 function switchTab(tab){
   // Soft auth gate — non-race tabs require admin login.
