@@ -3,8 +3,9 @@
 // ── Soft auth ────────────────────────────────────────────────────────────
 // Accidental-clobber protection, not real security. A single shared admin
 // password (stored in NVS on the web node) gates the non-race tabs and the
-// race-control buttons. Session-scoped (sessionStorage) so a shared device
-// doesn't stay authed across a browser-close.
+// race-control buttons. The login is a token from the timer, kept in
+// localStorage; the timer drops it once no browser has used it for the hold
+// time set in settings (closed browser, phone screen off), or on logout.
 
 // Header button: login when logged out, logout when logged in.
 function onAuthBtn(){ if(isAuthed)logout(); else openLoginModal(); }
@@ -34,7 +35,7 @@ async function submitLogin(){
       return;
     }
     if(r.ok&&j.token){
-      authToken=j.token;isAuthed=true;sessionStorage.setItem('authToken',authToken);
+      authToken=j.token;isAuthed=true;lsSet('authToken',authToken);
       sendHello();   // this connection becomes an admin's (RSSI, the date)
       if(pw){pw.blur();pw.value='';}   // close the keyboard; leave no password behind
       closeLoginModal();applyAuthState();
@@ -69,7 +70,7 @@ function logout(){
 
 // Forget the login on this tab (logout, or the timer no longer knows it).
 function dropAuth(){
-  authToken='';isAuthed=false;sessionStorage.removeItem('authToken');
+  authToken='';isAuthed=false;lsSet('authToken','');
   applyAuthState();
 }
 

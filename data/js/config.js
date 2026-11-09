@@ -394,6 +394,7 @@ async function loadConnLimits(){
     fillConnSelect('connAdmin',1,c.adminLimit,c.adminMax);
     fillConnSelect('connViewHost',0,c.viewHostLimit,c.viewHost);
     fillConnSelect('connViewClient',0,c.viewClientLimit,c.viewClient);
+    var h=document.getElementById('connHold');if(h&&c.holdSec)h.value=String(c.holdSec);
     var now=document.getElementById('connNow');
     if(now)now.innerHTML='<span>現在（'+(c.ap?'ホスト':'クライアント')+'モード）</span><b>管理者 '+c.logins+' / '+c.adminMax
       +' ・ 観戦 '+c.viewers+' / '+c.viewerLimit+'</b>';
@@ -403,7 +404,7 @@ async function saveConnLimits(){
   var v=id=>parseInt(document.getElementById(id).value,10);
   try{
     var r=await fetch('/api/conn',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({adminMax:v('connAdmin'),viewHost:v('connViewHost'),viewClient:v('connViewClient')})});
+      body:JSON.stringify({adminMax:v('connAdmin'),viewHost:v('connViewHost'),viewClient:v('connViewClient'),holdSec:v('connHold')})});
     if(!r.ok)throw 0;
     toast('✅ 接続台数を保存しました');
     loadConnLimits();

@@ -60,9 +60,13 @@ var editingRosterId = null;
 // password, default "admin") get access to Config/Calib/SD + race controls.
 // Session-scoped: clears on tab close so a shared device doesn't stay
 // authed forever.
-// Admin login: the timer's token for this tab (sessionStorage). Without
-// one the page is a viewer (light spectator screen).
-var authToken = sessionStorage.getItem('authToken')||'';
+// Admin login: the timer's token (localStorage, so a page that a phone
+// reloads after its screen was off keeps it; the timer itself drops the
+// login after the hold time set in settings). Without one the page is a
+// viewer (light spectator screen).
+function lsGet(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){}}
+var authToken = lsGet('authToken');
 var isAuthed = !!authToken;
 var pendingTab = null;       // tab the user is trying to reach via login
 var sdPresent = false;

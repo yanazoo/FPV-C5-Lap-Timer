@@ -55,6 +55,15 @@ struct ConnLimits {
 };
 constexpr uint8_t CONN_ADMIN_MAX = 4, CONN_VIEW_HOST_MAX = 5, CONN_VIEW_CLIENT_MAX = 8;
 constexpr int     AP_MAX_STATIONS = 10;   // ESP32-S3 access point
+// How long a login is held after its last browser left (closed, phone
+// screen off): seconds, one of these (settings).
+constexpr uint16_t LOGIN_HOLD_CHOICES[] = {60, 180, 300, 600, 1800};
+constexpr uint16_t LOGIN_HOLD_DEFAULT   = 60;
+inline bool loginHoldValid(int s) {
+    for (uint16_t c : LOGIN_HOLD_CHOICES) if (c == s) return true;
+    return false;
+}
+extern uint16_t loginHoldSec;
 
 struct ElrsSettings {
     bool     enabled   = false;

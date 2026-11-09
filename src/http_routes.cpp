@@ -513,10 +513,10 @@ void registerHttpRoutes() {
         char b[256];
         snprintf(b, sizeof b,
                  R"({"adminMax":%u,"viewHost":%u,"viewClient":%u,"adminLimit":%u,"viewHostLimit":%u,)"
-                 R"("viewClientLimit":%u,"ap":%s,"admins":%d,"logins":%d,"viewers":%d,"viewerLimit":%d})",
+                 R"("viewClientLimit":%u,"ap":%s,"admins":%d,"logins":%d,"viewers":%d,"viewerLimit":%d,"holdSec":%u})",
                  connLimits.adminMax, connLimits.viewHost, connLimits.viewClient, CONN_ADMIN_MAX, CONN_VIEW_HOST_MAX,
                  CONN_VIEW_CLIENT_MAX, netIsAp() ? "true" : "false", admins, wsAdminLogins(), viewers,
-                 wsViewerLimit());
+                 wsViewerLimit(), loginHoldSec);
         req->send(200, "application/json", b);
     });
     onJson("/api/conn", [](AsyncWebServerRequest* req, JsonDocument& d) {
@@ -524,6 +524,7 @@ void registerHttpRoutes() {
         if (!d["viewHost"].isNull()) connLimits.viewHost = constrain((int)d["viewHost"], 0, (int)CONN_VIEW_HOST_MAX);
         if (!d["viewClient"].isNull())
             connLimits.viewClient = constrain((int)d["viewClient"], 0, (int)CONN_VIEW_CLIENT_MAX);
+        if (!d["holdSec"].isNull() && loginHoldValid(d["holdSec"] | 0)) loginHoldSec = d["holdSec"] | 0;
         saveConnLimits();
         ok(req);
     });

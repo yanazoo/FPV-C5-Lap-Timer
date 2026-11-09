@@ -10,6 +10,7 @@ int          activePilots[MAX_ACTIVE];
 Settings     settings;
 RaceRules    raceRules;
 ConnLimits   connLimits;
+uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -95,6 +96,7 @@ void saveSettings() {
 void saveConnLimits() {
     prefs.begin("settings", false);
     prefs.putBytes("c", &connLimits, sizeof connLimits);
+    prefs.putUShort("hold", loginHoldSec);
     prefs.end();
 }
 
@@ -167,6 +169,8 @@ void loadAll() {
     if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
+    loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);
+    if (!loginHoldValid(loginHoldSec)) loginHoldSec = LOGIN_HOLD_DEFAULT;
     prefs.end();
     connLimits.adminMax   = constrain(connLimits.adminMax, (uint8_t)1, CONN_ADMIN_MAX);
     connLimits.viewHost   = min(connLimits.viewHost, CONN_VIEW_HOST_MAX);

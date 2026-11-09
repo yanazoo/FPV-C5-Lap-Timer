@@ -99,15 +99,15 @@ ws_lock = threading.Lock()
 # limit are closed with code 4001; admin logins are limited.
 ws_role = {}        # wfile -> {"since": s, "admin": bool}
 sessions = {}       # token -> last seen (s)
-SESSION_GRACE = 60.0
-CONN = {"adminMax": 2, "viewHost": 3, "viewClient": 6}
+SESSION_GRACE = 60.0   # "holdSec" in CONN
+CONN = {"adminMax": 2, "viewHost": 3, "viewClient": 6, "holdSec": 60}
 CONN_LIMITS = {"adminLimit": 4, "viewHostLimit": 5, "viewClientLimit": 8}
 
 
 def live_sessions():
     now = time.monotonic()
     held = {r.get("token") for r in ws_role.values() if r.get("admin")}
-    return [t for t, seen in sessions.items() if t in held or now - seen < SESSION_GRACE]
+    return [t for t, seen in sessions.items() if t in held or now - seen < CONN["holdSec"]]
 
 
 def ws_close(wfile, code):

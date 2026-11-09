@@ -25,10 +25,10 @@ void wsText(const String& msg) { ws.textAll(msg); }
 // than allowed the oldest one is closed (code 4001, so it does not reconnect
 // by itself). Admin logins are limited too: a login past the limit is
 // refused. A login stays held while one of its browsers is connected and for
-// kSessionGraceMs after (a page reload keeps it).
+// loginHoldSec after (settings; a page reload or a phone screen turned off
+// for a while keeps it).
 static constexpr int      kMaxClients     = 24;
 static constexpr int      kMaxSessions    = CONN_ADMIN_MAX;
-static constexpr uint32_t kSessionGraceMs = 60000;
 static constexpr uint32_t kHelloGraceMs   = 3000;   // time a new client has to say who it is
 
 struct WsClient {
@@ -71,7 +71,7 @@ static bool sessionLive(int i, uint32_t now) {
     if (!sessions[i].used) return false;
     for (int c = 0; c < wsIdCount; c++)
         if (wsClients[c].session == i) return true;
-    return now - sessions[i].lastSeen < kSessionGraceMs;
+    return now - sessions[i].lastSeen < (uint32_t)loginHoldSec * 1000u;
 }
 
 static int liveSessions(uint32_t now) {
