@@ -227,6 +227,7 @@ To cover lost packets:
 ## Restart and a fixed IP address
 
 - Settings → "🔄 再起動" → "タイマーを再起動" restarts the timer (XIAO ESP32-S3); the C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart.
+- Settings → "📱 接続用 QR コード": scan to open the page. Host mode shows two codes (join the timer's WiFi, then open the page); client mode one (open the page by IP address). "大きく表示" shows them large.
 - Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
 
 ## Connections and the spectator screen
@@ -278,5 +279,6 @@ gear.
 ## Licences
 
 FPVGate C5MK (including `c5host`) is CC BY-NC-SA 4.0 (non-commercial);
-vrxc_elrs and elrs-netpack are GPL-3.0. The combined firmware is meant for
+vrxc_elrs and elrs-netpack are GPL-3.0; the QR code library
+(`data/js/qrcode.js`, qrcode-generator by Kazuhiko Arase) is MIT. The combined firmware is meant for
 personal, non-commercial use.

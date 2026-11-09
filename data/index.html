@@ -217,6 +217,15 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .res-legend button.off{opacity:.35}
 .res-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 .res-bar{height:8px;border-radius:4px;background:var(--accent)}
+/* Connection QR codes */
+.qr-wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+.qr-item{display:flex;flex-direction:column;align-items:center;gap:6px;max-width:220px}
+.qr-item .qr{background:#fff;padding:8px;border-radius:8px;line-height:0}
+.qr-item .qr svg{width:180px;height:180px}
+.qr-item .cap{font-size:12px;color:var(--tx);text-align:center;font-weight:600}
+.qr-item .sub{font-size:11px;color:var(--muted);text-align:center;word-break:break-all}
+.modal-box.qr-big{max-width:560px}
+.qr-big .qr-item{max-width:260px}.qr-big .qr-item .qr svg{width:240px;height:240px}
 /* Viewers (not logged in): the light spectator screen */
 #viewBadge{display:none;font-size:11px;color:var(--muted);border:1px solid var(--bd);border-radius:10px;padding:1px 8px;white-space:nowrap}
 body.viewer #viewBadge{display:inline-block}
@@ -606,6 +615,15 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>
 
+  <!-- ── 接続用 QR コード ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">📱 接続用 QR コード</h3>
+    <p class="section-desc">スマホのカメラで読み取ると、タイマーの画面を開けます。</p>
+    <div id="qrWrap" class="qr-wrap"><span class="res-muted">読み込み中…</span></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button onclick="showQrBig()" class="btn-secondary">🔍 大きく表示</button></div>
+  </div>
+
   <!-- ── 接続台数 ── -->
   <div class="global-config-card">
     <h3 class="global-title">👥 接続台数</h3>
@@ -726,6 +744,14 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="confirmSdErase()" class="btn-danger">すべて削除する</button>
       <button onclick="closeSdErase()" class="btn-secondary">キャンセル</button>
     </div>
+  </div>
+</div>
+
+<!-- Connection QR codes, large, to show to others. -->
+<div id="qrModal" class="modal-overlay" onclick="this.style.display='none'">
+  <div class="modal-box qr-big" onclick="event.stopPropagation()">
+    <div id="qrBig" class="qr-wrap"></div>
+    <div class="modal-actions"><button onclick="document.getElementById('qrModal').style.display='none'" class="btn-secondary">閉じる</button></div>
   </div>
 </div>
 

@@ -336,6 +336,7 @@ async function loadNetSettings(){
     else txt='ホスト（アクセスポイント） '+esc(st.ip);
     document.getElementById('netStatus').innerHTML='<span>現在</span><b>'+txt+'</b>';
     onNetMode();
+    renderConnQr(d);
   }catch(e){}
 }
 async function saveNetSettings(){
@@ -440,4 +441,47 @@ async function restartAll(){
     if(!r.ok)throw 0;
     toast('🔄 再起動しています…（20 秒ほどで戻ります）',8000);
   }catch(e){toast('⚠️ 接続エラー');}
+}
+
+// ── 接続用 QR コード ────────────────────────────────────────────────────
+// Host mode: ① join the timer's WiFi, ② open the page. Client mode: open
+// the page by IP address (the phone on the same router). The QR library
+// (qrcode-generator, MIT) is loaded only when this card is shown.
+var qrLib=null,qrItems=[];
+function loadQrLib(){
+  if(qrLib)return qrLib;
+  qrLib=new Promise((ok,ng)=>{
+    var s=document.createElement('script');s.src='/js/qrcode.js';
+    s.onload=()=>{qrcode.stringToBytes=qrcode.stringToBytesFuncs['UTF-8'];ok();};
+    s.onerror=()=>{qrLib=null;ng();};
+    document.head.appendChild(s);
+  });
+  return qrLib;
+}
+// WIFI: fields escape \ ; , : "
+function wifiEsc(s){return String(s).replace(/([\\;,:"])/g,'\\$1');}
+function qrSvg(text){
+  var q=qrcode(0,'M');q.addData(text);q.make();
+  return q.createSvgTag({cellSize:4,margin:2,scalable:true});
+}
+async function renderConnQr(d){
+  var wrap=document.getElementById('qrWrap');if(!wrap)return;
+  var st=(d&&d.status)||{},ip=st.ip||location.hostname,url='http://'+ip+'/';
+  qrItems=[];
+  if(st.ap){
+    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,text:'WIFI:T:WPA;S:'+wifiEsc(d.apSsid)+';P:'+wifiEsc(d.apPass)+';;'});
+    qrItems.push({cap:'② 画面を開く',sub:url,text:url});
+  }else{
+    qrItems.push({cap:'画面を開く（同じ WiFi に接続してから）',sub:url,text:url});
+  }
+  try{await loadQrLib();}catch(e){wrap.innerHTML='<span class="res-muted">QR コードを作れませんでした（再読み込みしてください）</span>';return;}
+  wrap.innerHTML=qrHtml();
+}
+function qrHtml(){
+  return qrItems.map(i=>'<div class="qr-item"><div class="qr">'+qrSvg(i.text)+'</div><div class="cap">'+esc(i.cap)+'</div><div class="sub">'+esc(i.sub)+'</div></div>').join('');
+}
+function showQrBig(){
+  if(!qrItems.length||typeof qrcode==='undefined')return;
+  document.getElementById('qrBig').innerHTML=qrHtml();
+  document.getElementById('qrModal').style.display='flex';
 }
