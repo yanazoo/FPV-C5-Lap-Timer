@@ -641,7 +641,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <select id="connViewClient" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
     <div class="config-row" style="gap:8px"><label style="width:150px">ログインの保持</label>
       <select id="connHold" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="60">1 分</option><option value="180">3 分</option><option value="300">5 分</option>
+        <option value="15">15 秒</option><option value="30">30 秒</option><option value="60">1 分</option><option value="180">3 分</option><option value="300">5 分</option>
         <option value="600">10 分</option><option value="1800">30 分</option>
       </select></div>
     <p class="section-desc" style="margin-top:4px">ログインの保持：ブラウザーを閉じたり、スマホの画面が消えて接続が切れたりしてから、この時間がたつとログアウトと同じ扱いになり、管理者の枠が空きます（その間に戻ればログインのまま）。「ログアウト」を押せばすぐ空きます。</p>
