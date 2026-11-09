@@ -562,7 +562,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── WiFi ── -->
   <div class="global-config-card">
     <h3 class="global-title">📶 WiFi</h3>
-    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く）。クライアントで設定した時間（15 / 30 / 60 秒）接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
+    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く。<code>.local</code> は IP に自動で切り替わります）。クライアントで設定した時間（15 / 30 / 60 秒）接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
     <div id="netStatus" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">動作モード</label>
       <select id="netMode" onchange="onNetMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">

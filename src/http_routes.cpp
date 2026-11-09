@@ -98,6 +98,35 @@ void copyStr(JsonDocument& d, const char* key, char* dst, size_t cap) {
 }  // namespace
 
 void registerHttpRoutes() {
+    // ── Opened as http://fpv-c5-lt.local: go to the IP address ─────────────
+    // Chrome's Local Network Access treats a page on a .local name over plain
+    // http as public and blocks its requests to .local (scripts, API,
+    // WebSocket): the page loads but nothing runs. Opened by IP address the
+    // page and its requests are both on the local network. So any request
+    // for a .local host is sent on to the same path on our IP address.
+    server.addMiddleware([](AsyncWebServerRequest* req, ArMiddlewareNext next) {
+        String host = req->host();
+        int colon = host.indexOf(':');
+        if (colon >= 0) host.remove(colon);
+        host.toLowerCase();
+        if (host.endsWith(".local")) {
+            String to = "http://" + netIp().toString() + req->url();
+            char sep = '?';
+            for (size_t i = 0; i < req->params(); i++) {
+                const AsyncWebParameter* p = req->getParam(i);
+                if (p->isPost() || p->isFile()) continue;
+                to += sep + p->name() + "=" + p->value();
+                sep = '&';
+            }
+            AsyncWebServerResponse* res = req->beginResponse(302);
+            res->addHeader("Location", to);
+            res->addHeader("Cache-Control", "no-store");
+            req->send(res);
+            return;
+        }
+        next();
+    });
+
     // ── Captive portal probes (first, so they take priority) ───────────────
     for (const char* p : {"/generate_204", "/gen_204", "/connecttest.txt", "/hotspot-detect.html",
                           "/library/test/success.html", "/success.txt", "/canonical.html", "/ncsi.txt",
