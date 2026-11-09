@@ -263,6 +263,12 @@ void registerHttpRoutes() {
         else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
     });
 
+    // The lap button on a race card (admins): a pass for that slot now.
+    onJson("/api/laps/manual", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (raceManualLap(d["slot"] | -1)) ok(req);
+        else req->send(409, "application/json", R"({"ok":false,"reason":"not racing"})");
+    });
+
     server.on("/api/laps", HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();

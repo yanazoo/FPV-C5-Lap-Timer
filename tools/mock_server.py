@@ -469,6 +469,17 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sd/files/delete":
             gone = SD_FILES.pop(d.get("path", "").lstrip("/"), None)
             return self.reply({"ok": gone is not None})
+        if p == "/api/laps/manual":   # the admin's lap button: a pass now
+            r = state["race"]
+            slot = int(d.get("slot", -1))
+            if not r["running"] or not 0 <= slot < 8:
+                return self.reply({"ok": False, "reason": "not racing"}, 409)
+            mine = [l for l in r["laps"] if l["slot"] == slot]
+            ts = now_ms()
+            lap_ms = ts - (mine[-1]["ts"] if mine else int(r["t0"] * 1000))
+            r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
+            broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
+            return self.reply({"ok": True})
         if p == "/api/sd/erase":
             if d.get("password") != state["password"]:
                 return self.reply({"ok": False, "reason": "password"}, 401)

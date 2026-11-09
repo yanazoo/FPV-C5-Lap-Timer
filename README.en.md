@@ -227,6 +227,7 @@ To cover lost packets:
 ## Restart and a fixed IP address
 
 - Settings → "🔄 再起動" → "タイマーを再起動" restarts the timer (XIAO ESP32-S3); the C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart.
+- "+LAP" on a race card (admins, during a race), next to BEST: records a lap for that pilot now (a pass the receiver missed), like a gate pass; ignored within the cooldown.
 - Settings → "📱 接続用 QR コード": scan to open the page. Host mode shows two codes (join the timer's WiFi, then open the page); client mode one (open the page by IP address). "大きく表示" shows them large.
 - Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
 

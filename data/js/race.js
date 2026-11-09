@@ -116,6 +116,7 @@ function buildRaceCards(){
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
         +'<span class="pilot-delta" id="rcDelta'+p.id+'"></span>'
+        +'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>'
       +'</div>'
       +'<div class="lap-table-wrap">'
         +'<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead>'
@@ -140,6 +141,7 @@ function buildRaceCards(){
   // Rebuilding the cards (another browser assigned pilots) keeps the laps.
   slots.forEach(p=>renderLapRows(p));
   renderRanking();
+  setBtns(raceRunning);   // the new cards' lap buttons
 }
 
 function updateRaceCard(p){
@@ -408,6 +410,17 @@ function setBtns(running){
   // Clear is only allowed while stopped (not during a running race).
   var btnClear=document.getElementById('btnClear');
   if(btnClear)btnClear.disabled=locked||running;
+  // Lap buttons on the race cards: admins, while the race runs.
+  document.querySelectorAll('.lap-btn').forEach(b=>b.disabled=locked||!running);
+}
+// Record a lap for this pilot now (a gate pass missed by the receiver).
+async function manualLap(slot,btn){
+  if(!isAuthed||!raceRunning)return;
+  if(btn){btn.classList.add('hit');setTimeout(()=>btn.classList.remove('hit'),300);}
+  try{
+    var r=await fetch('/api/laps/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:slot})});
+    if(!r.ok)toast('⚠ レース中だけ記録できます');
+  }catch(e){toast('⚠ 接続エラー');}
 }
 // finished: the firmware's verdict for this lap (it knows the holeshot lap
 // doesn't count). Without it, count laps the same way: the holeshot isn't a lap.

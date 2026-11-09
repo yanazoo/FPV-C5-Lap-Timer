@@ -410,10 +410,39 @@ static void serviceRaceDirector() {
     }
 }
 
+// Manual laps (the admin's lap button): the press time per slot, taken by
+// raceLoop() like a gate pass (cooldown, OSD, SD and browsers as usual).
+static portMUX_TYPE manualMux = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t manualAt[MAX_ACTIVE];
+static uint8_t  manualPending = 0;
+
+bool raceManualLap(int slot) {
+    if (slot < 0 || slot >= MAX_ACTIVE || !raceCore.running() || !rosterValid(activePilots[slot])) return false;
+    portENTER_CRITICAL(&manualMux);
+    manualAt[slot] = millis();
+    manualPending |= (uint8_t)(1u << slot);
+    portEXIT_CRITICAL(&manualMux);
+    return true;
+}
+
 void raceLoop() {
     serviceRaceDirector();
     C5Pass p;
     while (c5PopPass(&p)) onPass(p);
+    if (manualPending) {
+        uint8_t pending;
+        uint32_t at[MAX_ACTIVE];
+        portENTER_CRITICAL(&manualMux);
+        pending = manualPending;
+        memcpy(at, manualAt, sizeof at);
+        manualPending = 0;
+        portEXIT_CRITICAL(&manualMux);
+        for (int s = 0; s < MAX_ACTIVE; s++)
+            if (pending & (1u << s)) {
+                Serial.printf("[Race] slot %d manual lap\n", s);
+                onPass(C5Pass{(uint8_t)s, at[s], 0});
+            }
+    }
     uint32_t now = millis();
     serviceTimedRace(now);
     if (now - lastRssiSend >= RSSI_INTERVAL_MS) {

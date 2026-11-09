@@ -105,6 +105,10 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .rssi-mini-val{font-size:10px;color:var(--muted);min-width:36px;text-align:right}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
+.lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.lap-btn:disabled{opacity:.3;cursor:default}
+.lap-btn.hit{background:var(--accent);color:#fff}
+body.viewer .lap-btn{display:none}
 .pilot-best{font-size:14px;font-weight:700;color:var(--accent)}
 .pilot-delta{font-size:11px;font-weight:700;margin-left:auto}
 .pilot-delta.faster{color:var(--ok)}.pilot-delta.slower{color:var(--err)}
