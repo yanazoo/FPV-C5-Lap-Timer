@@ -212,7 +212,7 @@ void wsLoop(uint32_t now) {
 // place back before the netpack. So a station sent off is kept out for
 // kHoldOffMs (sent off again as soon as it joins) while the netpack is still
 // missing.
-static constexpr uint32_t kHoldOffMs = 60000;
+static constexpr uint32_t kHoldOffMs = 30000;
 static constexpr int      kHeldMax   = 4;
 struct HeldStation {
     uint8_t  mac[6];
