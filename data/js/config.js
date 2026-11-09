@@ -460,6 +460,10 @@ function loadQrLib(){
 }
 // WIFI: fields escape \ ; , : "
 function wifiEsc(s){return String(s).replace(/([\\;,:"])/g,'\\$1');}
+// Join a network: WPA with a password, or an open one.
+function wifiQr(ssid,pass){
+  return pass?'WIFI:T:WPA;S:'+wifiEsc(ssid)+';P:'+wifiEsc(pass)+';;':'WIFI:T:nopass;S:'+wifiEsc(ssid)+';;';
+}
 function qrSvg(text){
   var q=qrcode(0,'M');q.addData(text);q.make();
   return q.createSvgTag({cellSize:4,margin:2,scalable:true});
@@ -469,10 +473,22 @@ async function renderConnQr(d){
   var st=(d&&d.status)||{},ip=st.ip||location.hostname,url='http://'+ip+'/';
   qrItems=[];
   if(st.ap){
-    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,text:'WIFI:T:WPA;S:'+wifiEsc(d.apSsid)+';P:'+wifiEsc(d.apPass)+';;'});
+    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,text:wifiQr(d.apSsid,d.apPass)});
     qrItems.push({cap:'② 画面を開く',sub:url,text:url});
   }else{
-    qrItems.push({cap:'画面を開く（同じ WiFi に接続してから）',sub:url,text:url});
+    // Client mode: the router's network (the password only comes to a
+    // logged-in admin), then the page.
+    var w=null;
+    try{
+      var r=await fetch('/api/net/wifi-qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+      if(r.ok)w=await r.json();
+    }catch(e){}
+    if(w&&w.ssid){
+      qrItems.push({cap:'① ルーターの WiFi に接続',sub:w.ssid,text:wifiQr(w.ssid,w.pass)});
+      qrItems.push({cap:'② 画面を開く',sub:url,text:url});
+    }else{
+      qrItems.push({cap:'画面を開く（同じ WiFi に接続してから）',sub:url,text:url});
+    }
   }
   try{await loadQrLib();}catch(e){wrap.innerHTML='<span class="res-muted">QR コードを作れませんでした（再読み込みしてください）</span>';return;}
   wrap.innerHTML=qrHtml();

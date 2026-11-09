@@ -601,6 +601,19 @@ void registerHttpRoutes() {
         ok(req);
         wsText(R"({"type":"config_changed","what":"net"})");
     });
+    // Client mode's network for the connection QR code. The password is not
+    // in GET /api/net; only a logged-in admin (token) gets it here.
+    onJson("/api/net/wifi-qr", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!wsTokenValid(String(d["token"] | ""))) {
+            req->send(403, "application/json", R"({"ok":false,"reason":"login"})");
+            return;
+        }
+        JsonDocument o;
+        o["ssid"] = staSsid;
+        o["pass"] = staPass;
+        sendJson(req, o);
+    });
+
     // Restart button: the timer (the C5 and the bridge keep running; their
     // links come back on their own).
     server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest* req) {

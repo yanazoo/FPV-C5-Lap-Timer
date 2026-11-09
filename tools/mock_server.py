@@ -480,6 +480,10 @@ class Handler(SimpleHTTPRequestHandler):
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
             return self.reply({"ok": True})
+        if p == "/api/net/wifi-qr":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            return self.reply({"ssid": state["net"].get("staSsid") or "MyRouter", "pass": "router-pass"})
         if p == "/api/sd/erase":
             if d.get("password") != state["password"]:
                 return self.reply({"ok": False, "reason": "password"}, 401)
