@@ -252,8 +252,6 @@ body.viewer .rssi-mini-bar,body.viewer .crossing-badge,body.viewer .race-buttons
 .lapTable tbody tr.deletable{cursor:pointer}
 .lapTable tbody tr.deletable:hover td{background:rgba(255,255,255,.05)}
 .tab-btn.locked::before{content:'🔒 ';font-size:10px}
-#authHint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;display:none}
-#authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
 
 @media(max-width:900px){.calib-grid{grid-template-columns:1fr 1fr}}
 /* Race cards: 8 across on wide PC windows, 4 across on phones held sideways
@@ -356,7 +354,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button id="btnClear" onclick="clearAllLaps()" class="btn-secondary">クリア</button>
       <button id="btnVoiceTest" onclick="testVoice()" class="btn-secondary">音声テスト</button>
     </div>
-    <div id="authHint">🔒 操作するには <a onclick="onAuthBtn()">ログイン</a> が必要です</div>
   </div>
   <div class="rank-panel" id="rankPanel">
     <div class="rank-head"><b>順位</b><span id="rankRule"></span></div>

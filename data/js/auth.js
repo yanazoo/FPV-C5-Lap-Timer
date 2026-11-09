@@ -80,8 +80,6 @@ function applyAuthState(){
   document.body.classList.toggle('viewer',!isAuthed);
   var ab=document.getElementById('authBtn');
   if(ab)ab.textContent=isAuthed?'🔓 ログアウト':'🔒 ログイン';
-  var hint=document.getElementById('authHint');
-  if(hint)hint.style.display=isAuthed?'none':'block';
   if(typeof setBtns==='function')setBtns(raceRunning);
   ['btnStart','btnStop','btnClear'].forEach(function(id){
     var b=document.getElementById(id);if(b)b.title=isAuthed?'':'管理者ログインが必要です';
