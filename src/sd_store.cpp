@@ -195,7 +195,33 @@ bool sdSaveRace() {
     return true;
 }
 
-bool sdBackupRoster() {
+String sdStampedName(const char* base, const char* ext) {
+    char p[48];
+    if (!clockValid) {
+        snprintf(p, sizeof p, "/%s%s", base, ext);
+        return p;
+    }
+    time_t local = time(nullptr) + (time_t)clockTzMin * 60;
+    struct tm lt = {};
+    gmtime_r(&local, &lt);
+    snprintf(p, sizeof p, "/%s_%04d%02d%02d_%02d%02d%s", base, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday,
+             lt.tm_hour, lt.tm_min, ext);
+    return p;
+}
+
+bool sdBackupName(const String& path, const char* base, const char* ext) {
+    String head = String("/") + base, tail = ext;
+    if (!path.startsWith(head) || !path.endsWith(tail)) return false;
+    String mid = path.substring(head.length(), path.length() - tail.length());
+    if (!mid.length()) return true;   // pilots.csv
+    if (mid.length() != 14 || mid[0] != '_' || mid[9] != '_') return false;   // _YYYYMMDD_HHMM
+    for (int i = 1; i < 14; i++)
+        if (i != 9 && !isdigit((unsigned char)mid[i])) return false;
+    return true;
+}
+
+bool sdBackupRoster(String& path) {
+    path = sdStampedName("pilots", ".csv");
     String csv = "\xEF\xBB\xBFname,yomi,freq,enter,exit,slot,bind,osd\n";
     {
         Guard g;
@@ -209,7 +235,7 @@ bool sdBackupRoster() {
     }
     SdGuard g;
     if (!sdPresent) return false;
-    File f = SD.open("/pilots.csv", FILE_WRITE);
+    File f = SD.open(path, FILE_WRITE);
     if (!f) return false;
     f.print(csv);
     f.close();
@@ -227,9 +253,10 @@ static String field(const String& line, int idx) {
     return line.substring(start, end < 0 ? line.length() : end);
 }
 
-int sdRestoreRoster() {
+int sdRestoreRoster(const String& path) {
+    if (!sdBackupName(path, "pilots", ".csv")) return -1;
     String csv;
-    if (!sdReadFile("/pilots.csv", csv)) return -1;
+    if (!sdReadFile(path, csv)) return -1;
     Guard g;
     rosterCount = 0;
     for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = -1;

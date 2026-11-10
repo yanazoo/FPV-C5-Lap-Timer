@@ -292,7 +292,7 @@ class Handler(SimpleHTTPRequestHandler):
             q = parse_qs(u.query)
             path = q.get("path", [""])[0]
             base = path.rsplit("/", 1)[-1].lower()
-            if (base == "settings.json" or (base.startswith("qr_") and base.endswith(".png"))) \
+            if ((base.startswith("settings") and base.endswith(".json")) or (base.startswith("qr_") and base.endswith(".png"))) \
                     and q.get("token", [""])[0] not in live_sessions():
                 return self.reply({"error": "login"}, 403)
             if path.lstrip("/") not in SD_FILES:
@@ -382,17 +382,19 @@ class Handler(SimpleHTTPRequestHandler):
                    "settings": state["settings"], "elrs": state["elrs"],
                    "conn": dict(CONN),
                    "net": net, "auth": {"password": state["password"]}}
-            SD_FILES["settings.json"] = (json.dumps(doc, ensure_ascii=False, indent=2).encode(), int(time.time()))
-            return self.reply({"ok": True})
+            name = time.strftime("settings_%Y%m%d_%H%M.json")
+            SD_FILES[name] = (json.dumps(doc, ensure_ascii=False, indent=2).encode(), int(time.time()))
+            return self.reply({"ok": True, "file": name})
         if p == "/api/sd/settings/restore":
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)
             if state["race"]["running"] or state["race"]["paused"]:
                 return self.reply({"ok": False, "reason": "race"}, 409)
-            if "settings.json" not in SD_FILES:
+            name = d.get("path", "/settings.json").lstrip("/")
+            if not re.fullmatch(r"settings(_\d{8}_\d{4})?\.json", name) or name not in SD_FILES:
                 return self.reply({"ok": False, "reason": "nofile"}, 404)
             try:
-                b = json.loads(SD_FILES["settings.json"][0])
+                b = json.loads(SD_FILES[name][0])
                 assert b.get("kind") == "fpv-c5-lt-settings"
             except Exception:
                 return self.reply({"ok": False, "reason": "badfile"}, 422)
@@ -551,7 +553,15 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True, "removed": n})
         if p == "/api/clock":
             return self.reply({"ok": True})
+        if p == "/api/sd/pilots/backup":
+            name = time.strftime("pilots_%Y%m%d_%H%M.csv")
+            csv = "\ufeffname,yomi,freq\n" + "".join(f"{x['name']},{x.get('yomi') or ''},{x.get('freq') or 0}\n" for x in state["pilots"])
+            SD_FILES[name] = (csv.encode(), int(time.time()))
+            return self.reply({"ok": True, "file": name})
         if p == "/api/sd/pilots/restore":
+            name = d.get("path", "/pilots.csv").lstrip("/")
+            if not re.fullmatch(r"pilots(_\d{8}_\d{4})?\.csv", name) or name not in SD_FILES:
+                return self.reply({"error": "no such backup"}, 503)
             return self.reply({"ok": True, "pilots": len(state["pilots"])})
         return self.reply({"ok": True})
 

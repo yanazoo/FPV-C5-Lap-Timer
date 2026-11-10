@@ -17,8 +17,13 @@ void   sdNoteRaceStart();
 // Delete every file and folder on the card. Returns the number of entries
 // removed, -1 without a card.
 int    sdEraseAll();
-bool   sdBackupRoster();
-int    sdRestoreRoster();              // pilots restored, -1 on error
+// Backups are named with the date and time they were saved
+// (pilots_20261110_1432.csv), or plain (pilots.csv) before the timer knows
+// the date. sdStampedName gives that name; sdBackupName accepts both forms.
+String sdStampedName(const char* base, const char* ext);
+bool   sdBackupName(const String& path, const char* base, const char* ext);
+bool   sdBackupRoster(String& path);   // the file written
+int    sdRestoreRoster(const String& path);   // pilots restored, -1 on error
 String sdListJson();
 bool   sdReadFile(const String& path, String& out);
 // A whole file written at once.

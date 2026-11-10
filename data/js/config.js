@@ -372,14 +372,15 @@ async function saveNetSettings(){
 async function sdBackup(){
   try{
     var r=await fetch('/api/sd/pilots/backup',{method:'POST'});
-    toast(r.ok?'✅ SDカードにバックアップしました':'⚠️ バックアップエラー');
+    var j={};try{j=await r.json();}catch(e){}
+    toast(r.ok?'✅ パイロット情報を '+(j.file||'SD カード')+' に保存しました':'⚠️ 保存できませんでした',3000);
   }catch(e){toast('⚠️ 接続エラー');}
 }
 async function sdRestore(){
-  if(!confirm('SDカードからパイロット情報を復元します。現在のデータは上書きされます。よろしいですか？'))return;
+  var path=await pickBackup('pilots');if(!path)return;
   try{
-    var r=await fetch('/api/sd/pilots/restore',{method:'POST'});
-    if(!r.ok){toast('⚠️ 復元エラー（/pilots.csv がありません）');return;}
+    var r=await fetch('/api/sd/pilots/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path})});
+    if(!r.ok){toast('⚠️ 復元できませんでした');return;}
     var j=await r.json();
     await loadActive();await loadRoster();applyActiveToSlots();buildRaceCards();buildCalibCards();
     toast('✅ SDから'+j.pilots+'人分を復元しました',3000);

@@ -69,8 +69,50 @@ function renderSdFileList(){
 // ── Settings backup (everything but the pilots) ──────────────────────────
 function showSettingsBackupInfo(){
   var el=document.getElementById('setBkInfo');if(!el)return;
-  var f=(sdFileList||[]).find(function(x){return x.name.toLowerCase()==='settings.json';});
-  el.textContent=!f?'':f.t?'（保存済み '+fmtSdTime(f.t)+'）':'（保存済み）';
+  var f=backupFiles('settings')[0];
+  el.textContent=!f?'':f.when?'（最新 '+f.when+'）':'（保存済み）';
+}
+
+// ── Backup files: pilots_YYYYMMDD_HHMM.csv, settings_YYYYMMDD_HHMM.json
+// (or pilots.csv / settings.json from before the timer knew the date).
+var BACKUP_KINDS={
+  pilots:{re:/^pilots(?:_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2}))?\.csv$/i,title:'👤 パイロット情報の復元',
+    warn:'今のパイロット情報（名前・周波数・キャリブレーション・割り当て）は上書きされます。'},
+  settings:{re:/^settings(?:_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2}))?\.json$/i,title:'⚙️ 設定情報の復元',
+    warn:'今の設定（パイロット以外）は上書きされます。WiFi の設定は再起動後に切り替わります。'}
+};
+// Newest first: by the date in the name, files without one last.
+function backupFiles(kind){
+  var k=BACKUP_KINDS[kind],out=[];
+  (sdFileList||[]).forEach(function(f){
+    var m=k.re.exec(f.name);if(!m)return;
+    out.push({name:f.name,key:m[1]?m.slice(1,6).join(''):'',when:m[1]?m[1]+'/'+m[2]+'/'+m[3]+' '+m[4]+':'+m[5]:'',t:f.t||0});
+  });
+  return out.sort(function(a,b){return a.key===b.key?b.t-a.t:(b.key>a.key?1:-1);});
+}
+// Ask which backup to restore. Resolves to its path, or null.
+var pickResolve=null;
+async function pickBackup(kind){
+  if(!sdPresent){toast('SDカードがありません');return null;}
+  try{var r=await fetch('/api/sd/files');if(!r.ok)throw 0;sdFileList=await r.json();}
+  catch(e){toast('⚠️ ファイル一覧の取得に失敗しました');return null;}
+  if(typeof renderSdFileList==='function')renderSdFileList();
+  var files=backupFiles(kind),k=BACKUP_KINDS[kind];
+  if(!files.length){toast('SD カードに保存ファイルがありません');return null;}
+  document.getElementById('pickTitle').textContent=k.title;
+  document.getElementById('pickWarn').textContent=k.warn;
+  document.getElementById('pickList').innerHTML=files.map(function(f,i){
+    return '<label class="pick-row"><input type="radio" name="pickFile" value="/'+esc(f.name)+'"'+(i?'':' checked')+'>'
+      +'<span><b>'+esc(f.when||'日時なし')+'</b><span class="res-muted">'+esc(f.name)+'</span></span></label>';
+  }).join('');
+  document.getElementById('pickModal').style.display='flex';
+  return new Promise(function(ok){pickResolve=ok;});
+}
+function closePick(ok){
+  var el=document.querySelector('input[name="pickFile"]:checked');
+  document.getElementById('pickModal').style.display='none';
+  var r=pickResolve;pickResolve=null;
+  if(r)r(ok&&el?el.value:null);
 }
 function fmtSdTime(t){
   var d=new Date(t*1000),p=function(n){return String(n).padStart(2,'0');};
@@ -81,17 +123,18 @@ async function sdSettingsBackup(){
   try{
     var r=await fetch('/api/sd/settings/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
     if(r.status===403){toast('⚠️ ログインし直してください');return;}
-    toast(r.ok?'✅ 設定を SD カードの settings.json に保存しました':'⚠️ 保存できませんでした',3000);
+    var j={};try{j=await r.json();}catch(e){}
+    toast(r.ok?'✅ 設定情報を '+(j.file||'SD カード')+' に保存しました':'⚠️ 保存できませんでした',3000);
     if(r.ok)refreshSdFiles();
   }catch(e){toast('⚠️ 接続エラー');}
 }
-var SETTINGS_RESTORE_ERR={nofile:'SD カードに settings.json がありません',badfile:'settings.json が読めません（このタイマーの設定ファイルではありません）',
+var SETTINGS_RESTORE_ERR={nofile:'その保存ファイルがありません',badfile:'保存ファイルが読めません（このタイマーの設定ファイルではありません）',
   race:'レース中は復元できません',login:'ログインし直してください'};
 async function sdSettingsRestore(){
   if(!sdPresent){toast('SDカードがありません');return;}
-  if(!confirm('SD カードの settings.json から設定を復元します。今の設定（パイロット以外）は上書きされます。よろしいですか？'))return;
+  var path=await pickBackup('settings');if(!path)return;
   try{
-    var r=await fetch('/api/sd/settings/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    var r=await fetch('/api/sd/settings/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,path:path})});
     var j={};try{j=await r.json();}catch(e){}
     if(!r.ok||!j.ok){toast('⚠️ '+(SETTINGS_RESTORE_ERR[j.reason]||'復元できませんでした'),4000);return;}
     // Race settings come back over the WebSocket; reload the other forms.
@@ -117,7 +160,9 @@ async function sdSaveQrImage(){
     items=await buildQrItems(d);
     await loadQrLib();
   }catch(e){toast('⚠️ QR コードを作れませんでした');return;}
-  var name=(d.status&&d.status.ap)?'qr_host.png':'qr_client.png';
+  // qr_host_20261110_1432.png: the date and time it was saved (this browser's clock).
+  var n=new Date(),p2=function(v){return String(v).padStart(2,'0');};
+  var name=((d.status&&d.status.ap)?'qr_host_':'qr_client_')+n.getFullYear()+p2(n.getMonth()+1)+p2(n.getDate())+'_'+p2(n.getHours())+p2(n.getMinutes())+'.png';
   var cv=drawQrCard(items);
   var blob=await new Promise(function(ok){cv.toBlob(ok,'image/png');});
   try{

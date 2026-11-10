@@ -280,7 +280,6 @@ void ipToJson(JsonObject d) {
 
 // The settings backup (everything but the pilots), with the WiFi and admin
 // passwords: only a logged-in admin may read it back.
-const char* const kSettingsFile = "/settings.json";
 
 String settingsBackupJson() {
     JsonDocument doc;
@@ -320,7 +319,7 @@ String settingsBackupJson() {
 bool sdSecretFile(const String& path) {
     String n = path.substring(path.lastIndexOf('/') + 1);
     n.toLowerCase();
-    return n == "settings.json" || (n.startsWith("qr_") && n.endsWith(".png"));
+    return (n.startsWith("settings") && n.endsWith(".json")) || (n.startsWith("qr_") && n.endsWith(".png"));
 }
 
 // A connection QR image the browser drew: /qr_<a-z0-9_->.png only.
@@ -594,20 +593,26 @@ void registerHttpRoutes() {
         sdPollEnabled = d["enable"] | false;
         ok(req);
     });
+    // Pilot backup to /pilots_<date>_<time>.csv; restore from the file the
+    // browser picked ({"path"}; /pilots.csv without one).
     server.on(AsyncURIMatcher::exact("/api/sd/pilots/backup"), HTTP_POST, [](AsyncWebServerRequest* req) {
-        if (sdBackupRoster()) ok(req);
-        else req->send(503, "application/json", R"({"error":"no sd card"})");
+        String path;
+        if (!sdBackupRoster(path)) { req->send(503, "application/json", R"({"error":"no sd card"})"); return; }
+        JsonDocument o;
+        o["ok"]   = true;
+        o["file"] = path.substring(1);
+        sendJson(req, o);
     });
-    server.on(AsyncURIMatcher::exact("/api/sd/pilots/restore"), HTTP_POST, [](AsyncWebServerRequest* req) {
-        int n = sdRestoreRoster();
-        if (n < 0) { req->send(503, "application/json", R"({"error":"no /pilots.csv"})"); return; }
+    onJson("/api/sd/pilots/restore", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        int n = sdRestoreRoster(String(d["path"] | "/pilots.csv"));
+        if (n < 0) { req->send(503, "application/json", R"({"error":"no such backup"})"); return; }
         applyGateConfig();
         wsActiveUpdate();
         char b[48];
         snprintf(b, sizeof b, R"({"ok":true,"pilots":%d})", n);
         req->send(200, "application/json", b);
     });
-    // Settings backup (everything but the pilots) to /settings.json, and
+    // Settings backup (everything but the pilots) to /settings_<date>_<time>.json, and
     // back. Admin only (token): the file holds the WiFi and admin passwords.
     onJson("/api/sd/settings/backup", [](AsyncWebServerRequest* req, JsonDocument& d) {
         if (!wsTokenValid(String(d["token"] | ""))) {
@@ -615,11 +620,15 @@ void registerHttpRoutes() {
             return;
         }
         String s = settingsBackupJson();
-        if (!sdWriteFile(kSettingsFile, (const uint8_t*)s.c_str(), s.length())) {
+        String path = sdStampedName("settings", ".json");
+        if (!sdWriteFile(path, (const uint8_t*)s.c_str(), s.length())) {
             req->send(503, "application/json", R"({"ok":false,"reason":"nosd"})");
             return;
         }
-        ok(req);
+        JsonDocument o;
+        o["ok"]   = true;
+        o["file"] = path.substring(1);
+        sendJson(req, o);
     });
     onJson("/api/sd/settings/restore", [](AsyncWebServerRequest* req, JsonDocument& d) {
         if (!wsTokenValid(String(d["token"] | ""))) {
@@ -627,8 +636,9 @@ void registerHttpRoutes() {
             return;
         }
         if (raceOn()) { req->send(409, "application/json", R"({"ok":false,"reason":"race"})"); return; }
+        String path = d["path"] | "/settings.json";
         String body;
-        if (!sdReadFile(kSettingsFile, body)) {
+        if (!sdBackupName(path, "settings", ".json") || !sdReadFile(path, body)) {
             req->send(404, "application/json", R"({"ok":false,"reason":"nofile"})");
             return;
         }
