@@ -43,9 +43,10 @@ struct RaceRules {
 // connection; viewers (not logged in) get the light spectator screen and the
 // oldest viewer is disconnected when there are too many. Limits per WiFi mode
 // leave headroom: admins get 10 Hz RSSI telemetry, viewers only race events.
-//   host mode (our access point, 10 stations at most): admins 1-4, viewers
-//     1-5, so with the netpack XIAO at most 10 stations (the netpack is not
-//     counted, and a full access point makes room for it: ws_handler);
+//   host mode (our access point, 10 stations at most): admins 1-4 and
+//     viewers 1-8, together at most 9 so the netpack XIAO always has the
+//     10th (the netpack is not counted, and a full access point makes room
+//     for it: ws_handler);
 //   client mode (a router): admins 1-4, viewers 1-8 (lwIP has 16 TCP
 //     connections: admins + viewers + netpack + page loads).
 struct ConnLimits {
@@ -53,8 +54,14 @@ struct ConnLimits {
     uint8_t viewHost   = 3;
     uint8_t viewClient = 6;
 };
-constexpr uint8_t CONN_ADMIN_MAX = 4, CONN_VIEW_HOST_MAX = 5, CONN_VIEW_CLIENT_MAX = 8;
+constexpr uint8_t CONN_ADMIN_MAX = 4, CONN_VIEW_HOST_MAX = 8, CONN_VIEW_CLIENT_MAX = 8;
 constexpr int     AP_MAX_STATIONS = 10;   // ESP32-S3 access point
+constexpr uint8_t CONN_HOST_TOTAL = AP_MAX_STATIONS - 1;   // admins + viewers in host mode (1 for the netpack)
+// Host mode viewer places for this many admin places.
+inline uint8_t viewHostLimitFor(uint8_t admins) {
+    int n = (int)CONN_HOST_TOTAL - admins;
+    return (uint8_t)(n < 1 ? 1 : n > CONN_VIEW_HOST_MAX ? CONN_VIEW_HOST_MAX : n);
+}
 // How long a login is held after its last browser left (closed, phone
 // screen off): seconds, one of these (settings).
 constexpr uint16_t LOGIN_HOLD_CHOICES[] = {15, 30, 60, 180, 300, 600, 1800};

@@ -230,6 +230,8 @@ void connFromJson(JsonVariantConst d) {
     if (!d["viewClient"].isNull())
         connLimits.viewClient = constrain((int)d["viewClient"], 1, (int)CONN_VIEW_CLIENT_MAX);
     if (!d["holdSec"].isNull() && loginHoldValid(d["holdSec"] | 0)) loginHoldSec = d["holdSec"] | 0;
+    // Host mode: admins + viewers within our access point (one for the netpack).
+    connLimits.viewHost = min(connLimits.viewHost, viewHostLimitFor(connLimits.adminMax));
     saveConnLimits();
 }
 
@@ -806,9 +808,9 @@ void registerHttpRoutes() {
         char b[256];
         snprintf(b, sizeof b,
                  R"({"adminMax":%u,"viewHost":%u,"viewClient":%u,"adminLimit":%u,"viewHostLimit":%u,)"
-                 R"("viewClientLimit":%u,"ap":%s,"admins":%d,"logins":%d,"viewers":%d,"viewerLimit":%d,"holdSec":%u})",
+                 R"("viewClientLimit":%u,"hostTotal":%u,"ap":%s,"admins":%d,"logins":%d,"viewers":%d,"viewerLimit":%d,"holdSec":%u})",
                  connLimits.adminMax, connLimits.viewHost, connLimits.viewClient, CONN_ADMIN_MAX, CONN_VIEW_HOST_MAX,
-                 CONN_VIEW_CLIENT_MAX, netIsAp() ? "true" : "false", admins, wsAdminLogins(), viewers,
+                 CONN_VIEW_CLIENT_MAX, CONN_HOST_TOTAL, netIsAp() ? "true" : "false", admins, wsAdminLogins(), viewers,
                  wsViewerLimit(), loginHoldSec);
         req->send(200, "application/json", b);
     });

@@ -413,16 +413,35 @@ async function loadConnLimits(){
   try{
     var r=await fetch('/api/conn');if(!r.ok)throw 0;
     var c=await r.json();
+    connInfo=c;
     fillConnSelect('connAdmin',1,c.adminLimit,c.adminMax);
     // At least one viewer place: with none, a browser not logged in yet is
     // closed within seconds and could never log in.
-    fillConnSelect('connViewHost',1,c.viewHostLimit,Math.max(1,c.viewHost));
+    fillViewHost(c.adminMax,c.viewHost);
     fillConnSelect('connViewClient',1,c.viewClientLimit,Math.max(1,c.viewClient));
     var h=document.getElementById('connHold');if(h&&c.holdSec)h.value=String(c.holdSec);
     var now=document.getElementById('connNow');
     if(now)now.innerHTML='<span>現在（'+(c.ap?'ホスト':'クライアント')+'モード）</span><b>管理者 '+c.logins+' / '+c.adminMax
       +' ・ 観戦 '+c.viewers+' / '+c.viewerLimit+'</b>';
   }catch(e){}
+}
+// Host mode: admins + viewers fit our access point (hostTotal = 10 places
+// less one for the netpack), so the viewer choices follow the admin one.
+var connInfo=null;
+function viewHostMax(admins){
+  var c=connInfo||{},total=c.hostTotal||9;
+  return Math.max(1,Math.min(c.viewHostLimit||8,total-admins));
+}
+function fillViewHost(admins,val){
+  var max=viewHostMax(admins);
+  fillConnSelect('connViewHost',1,max,Math.min(max,Math.max(1,val)));
+  var n=document.getElementById('connHostNote');
+  if(n)n.textContent='ホストモードでは、管理者と観戦の合計が '+((connInfo&&connInfo.hostTotal)||9)+' 台まで（タイマーの WiFi は 10 台まで、うち 1 台は netpack 用）。管理者 '+admins+' 台なら観戦は '+max+' 台までです。';
+}
+function onConnAdmin(){
+  var v=id=>parseInt(document.getElementById(id).value,10);
+  fillViewHost(v('connAdmin'),v('connViewHost'));
+  saveConnLimits();
 }
 async function saveConnLimits(){
   var v=id=>parseInt(document.getElementById(id).value,10);

@@ -105,7 +105,7 @@ ws_role = {}        # wfile -> {"since": s, "admin": bool}
 sessions = {}       # token -> last seen (s)
 SESSION_GRACE = 60.0   # "holdSec" in CONN
 CONN = {"adminMax": 2, "viewHost": 3, "viewClient": 6, "holdSec": 60}
-CONN_LIMITS = {"adminLimit": 4, "viewHostLimit": 5, "viewClientLimit": 8}
+CONN_LIMITS = {"adminLimit": 4, "viewHostLimit": 8, "viewClientLimit": 8, "hostTotal": 9}
 
 
 def live_sessions():
@@ -528,6 +528,7 @@ class Handler(SimpleHTTPRequestHandler):
             for k in CONN:
                 if k in d:
                     CONN[k] = int(d[k])
+            CONN["viewHost"] = max(1, min(CONN["viewHost"], 9 - CONN["adminMax"], 8))
             return self.reply({"ok": True})
         if p == "/api/laps/delete":   # the timer's race::Core::deleteLap
             mine = [l for l in r["laps"] if l["slot"] == d.get("slot")]
