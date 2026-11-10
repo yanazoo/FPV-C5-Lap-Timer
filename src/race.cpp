@@ -405,8 +405,19 @@ static void rdStart() {
 
 static void rdStop() {
     if (rdPhase == RD_IDLE && !raceCore.running()) return;
+    bool goggles = rdPhase == RD_COUNTDOWN || raceCore.running();
     rdPhase = RD_IDLE;   // stopped before the start: drop it
-    raceStop();
+    if (goggles) {
+        raceStop();
+        return;
+    }
+    // Cancelled during the start delay or "レディ": the goggles were told
+    // nothing yet (no LAND NOW), the browsers end their countdown.
+    Serial.println("[Race] start cancelled");
+    JsonDocument d;
+    d["type"] = "race_stop";
+    d["elapsed"] = 0;
+    wsJson(d);
 }
 
 void raceRequestStart() { webPending = 1; }
