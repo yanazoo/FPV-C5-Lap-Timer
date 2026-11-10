@@ -873,6 +873,16 @@ void registerHttpRoutes() {
         ok(req);
         sysRequestRestart(500);
     });
+    // Reload every open page (admins and viewers). Admin only (token).
+    onJson("/api/reload-all", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!wsTokenValid(String(d["token"] | ""))) {
+            req->send(403, "application/json", R"({"ok":false,"reason":"login"})");
+            return;
+        }
+        ok(req);
+        Serial.println("[Web] every page asked to reload");
+        wsText(R"({"type":"reload"})");
+    });
     // Why the timer last started, crashes since, and free memory.
     server.on(AsyncURIMatcher::exact("/api/sys"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", sysJson());

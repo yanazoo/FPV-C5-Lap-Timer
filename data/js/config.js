@@ -443,6 +443,15 @@ async function restartAll(){
     waitForRestart();
   }catch(e){toast('⚠️ 接続エラー');}
 }
+// Every open page (admins and viewers) reloads, this one too.
+async function reloadAllPages(){
+  if(!confirm('つながっているすべての画面（観戦者も含む）を再読み込みします。よろしいですか？'))return;
+  try{
+    var r=await fetch('/api/reload-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    if(r.status===403){toast('⚠️ ログインし直してください');return;}
+    if(!r.ok)throw 0;
+  }catch(e){toast('⚠️ 接続エラー');}
+}
 // After a restart: wait until the timer answers again, then reload the page.
 function waitForRestart(){
   toast('🔄 再起動しています…（戻ったら自動で開き直します）',8000);

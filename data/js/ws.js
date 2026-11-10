@@ -75,6 +75,13 @@ function reconcileRace(r){
 }
 
 function onMsg(d){
+  if(d.type==='reload'){
+    // An admin asked every page to reload: spread over a second or so, so
+    // the timer isn't asked for every page at once.
+    toast('🔁 画面を再読み込みします…',3000);
+    setTimeout(()=>location.reload(),300+Math.random()*1500);
+    return;
+  }
   if(d.type==='init'){
     // The timer restarted since this page loaded (or has a new web UI):
     // start over from a fresh page.

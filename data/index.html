@@ -693,8 +693,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 再起動 ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔄 再起動</h3>
-    <p class="section-desc">タイマー（XIAO ESP32-S3）を再起動します。C5 受信機と ESP-NOW ブリッジはそのまま動き続け、タイマーの起動後に自動でつながり直します。設定はそのまま残ります。再起動するとログインし直しになります。</p>
-    <div style="display:flex;justify-content:flex-end">
+    <p class="section-desc">タイマー（XIAO ESP32-S3）を再起動します。C5 受信機と ESP-NOW ブリッジはそのまま動き続け、タイマーの起動後に自動でつながり直します。設定はそのまま残ります。再起動するとログインし直しになります。「全員の画面を再読み込み」は、つながっているすべての画面（観戦者も含む）を開き直します（タイマーは再起動しません）。</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button onclick="reloadAllPages()" class="btn-secondary">🔁 全員の画面を再読み込み</button>
       <button onclick="restartAll()" class="btn-secondary">🔄 タイマーを再起動</button></div>
     <p id="sysInfo" class="section-desc" style="margin:8px 0 0"></p>
   </div>

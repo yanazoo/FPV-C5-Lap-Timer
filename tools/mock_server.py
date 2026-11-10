@@ -292,7 +292,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
                                "viewers": viewers, "viewerLimit": CONN["viewHost"]})
         if p == "/api/sys":
-            return self.reply({"uptime": int(time.monotonic() - START), "reason": "restart", "boots": 12,
+            return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
                                "heapMin": 151000, "heapMax": 110000, "psram": 0})
         if p == "/api/sd/status":
@@ -385,6 +385,11 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         d = json.loads(raw) if raw else {}
         state["posts"].append([p, d])
+        if p == "/api/reload-all":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            broadcast({"type": "reload"})
+            return self.reply({"ok": True})
         if p == "/api/sd/settings/backup":
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)
