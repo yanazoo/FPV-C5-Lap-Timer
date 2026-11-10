@@ -71,6 +71,7 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
               for s, (n, laps) in enumerate([("そうた", [11600, 18100, 8420]), ("みお", []),
                                              ("れん", [13300, 11000, 9500]), ("ひな", [13300, 11000, 9500, 8900])])
               for lap, ms in [(0, 2000)] + list(enumerate(laps, 1)))).encode(), 1793030000)
+START = time.monotonic()
 state = {
     "pilots": [],
     "active": [-1] * 8,
@@ -283,6 +284,10 @@ class Handler(SimpleHTTPRequestHandler):
                 logins = len(live_sessions())
             return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
                                "viewers": viewers, "viewerLimit": CONN["viewHost"]})
+        if p == "/api/sys":
+            return self.reply({"uptime": int(time.monotonic() - START), "reason": "restart", "boots": 12,
+                               "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
+                               "heapMin": 151000, "heapMax": 110000, "psram": 0})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":

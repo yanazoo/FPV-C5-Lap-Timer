@@ -440,8 +440,40 @@ async function restartAll(){
   try{
     var r=await fetch('/api/restart',{method:'POST'});
     if(!r.ok)throw 0;
-    toast('🔄 再起動しています…（20 秒ほどで戻ります）',8000);
+    waitForRestart();
   }catch(e){toast('⚠️ 接続エラー');}
+}
+// After a restart: wait until the timer answers again, then reload the page.
+function waitForRestart(){
+  toast('🔄 再起動しています…（戻ったら自動で開き直します）',8000);
+  var t0=Date.now(),seenDown=false;
+  var poll=async()=>{
+    try{
+      var c=new AbortController();setTimeout(()=>c.abort(),1500);
+      var r=await fetch('/api/sys',{cache:'no-store',signal:c.signal});
+      if(r.ok){var j=await r.json();if(seenDown||j.uptime<20){location.reload();return;}}
+    }catch(e){seenDown=true;}
+    if(Date.now()-t0<90000)setTimeout(poll,2000);
+    else toast('⚠️ タイマーが戻りません。電源を入れ直してください',10000);
+  };
+  setTimeout(poll,3000);
+}
+
+// ── 状態（起動からの時間・前回の起動・空きメモリー） ──────────────────────
+var SYS_REASON={poweron:'電源オン',restart:'再起動ボタン',sw:'再起動',panic:'エラー（パニック）',watchdog:'エラー（ウォッチドッグ）',
+  brownout:'電源の電圧低下',reset:'リセットボタン',usb:'USB',other:'その他'};
+async function loadSysInfo(){
+  var el=document.getElementById('sysInfo');if(!el)return;
+  try{
+    var r=await fetch('/api/sys');if(!r.ok)throw 0;
+    var s=await r.json(),up=s.uptime,kb=v=>Math.round(v/1024)+' KB';
+    var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
+    var h='起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
+      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
+    if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
+      +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
+    el.innerHTML=h;
+  }catch(e){el.textContent='';}
 }
 
 // ── 接続用 QR コード ────────────────────────────────────────────────────

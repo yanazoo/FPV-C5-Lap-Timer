@@ -1,6 +1,5 @@
 #include <ArduinoJson.h>
 #include <LittleFS.h>
-#include <freertos/timers.h>
 #include <algorithm>
 #include <functional>
 #include <time.h>
@@ -11,6 +10,7 @@
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
+#include "sys_diag.h"
 #include "wifi_mgr.h"
 #include "ws_handler.h"
 
@@ -862,20 +862,20 @@ void registerHttpRoutes() {
         sendJson(req, o);
     });
 
-    // Restart button: the timer (the C5 and the bridge keep running; their
-    // links come back on their own).
+    // Restart button, and the reboot after a WiFi change: tidy up, then a
+    // power-on-like restart (sys_diag). The answer goes out first.
     server.on(AsyncURIMatcher::exact("/api/restart"), HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);
         Serial.println("[Sys] restart requested");
-        static TimerHandle_t t = xTimerCreate("restart", pdMS_TO_TICKS(1000), pdFALSE, nullptr,
-                                              [](TimerHandle_t) { ESP.restart(); });
-        xTimerStart(t, 0);
+        sysRequestRestart(1000);
     });
     server.on(AsyncURIMatcher::exact("/api/reboot"), HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);
-        static TimerHandle_t t = xTimerCreate("reboot", pdMS_TO_TICKS(500), pdFALSE, nullptr,
-                                              [](TimerHandle_t) { ESP.restart(); });
-        xTimerStart(t, 0);
+        sysRequestRestart(500);
+    });
+    // Why the timer last started, crashes since, and free memory.
+    server.on(AsyncURIMatcher::exact("/api/sys"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        req->send(200, "application/json", sysJson());
     });
 
     // ── Static files, then the captive portal catch-all ────────────────────

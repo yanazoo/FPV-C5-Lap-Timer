@@ -19,6 +19,7 @@
 #include "race.h"
 #include "sd_store.h"
 #include "wifi_mgr.h"
+#include "sys_diag.h"
 #include "ws_handler.h"
 
 SemaphoreHandle_t gLock;
@@ -26,6 +27,7 @@ SemaphoreHandle_t gLock;
 void setup() {
     Serial.begin(115200);
     Serial.println("\n[Web] FPV C5 Lap Timer");
+    sysBootNote();
     gLock = xSemaphoreCreateRecursiveMutex();
 
     loadAll();
@@ -56,6 +58,7 @@ void loop() {
     // default closes the oldest past 8, admins included).
     ws.cleanupClients(24);
     wsLoop(millis());
+    sysLoop(millis());
     raceLoop();
     if (sdPollEnabled && !raceCore.running()) sdCheckHotplug(millis());
     delay(2);

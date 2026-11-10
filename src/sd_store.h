@@ -5,6 +5,7 @@
 #include <Arduino.h>
 
 void   sdInit();
+void   sdShutdown();                   // unmount before a restart
 void   sdCheckHotplug(uint32_t now);   // only while sdPollEnabled
 bool   sdSaveRace();                   // caller holds gLock
 // Wall clock from a browser (the S3 has no RTC): epoch in ms (UTC) and the

@@ -143,7 +143,7 @@ async function sdSettingsRestore(){
     if(typeof loadConnLimits==='function')loadConnLimits();
     var when=j.saved?'（'+fmtSdTime(j.saved)+' の保存）':'';
     if(j.net){
-      if(confirm('設定を復元しました'+when+'。\nWiFi の設定は、タイマーを再起動すると切り替わります。今すぐ再起動しますか？')){fetch('/api/restart',{method:'POST'}).catch(()=>{});toast('🔄 再起動しています…（20 秒ほどで戻ります）',8000);}
+      if(confirm('設定を復元しました'+when+'。\nWiFi の設定は、タイマーを再起動すると切り替わります。今すぐ再起動しますか？')){fetch('/api/restart',{method:'POST'}).catch(()=>{});waitForRestart();}
       else toast('✅ 設定を復元しました（WiFi は再起動後に切り替わります）',4000);
     }else toast('✅ 設定を復元しました'+when+'（WiFi の設定は復元できませんでした）',4000);
   }catch(e){toast('⚠️ 接続エラー');}

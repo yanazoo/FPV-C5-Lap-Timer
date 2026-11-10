@@ -43,6 +43,12 @@ void sdInit() {
     else Serial.println("[SD] no card");
 }
 
+void sdShutdown() {
+    SdGuard g;
+    if (sdPresent) SD.end();
+    sdPresent = false;
+}
+
 void sdCheckHotplug(uint32_t now) {
     static uint32_t last = 0;
     if (now - last < (sdPresent ? 3000UL : 500UL)) return;
