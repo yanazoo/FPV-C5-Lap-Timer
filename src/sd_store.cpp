@@ -301,6 +301,33 @@ bool sdReadFile(const String& path, String& out) {
     return true;
 }
 
+bool sdReadBytes(const String& path, std::vector<uint8_t>& out, size_t maxLen) {
+    if (!safePath(path)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    File f = SD.open(path, FILE_READ);
+    if (!f) return false;
+    size_t n = f.size();
+    if (n > maxLen) { f.close(); return false; }
+    out.resize(n);
+    size_t got = n ? f.read(out.data(), n) : 0;
+    f.close();
+    return got == n;
+}
+
+bool sdWriteFile(const String& path, const uint8_t* data, size_t len) {
+    if (!safePath(path)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    File f = SD.open(path, FILE_WRITE);
+    if (!f) return false;
+    size_t put = f.write(data, len);
+    f.close();
+    if (put != len) { SD.remove(path); return false; }
+    Serial.printf("[SD] wrote %s (%u bytes)\n", path.c_str(), (unsigned)len);
+    return true;
+}
+
 bool sdDeleteFile(const String& path) {
     if (!safePath(path)) return false;
     SdGuard g;

@@ -13,6 +13,7 @@ import base64
 import random
 import hashlib
 import json
+import re
 import os
 import sys
 import threading
@@ -288,13 +289,19 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply([{"name": n, "size": len(b), **({"t": t} if t else {})}
                                for n, (b, t) in SD_FILES.items()])
         if p == "/api/sd/file":
-            path = parse_qs(u.query).get("path", [""])[0]
+            q = parse_qs(u.query)
+            path = q.get("path", [""])[0]
+            base = path.rsplit("/", 1)[-1].lower()
+            if (base == "settings.json" or (base.startswith("qr_") and base.endswith(".png"))) \
+                    and q.get("token", [""])[0] not in live_sessions():
+                return self.reply({"error": "login"}, 403)
             if path.lstrip("/") not in SD_FILES:
                 return self.reply({"error": "not found"}, 404)
             time.sleep(0.15)   # a real card over SPI is not instant
             body = SD_FILES[path.lstrip("/")][0]
             self.send_response(200)
-            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Type", "image/png" if base.endswith(".png") else
+                             "application/json" if base.endswith(".json") else "text/csv; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -354,8 +361,52 @@ class Handler(SimpleHTTPRequestHandler):
         p = urlparse(self.path).path
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b""
+        if p == "/api/sd/upload":   # a QR image (PNG body)
+            q = parse_qs(urlparse(self.path).query)
+            path = q.get("path", [""])[0]
+            if q.get("token", [""])[0] not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            if not re.fullmatch(r"/qr_[A-Za-z0-9_-]+\.png", path) or not raw or len(raw) > 160 * 1024:
+                return self.reply({"ok": False, "reason": "path" if raw else "size"}, 400)
+            SD_FILES[path[1:]] = (raw, int(time.time()))
+            state["posts"].append([p, {"path": path, "size": len(raw)}])
+            return self.reply({"ok": True})
         d = json.loads(raw) if raw else {}
         state["posts"].append([p, d])
+        if p == "/api/sd/settings/backup":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            net = {k: v for k, v in state["net"].items() if k not in ("status", "staPassSet")}
+            net.update(staPass="router-pass" if state["net"].get("staSsid") else "", staPassClear=not state["net"].get("staSsid"))
+            doc = {"kind": "fpv-c5-lt-settings", "ver": 1, "saved": int(time.time()),
+                   "settings": state["settings"], "elrs": state["elrs"],
+                   "conn": dict(CONN),
+                   "net": net, "auth": {"password": state["password"]}}
+            SD_FILES["settings.json"] = (json.dumps(doc, ensure_ascii=False, indent=2).encode(), int(time.time()))
+            return self.reply({"ok": True})
+        if p == "/api/sd/settings/restore":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            if state["race"]["running"] or state["race"]["paused"]:
+                return self.reply({"ok": False, "reason": "race"}, 409)
+            if "settings.json" not in SD_FILES:
+                return self.reply({"ok": False, "reason": "nofile"}, 404)
+            try:
+                b = json.loads(SD_FILES["settings.json"][0])
+                assert b.get("kind") == "fpv-c5-lt-settings"
+            except Exception:
+                return self.reply({"ok": False, "reason": "badfile"}, 422)
+            state["settings"].update(b.get("settings", {}))
+            broadcast(dict(state["settings"], type="settings"))
+            state["elrs"].update(b.get("elrs", {}))
+            broadcast({"type": "config_changed", "what": "elrs"})
+            n = b.get("net", {})
+            state["net"].update({k: v for k, v in n.items() if k in state["net"] and k != "status"})
+            broadcast({"type": "config_changed", "what": "net"})
+            CONN.update({k: v for k, v in b.get("conn", {}).items() if k in CONN})
+            if b.get("auth", {}).get("password"):
+                state["password"] = b["auth"]["password"]
+            return self.reply({"ok": True, "net": True, "saved": b.get("saved")})
         if p == "/api/pilots":
             pid = d.get("id", -1)
             rec = {k: d.get(k) for k in ("name", "yomi", "freq", "bind", "osd")}

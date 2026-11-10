@@ -470,10 +470,16 @@ function qrSvg(text){
 }
 async function renderConnQr(d){
   var wrap=document.getElementById('qrWrap');if(!wrap)return;
+  qrItems=await buildQrItems(d);
+  try{await loadQrLib();}catch(e){wrap.innerHTML='<span class="res-muted">QR コードを作れませんでした（再読み込みしてください）</span>';return;}
+  wrap.innerHTML=qrHtml();
+}
+// The connection QR codes for /api/net's answer d: [{cap,sub,text,pass}].
+async function buildQrItems(d){
   var st=(d&&d.status)||{},ip=st.ip||location.hostname,url='http://'+ip+'/';
-  qrItems=[];
+  var qrItems=[];
   if(st.ap){
-    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,text:wifiQr(d.apSsid,d.apPass)});
+    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,pass:d.apPass,text:wifiQr(d.apSsid,d.apPass)});
     qrItems.push({cap:'② 画面を開く',sub:url,text:url});
   }else{
     // Client mode: the router's network (the password only comes to a
@@ -484,14 +490,13 @@ async function renderConnQr(d){
       if(r.ok)w=await r.json();
     }catch(e){}
     if(w&&w.ssid){
-      qrItems.push({cap:'① ルーターの WiFi に接続',sub:w.ssid,text:wifiQr(w.ssid,w.pass)});
+      qrItems.push({cap:'① ルーターの WiFi に接続',sub:w.ssid,pass:w.pass,text:wifiQr(w.ssid,w.pass)});
       qrItems.push({cap:'② 画面を開く',sub:url,text:url});
     }else{
       qrItems.push({cap:'画面を開く（同じ WiFi に接続してから）',sub:url,text:url});
     }
   }
-  try{await loadQrLib();}catch(e){wrap.innerHTML='<span class="res-muted">QR コードを作れませんでした（再読み込みしてください）</span>';return;}
-  wrap.innerHTML=qrHtml();
+  return qrItems;
 }
 function qrHtml(){
   return qrItems.map(i=>'<div class="qr-item"><div class="qr">'+qrSvg(i.text)+'</div><div class="cap">'+esc(i.cap)+'</div><div class="sub">'+esc(i.sub)+'</div></div>').join('');

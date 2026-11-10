@@ -54,6 +54,7 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
 #timer.waiting{color:var(--warn)}
+.qr-save-preview{margin:4px 0 10px;text-align:center}.qr-save-preview img{max-width:100%;max-height:360px;border-radius:6px;border:1px solid var(--bd)}
 #waitLabel{display:none;font-size:13px;font-weight:700;color:var(--warn);margin-bottom:-4px}
 #timer.running{color:var(--ok)}
 #timer.timeup,#timer.running.timeup{color:var(--err)}
@@ -706,6 +707,27 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div class="card" id="resDetail" style="display:none"></div>
   <div class="card" id="resPilots" style="display:none"></div>
 
+  <!-- Everything but the pilots, to /settings.json (pilots: Settings tab). -->
+  <div class="card">
+    <div class="res-head"><b>⚙️ 設定のバックアップ</b><span id="setBkInfo" class="res-muted"></span></div>
+    <p class="section-desc">パイロット以外の設定（レース内容・検出・ELRS OSD・WiFi・固定IP・接続数・ログインの保持・管理者パスワード）を SD カードの <b>settings.json</b> に保存し、復元します。パイロットは設定タブの「💾 SDカード」から保存します。</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="sdSettingsBackup()" class="btn-secondary" style="flex:1">📥 SDに保存</button>
+      <button onclick="sdSettingsRestore()" class="btn-secondary" style="flex:1">📤 SDから復元</button>
+    </div>
+    <p class="section-desc" style="margin:8px 0 0">WiFi の設定は、復元後にタイマーを再起動すると切り替わります。ファイルには WiFi と管理者のパスワードが入るため、ダウンロードはログイン中の管理者だけができます。</p>
+  </div>
+
+  <!-- The connection QR codes as one PNG, to print or put up at the field. -->
+  <div class="card">
+    <div class="res-head"><b>🔳 接続 QR コードの画像</b></div>
+    <p class="section-desc">設定タブの「接続用 QR コード」と同じ内容（WiFi への接続・画面を開く）を 1 枚の PNG 画像にして SD カードに保存します。ホストモードは <b>qr_host.png</b>、クライアントモードは <b>qr_client.png</b> です。印刷して会場に貼れます。</p>
+    <div id="qrSavePreview" class="qr-save-preview" style="display:none"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button onclick="sdSaveQrImage()" class="btn-secondary" style="flex:1">💾 QR画像をSDに保存</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="res-head"><b>📁 ファイル</b></div>
     <div id="sdFileListWrap">
@@ -757,7 +779,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <div id="sdEraseModal" class="modal-overlay" onclick="if(event.target===this)closeSdErase()">
   <div class="modal-box" style="border-color:var(--err)">
     <h3 style="color:var(--err)">🧹 SDカードのフォーマット</h3>
-    <p style="color:var(--tx);font-size:13px">SDカードの<b>すべてのファイル</b>（レース結果・パイロットのバックアップ）を削除します。元に戻せません。</p>
+    <p style="color:var(--tx);font-size:13px">SDカードの<b>すべてのファイル</b>（レース結果・パイロットと設定のバックアップ・QR 画像）を削除します。元に戻せません。</p>
     <p>必要なファイルは、先に「📁 ファイル」からダウンロードしてください。続けるには管理者パスワードを入力します。</p>
     <input type="text" class="pw-mask" id="sdErasePw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="パスワード"
       onkeydown="if(event.key==='Enter')confirmSdErase()">
