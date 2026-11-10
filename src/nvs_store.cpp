@@ -10,7 +10,8 @@ int          activePilots[MAX_ACTIVE];
 Settings     settings;
 RaceRules    raceRules;
 ConnLimits   connLimits;
-uint16_t     startDelaySec = 0;
+bool         startDelayOn = false;
+uint16_t     startDelaySec = 10;
 uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
 StaIpConfig  staIp;
 ElrsSettings elrsCfg;
@@ -93,6 +94,7 @@ void saveSettings() {
     prefs.putBytes("s", &settings, sizeof settings);
     prefs.putBytes("r", &raceRules, sizeof raceRules);
     prefs.putUShort("sdly", startDelaySec);
+    prefs.putBool("sdlyon", startDelayOn);
     prefs.end();
 }
 
@@ -176,7 +178,10 @@ void loadAll() {
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
     RaceRules rr;
     if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
-    startDelaySec = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
+    // Before the switch, 0 s meant off.
+    uint16_t sd = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
+    startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
+    startDelaySec = sd ? sd : 10;
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

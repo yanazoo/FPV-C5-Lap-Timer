@@ -93,7 +93,8 @@ extern ConnLimits   connLimits;
 // Wait before the start sequence (Start button or the race director's
 // switch), seconds; 0 = start at once. Its own NVS key.
 constexpr uint16_t START_DELAY_MAX = 600;
-extern uint16_t     startDelaySec;
+extern bool         startDelayOn;    // wait before the start (settings switch)
+extern uint16_t     startDelaySec;   // that wait, 1..START_DELAY_MAX s
 extern ElrsSettings elrsCfg;
 // Race director's TX switch: 0 toggle (on = start, off = stop), 1 push
 // (each press starts or stops). Its own NVS key, so ElrsSettings' stored

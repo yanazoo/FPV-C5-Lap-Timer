@@ -150,8 +150,8 @@ channels.
 **🏁 レース内容** (race content, top of the Settings tab): total laps (0 =
 no limit) and the ranking rule: total time (most laps, then fastest), best
 lap, or **laps within a time limit** (30 s to 30 min; choose whether the last
-lap after time-up counts). **Start delay** (スタートの待ち時間): none, 10, 15,
-30, 60 s or any 1–600 s. A start from the button or the director's switch
+lap after time-up counts). **Start delay** (スタートの待ち時間): an ON/OFF switch (off by
+default) and 10, 15, 30, 60 s or any 1–600 s. With it on, a start from the button or the director's switch
 waits this long before "ready → 3-2-1"; the timer shows the time left in
 orange, and at the start and every 10 s a chime is followed by the call-out
 "レーススタートまで残り○秒です。" (with voice on). Stop (or switching back)

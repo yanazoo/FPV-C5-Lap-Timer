@@ -111,6 +111,7 @@ void settingsToJson(JsonObject doc) {
     doc["rankMode"]     = raceRules.rankMode;
     doc["timeLimitSec"] = raceRules.timeLimitSec;
     doc["countLastLap"] = raceRules.countLastLap;
+    doc["startDelayOn"]  = startDelayOn;
     doc["startDelaySec"] = startDelaySec;
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
@@ -129,8 +130,12 @@ void settingsFromJson(JsonVariantConst doc) {
     if (!doc["timeLimitSec"].isNull())
         raceRules.timeLimitSec = (uint16_t)constrain((int)doc["timeLimitSec"], 30, 1800);
     if (!doc["countLastLap"].isNull()) raceRules.countLastLap = doc["countLastLap"] | true;
-    if (!doc["startDelaySec"].isNull())
-        startDelaySec = (uint16_t)constrain((int)doc["startDelaySec"], 0, (int)START_DELAY_MAX);
+    if (!doc["startDelayOn"].isNull()) startDelayOn = doc["startDelayOn"] | false;
+    if (!doc["startDelaySec"].isNull()) {
+        int sd = doc["startDelaySec"] | 0;
+        if (sd > 0) startDelaySec = (uint16_t)min(sd, (int)START_DELAY_MAX);
+        else if (doc["startDelayOn"].isNull()) startDelayOn = false;   // an old backup's "none"
+    }
     saveSettings();
 }
 

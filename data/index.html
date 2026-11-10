@@ -391,8 +391,15 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     </div>
     <div class="config-row">
       <label>スタートの待ち時間</label>
+      <label class="toggle-sw" style="flex:1">
+        <input type="checkbox" id="startDelayToggle" onchange="toggleStartDelay()">
+        <span class="toggle-track"></span>
+        <span id="startDelayState">OFF</span>
+      </label>
+    </div>
+    <div class="config-row" id="startDelaySelRow" style="display:none">
+      <label>待ち時間</label>
       <select id="startDelaySelect" onchange="onStartDelaySelect()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
-        <option value="0">なし（すぐにスタート）</option>
         <option value="10">10 秒</option>
         <option value="15">15 秒</option>
         <option value="30">30 秒</option>
@@ -406,7 +413,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <input type="number" id="startDelayCustom" min="1" max="600" value="20" onchange="saveStartDelay()" style="width:80px"><span class="unit">秒（1〜600）</span>
       </div>
     </div>
-    <p class="section-desc" style="margin-top:-2px">スタートボタン・ディレクターのスイッチで始めたとき、この時間待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
+    <p class="section-desc" style="margin-top:-2px">ON にすると、スタートボタン・ディレクターのスイッチで始めたとき、待ち時間だけ待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
     <div class="config-row rank-timed">
       <label>制限時間</label>
       <div class="slider-num">

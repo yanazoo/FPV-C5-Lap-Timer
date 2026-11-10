@@ -508,20 +508,30 @@ function showQrBig(){
 }
 
 // ── Start delay (settings → レース内容) ─────────────────────────────────
-var START_DELAY_PRESETS=[0,10,15,30,60];
+var START_DELAY_PRESETS=[10,15,30,60];
 function showStartDelay(){
+  var tg=document.getElementById('startDelayToggle');if(tg)tg.checked=startDelayOn;
+  var stl=document.getElementById('startDelayState');if(stl)stl.textContent=startDelayOn?'ON':'OFF';
+  var sr=document.getElementById('startDelaySelRow');if(sr)sr.style.display=startDelayOn?'':'none';
   var sel=document.getElementById('startDelaySelect');if(!sel)return;
   var preset=START_DELAY_PRESETS.indexOf(startDelaySec)>=0;
   sel.value=preset?String(startDelaySec):'custom';
   if(!preset)setField('startDelayCustom',startDelaySec);
-  var row=document.getElementById('startDelayCustomRow');if(row)row.style.display=preset?'none':'';
+  var row=document.getElementById('startDelayCustomRow');if(row)row.style.display=preset||!startDelayOn?'none':'';
+}
+function toggleStartDelay(){
+  startDelayOn=document.getElementById('startDelayToggle').checked;
+  showStartDelay();
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startDelayOn:startDelayOn})})
+    .then(r=>toast(r.ok?(startDelayOn?'✓ スタートの待ち時間を ON（'+startDelaySec+' 秒）にしました':'✓ スタートの待ち時間を OFF にしました'):'⚠️ 保存エラー'))
+    .catch(()=>toast('⚠️ 接続エラー'));
 }
 function onStartDelaySelect(){
   var v=document.getElementById('startDelaySelect').value;
   var row=document.getElementById('startDelayCustomRow');
   if(v==='custom'){if(row)row.style.display='';saveStartDelay();return;}
   if(row)row.style.display='none';
-  postStartDelay(parseInt(v,10)||0);
+  postStartDelay(parseInt(v,10)||10);
 }
 function saveStartDelay(){
   var n=Math.max(1,Math.min(600,parseInt(document.getElementById('startDelayCustom').value,10)||1));
@@ -531,6 +541,6 @@ function saveStartDelay(){
 function postStartDelay(n){
   startDelaySec=n;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startDelaySec:n})})
-    .then(r=>toast(r.ok?(n?'✓ スタートの待ち時間を '+n+' 秒にしました':'✓ スタートの待ち時間をなしにしました'):'⚠️ 保存エラー'))
+    .then(r=>toast(r.ok?'✓ スタートの待ち時間を '+n+' 秒にしました':'⚠️ 保存エラー'))
     .catch(()=>toast('⚠️ 接続エラー'));
 }

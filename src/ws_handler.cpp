@@ -359,6 +359,7 @@ static void addSettings(JsonDocument& d) {
     d["rankMode"]     = raceRules.rankMode;
     d["timeLimitSec"] = raceRules.timeLimitSec;
     d["countLastLap"] = raceRules.countLastLap;
+    d["startDelayOn"]  = startDelayOn;
     d["startDelaySec"] = startDelaySec;
 }
 

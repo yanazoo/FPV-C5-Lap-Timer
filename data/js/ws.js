@@ -327,7 +327,8 @@ function applySettings(st){
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
     showRaceRules();renderRanking();}
-  if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec;showStartDelay();}
+  if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
+  if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

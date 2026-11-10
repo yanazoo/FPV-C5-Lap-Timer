@@ -387,7 +387,7 @@ static void rdStart() {
         raceResume();
         return;
     }
-    uint16_t wait = startDelaySec;
+    uint16_t wait = startDelayOn ? startDelaySec : 0;
     if (!wait) {
         rdReady();
         return;
