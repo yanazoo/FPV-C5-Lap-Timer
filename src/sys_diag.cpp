@@ -25,7 +25,7 @@ const char* reasonName(int r) {
     switch (r) {
         case ESP_RST_POWERON:   return "poweron";
         case ESP_RST_SW:        return "sw";
-        case ESP_RST_DEEPSLEEP: return "restart";   // our restart (deep sleep 0.1 s)
+        case ESP_RST_DEEPSLEEP: return "restart";   // our restart (deep sleep 2 s)
         case ESP_RST_PANIC:     return "panic";
         case ESP_RST_INT_WDT:
         case ESP_RST_TASK_WDT:
@@ -77,7 +77,7 @@ void sysLoop(uint32_t now) {
     delay(300);   // the frames go out
     sdShutdown();
     Serial.flush();
-    esp_sleep_enable_timer_wakeup(100 * 1000);   // 0.1 s
+    esp_sleep_enable_timer_wakeup(2000 * 1000);   // 2 s: off long enough for the router to see us gone
     esp_deep_sleep_start();
 }
 
