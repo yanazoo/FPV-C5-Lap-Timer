@@ -9,9 +9,13 @@ var timerEl=document.getElementById('timer');
 // one with the least delay. It drifts down slowly (clocks differ by up to
 // ~0.05 %) so a better sample can take over.
 var srvOff=null,srvOffAt=0,raceStartSrv=0;
+// A sample far below the estimate means the timer's clock started again
+// (the timer restarted while this page stayed open): start over from it,
+// or every race clock would run ahead by the old uptime.
 function noteServerTime(ts){
   if(!ts)return;
   var now=performance.now(),s=ts-now;
+  if(srvOff!==null&&s<srvOff-2000)srvOff=null;
   if(srvOff===null||s>srvOff-(now-srvOffAt)*0.0005)srvOff=s;
   else srvOff-=(now-srvOffAt)*0.0005;
   srvOffAt=now;

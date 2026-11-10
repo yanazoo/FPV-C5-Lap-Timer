@@ -79,6 +79,7 @@ function onMsg(d){
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);
+    srvOff=null;   // a new connection: measure the timer's clock afresh (it may have restarted)
     noteServerTime(d.now);
     timerFrozenMs=d.raceElapsedMs||0;
     if(raceRunning)resumeTimer(d.now!==undefined?d.raceStartMs:undefined);

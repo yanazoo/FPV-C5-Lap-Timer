@@ -132,6 +132,12 @@ def enforce_viewers():
             ws_clients.remove(w)
 
 
+# The timer's clock is millis(): it starts again from 0 when the timer
+# restarts. So does this mock's (time.monotonic from this process's start).
+_mono, _BOOT = time.monotonic, time.monotonic()
+time.monotonic = lambda: _mono() - _BOOT + 1.0
+
+
 def now_ms():
     return int(time.monotonic() * 1000)
 
