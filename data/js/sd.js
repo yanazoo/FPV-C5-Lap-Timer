@@ -70,7 +70,7 @@ function renderSdFileList(){
 function showSettingsBackupInfo(){
   var el=document.getElementById('setBkInfo');if(!el)return;
   var f=(sdFileList||[]).find(function(x){return x.name.toLowerCase()==='settings.json';});
-  el.textContent=!f?'':f.t?'保存済み '+fmtSdTime(f.t):'保存済み';
+  el.textContent=!f?'':f.t?'（保存済み '+fmtSdTime(f.t)+'）':'（保存済み）';
 }
 function fmtSdTime(t){
   var d=new Date(t*1000),p=function(n){return String(n).padStart(2,'0');};
@@ -119,9 +119,6 @@ async function sdSaveQrImage(){
   }catch(e){toast('⚠️ QR コードを作れませんでした');return;}
   var name=(d.status&&d.status.ap)?'qr_host.png':'qr_client.png';
   var cv=drawQrCard(items);
-  var url=cv.toDataURL('image/png');
-  var pv=document.getElementById('qrSavePreview');
-  if(pv){pv.innerHTML='<img alt="" src="'+url+'">';pv.style.display='';}
   var blob=await new Promise(function(ok){cv.toBlob(ok,'image/png');});
   try{
     var u='/api/sd/upload?path='+encodeURIComponent('/'+name)+'&token='+encodeURIComponent(authToken||'');
