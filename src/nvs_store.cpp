@@ -10,6 +10,7 @@ int          activePilots[MAX_ACTIVE];
 Settings     settings;
 RaceRules    raceRules;
 ConnLimits   connLimits;
+uint16_t     startDelaySec = 0;
 uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
 StaIpConfig  staIp;
 ElrsSettings elrsCfg;
@@ -91,6 +92,7 @@ void saveSettings() {
     prefs.begin("settings", false);
     prefs.putBytes("s", &settings, sizeof settings);
     prefs.putBytes("r", &raceRules, sizeof raceRules);
+    prefs.putUShort("sdly", startDelaySec);
     prefs.end();
 }
 
@@ -174,6 +176,7 @@ void loadAll() {
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
     RaceRules rr;
     if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
+    startDelaySec = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

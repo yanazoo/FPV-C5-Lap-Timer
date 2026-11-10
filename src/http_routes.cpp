@@ -297,6 +297,7 @@ void registerHttpRoutes() {
         doc["rankMode"]     = raceRules.rankMode;
         doc["timeLimitSec"] = raceRules.timeLimitSec;
         doc["countLastLap"] = raceRules.countLastLap;
+        doc["startDelaySec"] = startDelaySec;
         sendJson(req, doc);
     });
     onJson("/api/settings", [](AsyncWebServerRequest* req, JsonDocument& doc) {
@@ -314,6 +315,8 @@ void registerHttpRoutes() {
             if (!doc["timeLimitSec"].isNull())
                 raceRules.timeLimitSec = (uint16_t)constrain((int)doc["timeLimitSec"], 30, 1800);
             if (!doc["countLastLap"].isNull()) raceRules.countLastLap = doc["countLastLap"] | true;
+            if (!doc["startDelaySec"].isNull())
+                startDelaySec = (uint16_t)constrain((int)doc["startDelaySec"], 0, (int)START_DELAY_MAX);
             saveSettings();
         }
         applyGateConfig();

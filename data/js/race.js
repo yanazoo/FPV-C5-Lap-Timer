@@ -303,8 +303,50 @@ function resetLaps(){
 var startWatchdog=null;
 function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);startWatchdog=null;}}
 
-function onRaceStart(ts){
+// ── Start delay (race_wait) ─────────────────────────────────────────────
+// The timer waits startDelaySec before "レディ". Every browser shows the
+// time left on the race clock and calls it out at the start of the wait
+// and every 10 s: a chime, then "レーススタートまで残り N 秒です。".
+var waitEnd=0,waitNextCall=0;
+function onRaceWait(sec,joined){
   clearStartWatchdog();
+  if(countdownH||raceRunning)return;
+  var s=Math.ceil(sec);
+  waitEnd=performance.now()+sec*1000;
+  // A fresh wait is called out at once; a browser joining one part way
+  // through waits for the next multiple of 10.
+  waitNextCall=joined?Math.floor((s-1)/10)*10:s;
+  if(waitH)clearInterval(waitH);
+  timerEl.classList.remove('running');timerEl.classList.add('waiting');
+  var lbl=document.getElementById('waitLabel');if(lbl)lbl.style.display='block';
+  var tick=()=>{
+    var rem=waitEnd-performance.now();
+    if(rem<=0){timerEl.textContent='00:00';return;}   // race_ready ends it
+    var left=Math.ceil(rem/1000);
+    timerEl.textContent=pad(Math.floor(left/60),2)+':'+pad(left%60,2);
+    if(waitNextCall>0&&left<=waitNextCall){
+      announceWait(waitNextCall);
+      waitNextCall=Math.floor((waitNextCall-1)/10)*10;
+    }
+  };
+  waitH=setInterval(tick,100);tick();
+  setBtns(raceRunning);
+}
+function announceWait(n){
+  ensureAudio();sfx.chime();
+  if(voiceEnabled&&announceMode!=='none'&&announceMode!=='beep')
+    setTimeout(()=>sayNow('レーススタートまで残り'+n+'秒です。'),450);
+}
+function endWait(){
+  if(!waitH)return;
+  clearInterval(waitH);waitH=null;
+  timerEl.classList.remove('waiting');
+  var lbl=document.getElementById('waitLabel');if(lbl)lbl.style.display='none';
+  setBtns(raceRunning);
+}
+
+function onRaceStart(ts){
+  clearStartWatchdog();endWait();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
   lapEpoch++;resetLaps();
 }
@@ -315,7 +357,7 @@ function onRaceResume(ts){
 // A start under way: "レディ" on every browser, then race_stage's countdown.
 var readyUntil=0;   // until then the 1 Hz status mustn't undo the start
 function onRaceReady(){
-  clearStartWatchdog();
+  clearStartWatchdog();endWait();
   if(countdownH)return;
   readyUntil=performance.now()+2500;
   ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
@@ -326,6 +368,7 @@ function onRaceReady(){
 // director); the browser that pressed Stop has already played it.
 var stopToneAt=-1e9;
 function onRaceStop(elapsed){
+  if(waitH){endWait();timerEl.textContent=raceClockText(timerFrozenMs);}   // start called off during the wait
   if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
   if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
   raceRunning=false;setBtns(false);stopTimer(elapsed);
@@ -382,6 +425,7 @@ async function clearAllLaps(){
 }
 // Clear from any browser (race_clear) or this one.
 function onRaceClear(){
+  endWait();
   stopTimer();
   timerFrozenMs=0;
   timerEl.textContent=raceClockText(0);
@@ -393,12 +437,13 @@ function onRaceClear(){
 
 function setBtns(running){
   // Viewers (unauthed) can never operate race controls regardless of state.
-  var locked=!isAuthed;
-  document.getElementById('btnStart').disabled=locked||running;
-  document.getElementById('btnStop').disabled=locked||!running;
+  var locked=!isAuthed,waiting=!!waitH;
+  document.getElementById('btnStart').disabled=locked||running||waiting;
+  // Stop also calls off a delayed start.
+  document.getElementById('btnStop').disabled=locked||(!running&&!waiting);
   // Clear is only allowed while stopped (not during a running race).
   var btnClear=document.getElementById('btnClear');
-  if(btnClear)btnClear.disabled=locked||running;
+  if(btnClear)btnClear.disabled=locked||running||waiting;
   // Lap buttons on the race cards: admins, while the race runs.
   document.querySelectorAll('.lap-btn').forEach(b=>b.disabled=locked||!running);
 }

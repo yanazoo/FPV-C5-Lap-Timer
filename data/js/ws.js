@@ -54,6 +54,12 @@ function onHelloReply(d){
 var seenEpoch=null;
 function reconcileRace(r){
   noteServerTime(r.now);
+  // A delayed start under way (joined late, or race_wait lost).
+  if(r.wait>0&&!waitH&&!countdownH&&!raceRunning&&performance.now()>=readyUntil){onRaceWait(r.wait/1000,true);return;}
+  if(waitH){
+    if(!r.wait&&!r.run&&performance.now()>waitEnd+2000)endWait();   // called off elsewhere, race_stop lost
+    else return;
+  }
   if(countdownH||performance.now()<readyUntil)return;   // a start is under way
   var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
   seenEpoch=r.epoch;
@@ -99,6 +105,7 @@ function onMsg(d){
   }
   if(d.type==='settings'){applySettings(d);return;}
   if(d.type==='hello'){onHelloReply(d);return;}
+  if(d.type==='race_wait'){onRaceWait(d.sec,false);return;}
   if(d.type==='calib'){
     // Thresholds saved on some browser (this one included).
     var rd=rosterById[d.id];if(rd){rd.enter=d.enter;rd.exit=d.exit;}
@@ -320,6 +327,7 @@ function applySettings(st){
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
     showRaceRules();renderRanking();}
+  if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec;showStartDelay();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

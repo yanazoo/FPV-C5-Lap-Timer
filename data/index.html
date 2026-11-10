@@ -53,6 +53,8 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 /* ── Race controls ── */
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
+#timer.waiting{color:var(--warn)}
+#waitLabel{display:none;font-size:13px;font-weight:700;color:var(--warn);margin-bottom:-4px}
 #timer.running{color:var(--ok)}
 #timer.timeup,#timer.running.timeup{color:var(--err)}
 .race-buttons{display:flex;gap:8px;justify-content:center}
@@ -347,6 +349,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <!-- ═══════════════════════════ RACE ═══════════════════════════ -->
 <section id="pane-race" class="tab-pane active">
   <div class="race-controls">
+    <div id="waitLabel">レーススタートまで</div>
     <div id="timer">00:00</div>
     <div class="race-buttons">
       <button id="btnStart" onclick="startRace()" class="btn-success">▶ スタート</button>
@@ -385,6 +388,24 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
       </select>
     </div>
+    <div class="config-row">
+      <label>スタートの待ち時間</label>
+      <select id="startDelaySelect" onchange="onStartDelaySelect()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="0">なし（すぐにスタート）</option>
+        <option value="10">10 秒</option>
+        <option value="15">15 秒</option>
+        <option value="30">30 秒</option>
+        <option value="60">60 秒</option>
+        <option value="custom">任意の秒数</option>
+      </select>
+    </div>
+    <div class="config-row" id="startDelayCustomRow" style="display:none">
+      <label>待ち時間（任意）</label>
+      <div class="slider-num">
+        <input type="number" id="startDelayCustom" min="1" max="600" value="20" onchange="saveStartDelay()" style="width:80px"><span class="unit">秒（1〜600）</span>
+      </div>
+    </div>
+    <p class="section-desc" style="margin-top:-2px">スタートボタン・ディレクターのスイッチで始めたとき、この時間待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
     <div class="config-row rank-timed">
       <label>制限時間</label>
       <div class="slider-num">

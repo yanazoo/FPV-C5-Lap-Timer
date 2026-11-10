@@ -501,3 +501,31 @@ function showQrBig(){
   document.getElementById('qrBig').innerHTML=qrHtml();
   document.getElementById('qrModal').style.display='flex';
 }
+
+// ── Start delay (settings → レース内容) ─────────────────────────────────
+var START_DELAY_PRESETS=[0,10,15,30,60];
+function showStartDelay(){
+  var sel=document.getElementById('startDelaySelect');if(!sel)return;
+  var preset=START_DELAY_PRESETS.indexOf(startDelaySec)>=0;
+  sel.value=preset?String(startDelaySec):'custom';
+  if(!preset)setField('startDelayCustom',startDelaySec);
+  var row=document.getElementById('startDelayCustomRow');if(row)row.style.display=preset?'none':'';
+}
+function onStartDelaySelect(){
+  var v=document.getElementById('startDelaySelect').value;
+  var row=document.getElementById('startDelayCustomRow');
+  if(v==='custom'){if(row)row.style.display='';saveStartDelay();return;}
+  if(row)row.style.display='none';
+  postStartDelay(parseInt(v,10)||0);
+}
+function saveStartDelay(){
+  var n=Math.max(1,Math.min(600,parseInt(document.getElementById('startDelayCustom').value,10)||1));
+  setField('startDelayCustom',n);
+  postStartDelay(n);
+}
+function postStartDelay(n){
+  startDelaySec=n;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startDelaySec:n})})
+    .then(r=>toast(r.ok?(n?'✓ スタートの待ち時間を '+n+' 秒にしました':'✓ スタートの待ち時間をなしにしました'):'⚠️ 保存エラー'))
+    .catch(()=>toast('⚠️ 接続エラー'));
+}

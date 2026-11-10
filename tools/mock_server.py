@@ -74,7 +74,7 @@ state = {
     "pilots": [],
     "active": [-1] * 8,
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30,
-                 "rankMode": 0, "timeLimitSec": 120, "countLastLap": True},
+                 "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelaySec": 0},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
@@ -398,6 +398,14 @@ class Handler(SimpleHTTPRequestHandler):
             token = object()
             r["seq"] = token
             def seq():
+                wait = int(state["settings"].get("startDelaySec", 0))
+                if wait > 0:
+                    r["waitEnd"] = time.monotonic() + wait
+                    broadcast({"type": "race_wait", "sec": wait, "now": now_ms()})
+                    while time.monotonic() < r["waitEnd"]:
+                        time.sleep(0.05)
+                        if r.get("seq") is not token: r["waitEnd"] = 0; return
+                    r["waitEnd"] = 0
                 broadcast({"type": "race_ready"}); time.sleep(1.5)
                 if r.get("seq") is not token: return
                 broadcast({"type": "race_stage"}); time.sleep(3.3)
@@ -527,6 +535,7 @@ if __name__ == "__main__":
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
                            "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART"},
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
-                                    "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"]}})
+                                    "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],
+                                    "wait": max(0, int((r.get("waitEnd", 0) - time.monotonic()) * 1000)) if r.get("waitEnd") else 0}})
     threading.Thread(target=telemetry, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

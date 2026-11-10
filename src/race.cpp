@@ -238,6 +238,8 @@ static void sendTelemetry() {
     wsTelemetry(s);
 }
 
+static uint32_t startWaitLeft(uint32_t now);
+
 void sendC5Status() {
     C5Status c = c5Status();
     ElrsStatus e = elrsStatus();
@@ -271,6 +273,7 @@ void sendC5Status() {
         rs["now"]    = now;
         rs["laps"]   = raceCore.lapCount();
         rs["epoch"]  = raceEpoch;
+        rs["wait"]   = startWaitLeft(now);   // a delayed start under way: ms to go
     }
     wsJson(d);
 }
@@ -315,13 +318,16 @@ static void serviceTimedRace(uint32_t now) {
 }
 
 // ── Start / Stop (web buttons and the race director's TX switch) ───────────
+// With a start delay set, a start first waits that long (race_wait: every
+// browser counts it down and calls it out every 10 s), then runs the
+// sequence below. Stop during the wait cancels the start.
 // The firmware runs the whole start sequence, whoever asked for it, so every
 // browser and every goggle follow one clock: race_ready (every browser says
 // "レディ"), then the stage (ARM NOW and 3-2-1 on the goggles, the 3-2-1
 // countdown on every browser), then the start 3.3 s later.
 static volatile int16_t rdPending = -1;   // switch state waiting for raceLoop
 static volatile int8_t  webPending = -1;  // web Start (1) / Stop (0) waiting for raceLoop
-enum RdPhase : uint8_t { RD_IDLE, RD_READY, RD_COUNTDOWN };
+enum RdPhase : uint8_t { RD_IDLE, RD_WAIT, RD_READY, RD_COUNTDOWN };
 static RdPhase  rdPhase = RD_IDLE;
 static uint32_t rdNextAt = 0;
 static const uint32_t RD_READY_MS     = 1500;   // time to say "レディ"
@@ -360,17 +366,41 @@ void raceDirectorSwitch(uint8_t state) {
 
 static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
 
+// The start delay still to wait, ms (0: not waiting).
+static uint32_t startWaitLeft(uint32_t now) {
+    if (rdPhase != RD_WAIT) return 0;
+    int32_t left = (int32_t)(rdNextAt - now);
+    return left > 0 ? (uint32_t)left : 1;
+}
+
+static void rdReady() {
+    JsonDocument d;
+    d["type"] = "race_ready";
+    wsJson(d);
+    rdPhase = RD_READY;
+    rdNextAt = millis() + RD_READY_MS;
+}
+
 static void rdStart() {
     if (raceBusy()) return;
     if (raceCore.paused()) {   // stopped mid-race: carry on, like Start in the UI
         raceResume();
         return;
     }
+    uint16_t wait = startDelaySec;
+    if (!wait) {
+        rdReady();
+        return;
+    }
+    uint32_t now = millis();
+    rdPhase = RD_WAIT;
+    rdNextAt = now + (uint32_t)wait * 1000u;
+    Serial.printf("[Race] start in %u s\n", wait);
     JsonDocument d;
-    d["type"] = "race_ready";
+    d["type"] = "race_wait";
+    d["sec"]  = wait;
+    d["now"]  = now;
     wsJson(d);
-    rdPhase = RD_READY;
-    rdNextAt = millis() + RD_READY_MS;
 }
 
 static void rdStop() {
@@ -399,7 +429,9 @@ static void serviceRaceDirector() {
         }
     }
     if (rdPhase != RD_IDLE && (int32_t)(millis() - rdNextAt) >= 0) {
-        if (rdPhase == RD_READY) {
+        if (rdPhase == RD_WAIT) {
+            rdReady();
+        } else if (rdPhase == RD_READY) {
             raceStage();
             rdPhase = RD_COUNTDOWN;
             rdNextAt = millis() + RD_COUNTDOWN_MS;
