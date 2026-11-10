@@ -6,7 +6,7 @@
 // timer restarted that way could come back unreachable until power was cut.
 // sysRequestRestart() now tidies up first (tells the router and the phones
 // on our access point we are leaving, closes the browsers' connections,
-// unmounts the card) and restarts through a 0.1 s deep sleep, which resets
+// unmounts the card) and restarts through a 2 s deep sleep, which resets
 // the chip much like a power-on.
 //
 // Diagnostics: the reason for the last start, and a count of starts after a
