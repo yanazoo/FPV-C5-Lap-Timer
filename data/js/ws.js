@@ -76,6 +76,12 @@ function reconcileRace(r){
 
 function onMsg(d){
   if(d.type==='init'){
+    // The timer restarted since this page loaded (or has a new web UI):
+    // start over from a fresh page.
+    if(d.boot){
+      if(seenBoot&&d.boot!==seenBoot){location.reload();return;}
+      seenBoot=d.boot;
+    }
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);

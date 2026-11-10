@@ -413,6 +413,7 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
         // (running: keeps counting; paused: frozen at the pause point).
         doc["raceElapsedMs"] = raceCore.elapsed(now);
         doc["now"]           = now;   // the browser's race clock follows this clock
+        doc["boot"]          = bootId();   // changes when the timer restarts: pages reload
         doc["sdPresent"]     = sdPresent;
         addSettings(doc);
         addSlots(doc["pilots"].to<JsonArray>(), true);
@@ -422,7 +423,17 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
     client->text(msg);
 }
 
+// A number for this start of the timer. A page that sees it change (the
+// timer restarted, or got a new web UI) reloads itself, so nothing from
+// before the restart (clock offset, state, an old page) stays behind.
+static uint32_t bootId() {
+    static uint32_t id = 0;
+    while (!id) id = esp_random();
+    return id;
+}
+
 void initWsHandler() {
+    bootId();
     WiFi.onEvent(onStationJoined, ARDUINO_EVENT_WIFI_AP_STACONNECTED);
     ws.onEvent(onWsEvent);
     server.addHandler(&ws);

@@ -72,6 +72,7 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
                                              ("れん", [13300, 11000, 9500]), ("ひな", [13300, 11000, 9500, 8900])])
               for lap, ms in [(0, 2000)] + list(enumerate(laps, 1)))).encode(), 1793030000)
 START = time.monotonic()
+BOOT_ID = random.randint(1, 2**31)
 state = {
     "pilots": [],
     "active": [-1] * 8,
@@ -187,7 +188,7 @@ def init_msg():
         o = dict(o, lapCount=counts[o["slot"]], bestLap=0, rssi=0, crossing=False)
         pilots.append(o)
     return dict(state["settings"], type="init", raceRunning=r["running"], racePaused=r["paused"],
-                raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
+                boot=BOOT_ID, raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
                 now=now_ms(), sdPresent=True, pilots=pilots)
 
 
