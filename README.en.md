@@ -231,7 +231,10 @@ To cover lost packets:
 
 ## Restart and a fixed IP address
 
-- Settings → "🔄 再起動" → "タイマーを再起動" restarts the timer (XIAO ESP32-S3); the C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart.
+- Settings → "🔄 再起動" → "タイマーを再起動": pulling the plug, remotely, for when something is wrong. The timer (XIAO ESP32-S3) closes the browsers' connections, tells the router (or the phones on its access point) it is leaving, unmounts the SD card, **stops for 2 s** and starts much like a power-on. The C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart; the page reopens by itself (log in again).
+- Settings → "🔄 再起動" → "🔁 全員の画面を再読み込み" (admins): every open page (viewers too) reloads; the timer keeps running.
+- When the timer has restarted (the button, a power cycle, `uploadfs`), open pages reload themselves on reconnecting.
+- Under Settings → "🔄 再起動": the uptime, why the timer last started (power-on, the restart button, a crash...), free memory, and how many starts followed a crash (kept across power cycles).
 - "+LAP" on a race card (admins, during a race), next to BEST: records a lap for that pilot now (a pass the receiver missed), like a gate pass; ignored within the cooldown.
 - Settings → "📱 接続用 QR コード": scan to open the page. Host mode: join the timer's WiFi, then open the page; client mode: join the router's WiFi, then open the page by IP address (the router password reaches logged-in admins only). "大きく表示" shows them large.
 - Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
