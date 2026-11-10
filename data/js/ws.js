@@ -29,6 +29,13 @@ function showKicked(){
   var w=document.getElementById('kickedWhy');
   if(w)w.textContent='観戦の接続台数が上限に達したため、古い接続から切断しました。';
   var m=document.getElementById('kickedModal');if(m)m.style.display='flex';
+  // The viewer places as the timer has them now (this WiFi mode).
+  fetch('/api/conn',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(c=>{
+    if(!c||!w||c.viewerLimit===undefined)return;
+    w.textContent=(c.viewerLimit>0
+      ?'観戦の枠（'+(c.ap?'ホストモード':'クライアントモード')+'：'+c.viewerLimit+' 台）がいっぱいになったため、古い接続から切断しました。'
+      :'観戦の枠が 0 台に設定されているため、観戦では接続できません。');
+  }).catch(()=>{});
 }
 function wsReconnectNow(){
   var m=document.getElementById('kickedModal');if(m)m.style.display='none';
