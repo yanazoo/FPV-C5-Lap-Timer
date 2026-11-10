@@ -226,9 +226,9 @@ void elrsFromJson(JsonVariantConst d) {
 // Connection limits and the login hold time; saves.
 void connFromJson(JsonVariantConst d) {
     if (!d["adminMax"].isNull()) connLimits.adminMax = constrain((int)d["adminMax"], 1, (int)CONN_ADMIN_MAX);
-    if (!d["viewHost"].isNull()) connLimits.viewHost = constrain((int)d["viewHost"], 0, (int)CONN_VIEW_HOST_MAX);
+    if (!d["viewHost"].isNull()) connLimits.viewHost = constrain((int)d["viewHost"], 1, (int)CONN_VIEW_HOST_MAX);
     if (!d["viewClient"].isNull())
-        connLimits.viewClient = constrain((int)d["viewClient"], 0, (int)CONN_VIEW_CLIENT_MAX);
+        connLimits.viewClient = constrain((int)d["viewClient"], 1, (int)CONN_VIEW_CLIENT_MAX);
     if (!d["holdSec"].isNull() && loginHoldValid(d["holdSec"] | 0)) loginHoldSec = d["holdSec"] | 0;
     saveConnLimits();
 }

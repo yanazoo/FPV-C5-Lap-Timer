@@ -44,9 +44,9 @@ struct RaceRules {
 // oldest viewer is disconnected when there are too many. Limits per WiFi mode
 // leave headroom: admins get 10 Hz RSSI telemetry, viewers only race events.
 //   host mode (our access point, 10 stations at most): admins 1-4, viewers
-//     0-5, so with the netpack XIAO at most 10 stations (the netpack is not
+//     1-5, so with the netpack XIAO at most 10 stations (the netpack is not
 //     counted, and a full access point makes room for it: ws_handler);
-//   client mode (a router): admins 1-4, viewers 0-8 (lwIP has 16 TCP
+//   client mode (a router): admins 1-4, viewers 1-8 (lwIP has 16 TCP
 //     connections: admins + viewers + netpack + page loads).
 struct ConnLimits {
     uint8_t adminMax   = 2;

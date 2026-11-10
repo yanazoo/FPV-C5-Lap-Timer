@@ -406,7 +406,7 @@ function updateSdSection(present){
 function fillConnSelect(id,min,max,val,unit){
   var s=document.getElementById(id);if(!s)return;
   var h='';
-  for(var i=min;i<=max;i++)h+='<option value="'+i+'"'+(i===val?' selected':'')+'>'+(i===0?'観戦なし（0 台）':i+' 台')+'</option>';
+  for(var i=min;i<=max;i++)h+='<option value="'+i+'"'+(i===val?' selected':'')+'>'+i+' 台'+'</option>';
   s.innerHTML=h;
 }
 async function loadConnLimits(){
@@ -414,8 +414,10 @@ async function loadConnLimits(){
     var r=await fetch('/api/conn');if(!r.ok)throw 0;
     var c=await r.json();
     fillConnSelect('connAdmin',1,c.adminLimit,c.adminMax);
-    fillConnSelect('connViewHost',0,c.viewHostLimit,c.viewHost);
-    fillConnSelect('connViewClient',0,c.viewClientLimit,c.viewClient);
+    // At least one viewer place: with none, a browser not logged in yet is
+    // closed within seconds and could never log in.
+    fillConnSelect('connViewHost',1,c.viewHostLimit,Math.max(1,c.viewHost));
+    fillConnSelect('connViewClient',1,c.viewClientLimit,Math.max(1,c.viewClient));
     var h=document.getElementById('connHold');if(h&&c.holdSec)h.value=String(c.holdSec);
     var now=document.getElementById('connNow');
     if(now)now.innerHTML='<span>現在（'+(c.ap?'ホスト':'クライアント')+'モード）</span><b>管理者 '+c.logins+' / '+c.adminMax

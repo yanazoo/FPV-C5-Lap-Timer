@@ -188,8 +188,10 @@ void loadAll() {
     if (!loginHoldValid(loginHoldSec)) loginHoldSec = LOGIN_HOLD_DEFAULT;
     prefs.end();
     connLimits.adminMax   = constrain(connLimits.adminMax, (uint8_t)1, CONN_ADMIN_MAX);
-    connLimits.viewHost   = min(connLimits.viewHost, CONN_VIEW_HOST_MAX);
-    connLimits.viewClient = min(connLimits.viewClient, CONN_VIEW_CLIENT_MAX);
+    // At least one viewer place: with none, a browser could never stay long
+    // enough to log in.
+    connLimits.viewHost   = constrain(connLimits.viewHost, (uint8_t)1, CONN_VIEW_HOST_MAX);
+    connLimits.viewClient = constrain(connLimits.viewClient, (uint8_t)1, CONN_VIEW_CLIENT_MAX);
     raceRules.rankMode     = raceRules.rankMode <= 2 ? raceRules.rankMode : 0;
     raceRules.timeLimitSec = constrain(raceRules.timeLimitSec, (uint16_t)30, (uint16_t)1800);
     // Raw bytes from flash: keep them in the ranges the API enforces.
