@@ -3,7 +3,6 @@
 // the pilot's MAC column becomes the VTX frequency.
 #pragma once
 #include <Arduino.h>
-#include <vector>
 
 void   sdInit();
 void   sdCheckHotplug(uint32_t now);   // only while sdPollEnabled
@@ -22,7 +21,12 @@ bool   sdBackupRoster();
 int    sdRestoreRoster();              // pilots restored, -1 on error
 String sdListJson();
 bool   sdReadFile(const String& path, String& out);
-// Any file (a PNG too) up to maxLen bytes, and a whole file written at once.
-bool   sdReadBytes(const String& path, std::vector<uint8_t>& out, size_t maxLen);
+// A whole file written at once.
 bool   sdWriteFile(const String& path, const uint8_t* data, size_t len);
+// Pieces of a file: append (first = start a new file), read at an offset,
+// size (-1: none), and put a finished file in place of another.
+bool    sdAppendFile(const String& path, const uint8_t* data, size_t len, bool first);
+size_t  sdReadAt(const String& path, size_t offset, uint8_t* out, size_t len);
+int32_t sdFileSize(const String& path);
+bool    sdReplaceFile(const String& from, const String& to);
 bool   sdDeleteFile(const String& path);

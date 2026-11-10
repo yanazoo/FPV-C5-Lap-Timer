@@ -301,18 +301,47 @@ bool sdReadFile(const String& path, String& out) {
     return true;
 }
 
-bool sdReadBytes(const String& path, std::vector<uint8_t>& out, size_t maxLen) {
+bool sdAppendFile(const String& path, const uint8_t* data, size_t len, bool first) {
     if (!safePath(path)) return false;
     SdGuard g;
     if (!sdPresent) return false;
-    File f = SD.open(path, FILE_READ);
+    File f = SD.open(path, first ? FILE_WRITE : FILE_APPEND);
     if (!f) return false;
-    size_t n = f.size();
-    if (n > maxLen) { f.close(); return false; }
-    out.resize(n);
-    size_t got = n ? f.read(out.data(), n) : 0;
+    size_t put = f.write(data, len);
     f.close();
-    return got == n;
+    return put == len;
+}
+
+size_t sdReadAt(const String& path, size_t offset, uint8_t* out, size_t len) {
+    if (!safePath(path)) return 0;
+    SdGuard g;
+    if (!sdPresent) return 0;
+    File f = SD.open(path, FILE_READ);
+    if (!f) return 0;
+    size_t n = f.seek(offset) ? f.read(out, len) : 0;
+    f.close();
+    return n;
+}
+
+int32_t sdFileSize(const String& path) {
+    if (!safePath(path)) return -1;
+    SdGuard g;
+    if (!sdPresent) return -1;
+    File f = SD.open(path, FILE_READ);
+    if (!f || f.isDirectory()) { if (f) f.close(); return -1; }
+    int32_t n = (int32_t)f.size();
+    f.close();
+    return n;
+}
+
+bool sdReplaceFile(const String& from, const String& to) {
+    if (!safePath(from) || !safePath(to)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    if (SD.exists(to)) SD.remove(to);
+    bool ok = SD.rename(from, to);
+    if (ok) Serial.printf("[SD] wrote %s\n", to.c_str());
+    return ok;
 }
 
 bool sdWriteFile(const String& path, const uint8_t* data, size_t len) {

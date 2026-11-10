@@ -3,7 +3,6 @@
 #include <freertos/timers.h>
 #include <algorithm>
 #include <functional>
-#include <memory>
 #include <time.h>
 #include "http_routes.h"
 #include "c5_link.h"
@@ -21,7 +20,7 @@ using JsonHandler = std::function<void(AsyncWebServerRequest*, JsonDocument&)>;
 
 // POST with a JSON body. The body can arrive in several chunks.
 void onJson(const char* path, JsonHandler h) {
-    server.on(path, HTTP_POST, [](AsyncWebServerRequest*) {}, nullptr,
+    server.on(AsyncURIMatcher::exact(path), HTTP_POST, [](AsyncWebServerRequest*) {}, nullptr,
         [h](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
             if (total > 4096) { if (index == 0) req->send(413); return; }
             // malloc, not new: the server free()s _tempObject if the request is aborted.
@@ -333,7 +332,14 @@ bool qrImagePath(const String& path) {
     }
     return true;
 }
-const size_t kQrImageMax = 160 * 1024;
+const size_t kQrImageMax = 300 * 1024;
+const char* const kQrUploadTmp = "/qr_upload_tmp.png";   // until the last piece is in
+struct QrUpload {
+    size_t total, got;
+    bool started;
+    int code;
+    const char* why;   // refused: the reply
+};
 
 const char* mimeOf(const String& path) {
     if (path.endsWith(".csv")) return "text/csv; charset=utf-8";
@@ -389,7 +395,7 @@ void registerHttpRoutes() {
         server.on(p, HTTP_ANY, [](AsyncWebServerRequest* r) { r->send(204); });
 
     // ── Roster ─────────────────────────────────────────────────────────────
-    server.on("/api/pilots", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/pilots"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", rosterJson());
     });
 
@@ -445,7 +451,7 @@ void registerHttpRoutes() {
     });
 
     // ── Slots ──────────────────────────────────────────────────────────────
-    server.on("/api/active", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/active"), HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
         Guard g;
@@ -499,10 +505,10 @@ void registerHttpRoutes() {
     // ── Race ───────────────────────────────────────────────────────────────
     // Start: the timer runs ready -> stage -> start (or resumes a stopped
     // race) and every browser and goggle follows it.
-    server.on("/api/race/start", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStart(); ok(req); });
-    server.on("/api/race/stop", HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStop(); ok(req); });
+    server.on(AsyncURIMatcher::exact("/api/race/start"), HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStart(); ok(req); });
+    server.on(AsyncURIMatcher::exact("/api/race/stop"), HTTP_POST, [](AsyncWebServerRequest* req) { raceRequestStop(); ok(req); });
     // The Clear button: save to SD (per SD log mode), then forget the race.
-    server.on("/api/race/save", HTTP_POST, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/race/save"), HTTP_POST, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", raceClear());
     });
 
@@ -522,7 +528,7 @@ void registerHttpRoutes() {
         else req->send(409, "application/json", R"({"ok":false,"reason":"not racing"})");
     });
 
-    server.on("/api/laps", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/laps"), HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument doc;
         JsonArray arr = doc.to<JsonArray>();
         Guard g;
@@ -539,7 +545,7 @@ void registerHttpRoutes() {
 
 
     // ── Settings ───────────────────────────────────────────────────────────
-    server.on("/api/settings", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/settings"), HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument doc;
         {
             Guard g;
@@ -556,7 +562,7 @@ void registerHttpRoutes() {
 
 
     // ── ELRS OSD (vrxc_elrs settings) ──────────────────────────────────────
-    server.on("/api/elrs", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/elrs"), HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument d;
         {
             Guard g;
@@ -581,18 +587,18 @@ void registerHttpRoutes() {
     });
 
     // ── SD card ────────────────────────────────────────────────────────────
-    server.on("/api/sd/status", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/sd/status"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", sdPresent ? R"({"present":true})" : R"({"present":false})");
     });
     onJson("/api/sd/poll", [](AsyncWebServerRequest* req, JsonDocument& d) {
         sdPollEnabled = d["enable"] | false;
         ok(req);
     });
-    server.on("/api/sd/pilots/backup", HTTP_POST, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/sd/pilots/backup"), HTTP_POST, [](AsyncWebServerRequest* req) {
         if (sdBackupRoster()) ok(req);
         else req->send(503, "application/json", R"({"error":"no sd card"})");
     });
-    server.on("/api/sd/pilots/restore", HTTP_POST, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/sd/pilots/restore"), HTTP_POST, [](AsyncWebServerRequest* req) {
         int n = sdRestoreRoster();
         if (n < 0) { req->send(503, "application/json", R"({"error":"no /pilots.csv"})"); return; }
         applyGateConfig();
@@ -659,59 +665,67 @@ void registerHttpRoutes() {
 
     // A connection QR image drawn by the browser (PNG body), saved to the
     // card as /qr_*.png. Admin only: the WiFi QR carries the password.
-    server.on("/api/sd/upload", HTTP_POST,
+    server.on(AsyncURIMatcher::exact("/api/sd/upload"), HTTP_POST,
         [](AsyncWebServerRequest* req) {
-            uint8_t* buf = reinterpret_cast<uint8_t*>(req->_tempObject);
-            size_t got = buf ? *reinterpret_cast<size_t*>(buf) : 0;
-            size_t want = req->contentLength();
+            QrUpload* u = reinterpret_cast<QrUpload*>(req->_tempObject);
             String path = req->hasParam("path") ? req->getParam("path")->value() : "";
-            String token = req->hasParam("token") ? req->getParam("token")->value() : "";
             int code = 200;
             const char* msg = R"({"ok":true})";
-            if (!wsTokenValid(token)) code = 403, msg = R"({"ok":false,"reason":"login"})";
-            else if (!qrImagePath(path)) code = 400, msg = R"({"ok":false,"reason":"path"})";
-            else if (!buf || !want || got != want) code = 413, msg = R"({"ok":false,"reason":"size"})";
-            else if (!sdWriteFile(path, buf + sizeof(size_t), got)) code = 503, msg = R"({"ok":false,"reason":"nosd"})";
-            free(buf);
-            req->_tempObject = nullptr;
+            if (!u) code = 400, msg = R"({"ok":false,"reason":"size"})";
+            else if (u->why) code = u->code, msg = u->why;
+            else if (!u->total || u->got != u->total) code = 400, msg = R"({"ok":false,"reason":"size"})";
+            else if (!sdReplaceFile(kQrUploadTmp, path)) code = 503, msg = R"({"ok":false,"reason":"nosd"})";
+            if (code != 200 && u && u->started) sdDeleteFile(kQrUploadTmp);
             req->send(code, "application/json", msg);
         },
         nullptr,
         [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
             if (index == 0) {
-                // malloc: the server free()s _tempObject if the request is aborted.
-                req->_tempObject = total && total <= kQrImageMax ? malloc(sizeof(size_t) + total) : nullptr;
-                if (req->_tempObject) *reinterpret_cast<size_t*>(req->_tempObject) = 0;
+                // malloc: the server free()s _tempObject when the request ends.
+                QrUpload* n = reinterpret_cast<QrUpload*>(malloc(sizeof(QrUpload)));
+                if (!n) return;
+                *n = QrUpload{};
+                n->total = total;
+                String path = req->hasParam("path") ? req->getParam("path")->value() : "";
+                String token = req->hasParam("token") ? req->getParam("token")->value() : "";
+                if (!wsTokenValid(token)) n->code = 403, n->why = R"({"ok":false,"reason":"login"})";
+                else if (!qrImagePath(path)) n->code = 400, n->why = R"({"ok":false,"reason":"path"})";
+                else if (!total || total > kQrImageMax) n->code = 413, n->why = R"({"ok":false,"reason":"size"})";
+                req->_tempObject = n;
             }
-            uint8_t* buf = reinterpret_cast<uint8_t*>(req->_tempObject);
-            if (!buf || index + len > total) return;
-            memcpy(buf + sizeof(size_t) + index, data, len);
-            *reinterpret_cast<size_t*>(buf) = index + len;
+            QrUpload* u = reinterpret_cast<QrUpload*>(req->_tempObject);
+            if (!u || u->why || index != u->got) return;
+            // Each piece straight to a temporary file on the card.
+            if (!sdAppendFile(kQrUploadTmp, data, len, index == 0)) {
+                u->code = 503, u->why = R"({"ok":false,"reason":"nosd"})";
+                return;
+            }
+            u->started = true;
+            u->got = index + len;
         });
 
-    server.on("/api/sd/files", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/sd/files"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", sdListJson());
     });
     // Download a file. The settings backup and the QR images hold
     // passwords: only for a logged-in admin (token).
-    server.on("/api/sd/file", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/sd/file"), HTTP_GET, [](AsyncWebServerRequest* req) {
         String path = req->hasParam("path") ? req->getParam("path")->value() : "";
         String token = req->hasParam("token") ? req->getParam("token")->value() : "";
         if (sdSecretFile(path) && !wsTokenValid(token)) {
             req->send(403, "application/json", R"({"error":"login"})");
             return;
         }
-        auto buf = std::make_shared<std::vector<uint8_t>>();
-        if (!sdReadBytes(path, *buf, 200000)) {
+        // Read a piece at a time (a QR image is ~80 KB): no big buffer.
+        int32_t size = sdFileSize(path);
+        if (size < 0 || size > 2000000) {
             req->send(404, "application/json", R"({"error":"not found"})");
             return;
         }
-        AsyncWebServerResponse* res = req->beginResponse(mimeOf(path), buf->size(),
-            [buf](uint8_t* out, size_t maxLen, size_t index) -> size_t {
-                if (index >= buf->size()) return 0;
-                size_t n = std::min(maxLen, buf->size() - index);
-                memcpy(out, buf->data() + index, n);
-                return n;
+        AsyncWebServerResponse* res = req->beginResponse(mimeOf(path), (size_t)size,
+            [path, size](uint8_t* out, size_t maxLen, size_t index) -> size_t {
+                if (index >= (size_t)size) return 0;
+                return sdReadAt(path, index, out, std::min(maxLen, (size_t)size - index));
             });
         String name = path.substring(1);
         res->addHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
@@ -776,7 +790,7 @@ void registerHttpRoutes() {
     });
 
     // Connection limits (settings) and who is connected now.
-    server.on("/api/conn", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/conn"), HTTP_GET, [](AsyncWebServerRequest* req) {
         int admins, viewers;
         wsCounts(admins, viewers);
         char b[256];
@@ -802,7 +816,7 @@ void registerHttpRoutes() {
 
     // ── WiFi: host / client (applied after a reboot) ───────────────────────
     // The client network's password is never sent back to the browser.
-    server.on("/api/net", HTTP_GET, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/net"), HTTP_GET, [](AsyncWebServerRequest* req) {
         JsonDocument d;
         d["mode"]      = netMode;
         d["apSsid"]    = apSsid;
@@ -840,14 +854,14 @@ void registerHttpRoutes() {
 
     // Restart button: the timer (the C5 and the bridge keep running; their
     // links come back on their own).
-    server.on("/api/restart", HTTP_POST, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/restart"), HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);
         Serial.println("[Sys] restart requested");
         static TimerHandle_t t = xTimerCreate("restart", pdMS_TO_TICKS(1000), pdFALSE, nullptr,
                                               [](TimerHandle_t) { ESP.restart(); });
         xTimerStart(t, 0);
     });
-    server.on("/api/reboot", HTTP_POST, [](AsyncWebServerRequest* req) {
+    server.on(AsyncURIMatcher::exact("/api/reboot"), HTTP_POST, [](AsyncWebServerRequest* req) {
         ok(req);
         static TimerHandle_t t = xTimerCreate("reboot", pdMS_TO_TICKS(500), pdFALSE, nullptr,
                                               [](TimerHandle_t) { ESP.restart(); });
