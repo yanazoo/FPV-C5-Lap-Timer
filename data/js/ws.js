@@ -6,19 +6,38 @@ var wsDot=document.getElementById('wsDot');
 function wsConnect(){
   var c=new WebSocket('ws://'+location.host+'/ws');
   wsConn=c;wsLastMsg=performance.now();
-  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';sendClock();};
+  c.onopen=()=>{wsRetry=1000;wsLastMsg=performance.now();wsDot.className='ws-dot connected';sendHello();};
   c.onerror=()=>c.close();
-  c.onclose=()=>{
+  c.onclose=ev=>{
     if(wsConn!==c)return;   // replaced already
     wsDot.className='ws-dot disconnected';
+    // 4001: the timer closed this viewer (more viewers than allowed). Don't
+    // come straight back (that would push another viewer out): ask first.
+    if(ev&&ev.code===4001){wsConn=null;showKicked();return;}
     setTimeout(()=>{wsRetry=Math.min(wsRetry*2,4000);wsConnect();},wsRetry);
   };
   c.onmessage=e=>{wsLastMsg=performance.now();var d;try{d=JSON.parse(e.data);}catch(ex){return;}onMsg(d);};
 }
-// The timer has no clock: give it this browser's, so saved races get a date.
-function sendClock(){
-  fetch('/api/clock',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({epoch:Date.now(),tz:-new Date().getTimezoneOffset()})}).catch(()=>{});
+// Tell the timer who this browser is: a logged-in admin (token) gets RSSI
+// telemetry and keeps its connection; the timer takes its date from admins
+// only (it has no clock of its own).
+function sendHello(){
+  if(!wsConn||wsConn.readyState!==1)return;
+  try{wsConn.send(JSON.stringify({type:'hello',token:authToken,epoch:Date.now(),tz:-new Date().getTimezoneOffset()}));}catch(e){}
+}
+function showKicked(){
+  var w=document.getElementById('kickedWhy');
+  if(w)w.textContent='観戦の接続台数が上限に達したため、古い接続から切断しました。';
+  var m=document.getElementById('kickedModal');if(m)m.style.display='flex';
+  // The viewer places as the timer has them now (this WiFi mode).
+  fetch('/api/conn',{cache:'no-store'}).then(r=>r.ok?r.json():null).then(c=>{
+    if(!c||!w||c.viewerLimit===undefined)return;
+    w.textContent='観戦の枠（'+(c.ap?'ホストモード':'クライアントモード')+'：'+c.viewerLimit+' 台）がいっぱいになったため、古い接続から切断しました。';
+  }).catch(()=>{});
+}
+function wsReconnectNow(){
+  var m=document.getElementById('kickedModal');if(m)m.style.display='none';
+  wsRetry=1000;wsConnect();
 }
 // The timer sends its status every second: three seconds of silence means
 // the connection is stuck (WiFi hiccup, phone woke from sleep). Reconnect
@@ -26,12 +45,26 @@ function sendClock(){
 setInterval(()=>{
   if(wsConn&&wsConn.readyState===1&&performance.now()-wsLastMsg>3000){try{wsConn.close();}catch(e){}}
 },1000);
+// The timer's answer to hello: a token it doesn't know (it restarted, or the
+// login lapsed) leaves this tab a viewer.
+function onHelloReply(d){
+  if(d.admin||!isAuthed)return;
+  dropAuth();
+  if(activeTab!=='race')switchTab('race');
+  toast('🔒 ログインが切れました。もう一度ログインしてください');
+}
 
 // The race as the timer sees it (1 Hz status): put this browser right if it
 // missed a start, stop, clear or lap.
 var seenEpoch=null;
 function reconcileRace(r){
   noteServerTime(r.now);
+  // A delayed start under way (joined late, or race_wait lost).
+  if(r.wait>0&&!waitH&&!countdownH&&!raceRunning&&performance.now()>=readyUntil){onRaceWait(r.wait/1000,true);return;}
+  if(waitH){
+    if(!r.wait&&!r.run&&performance.now()>waitEnd+2000)endWait();   // called off elsewhere, race_stop lost
+    else return;
+  }
   if(countdownH||performance.now()<readyUntil)return;   // a start is under way
   var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
   seenEpoch=r.epoch;
@@ -47,10 +80,24 @@ function reconcileRace(r){
 }
 
 function onMsg(d){
+  if(d.type==='reload'){
+    // An admin asked every page to reload: spread over a second or so, so
+    // the timer isn't asked for every page at once.
+    toast('🔁 画面を再読み込みします…',3000);
+    setTimeout(()=>location.reload(),300+Math.random()*1500);
+    return;
+  }
   if(d.type==='init'){
+    // The timer restarted since this page loaded (or has a new web UI):
+    // start over from a fresh page.
+    if(d.boot){
+      if(seenBoot&&d.boot!==seenBoot){location.reload();return;}
+      seenBoot=d.boot;
+    }
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);
+    srvOff=null;   // a new connection: measure the timer's clock afresh (it may have restarted)
     noteServerTime(d.now);
     timerFrozenMs=d.raceElapsedMs||0;
     if(raceRunning)resumeTimer(d.now!==undefined?d.raceStartMs:undefined);
@@ -76,6 +123,8 @@ function onMsg(d){
     return;
   }
   if(d.type==='settings'){applySettings(d);return;}
+  if(d.type==='hello'){onHelloReply(d);return;}
+  if(d.type==='race_wait'){onRaceWait(d.sec,false);return;}
   if(d.type==='calib'){
     // Thresholds saved on some browser (this one included).
     var rd=rosterById[d.id];if(rd){rd.enter=d.enter;rd.exit=d.exit;}
@@ -297,6 +346,8 @@ function applySettings(st){
   if(st.gain!==undefined)setField('gainInput',st.gain);
   if(st.rankMode!==undefined){rankMode=st.rankMode;timeLimitSec=st.timeLimitSec||120;countLastLap=st.countLastLap!==false;
     showRaceRules();renderRanking();}
+  if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
+  if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

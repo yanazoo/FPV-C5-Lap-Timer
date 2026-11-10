@@ -9,9 +9,13 @@ var timerEl=document.getElementById('timer');
 // one with the least delay. It drifts down slowly (clocks differ by up to
 // ~0.05 %) so a better sample can take over.
 var srvOff=null,srvOffAt=0,raceStartSrv=0;
+// A sample far below the estimate means the timer's clock started again
+// (the timer restarted while this page stayed open): start over from it,
+// or every race clock would run ahead by the old uptime.
 function noteServerTime(ts){
   if(!ts)return;
   var now=performance.now(),s=ts-now;
+  if(srvOff!==null&&s<srvOff-2000)srvOff=null;
   if(srvOff===null||s>srvOff-(now-srvOffAt)*0.0005)srvOff=s;
   else srvOff-=(now-srvOffAt)*0.0005;
   srvOffAt=now;
@@ -115,7 +119,7 @@ function buildRaceCards(){
       +'<div class="pilot-best-row">'
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
-        +'<span class="pilot-delta" id="rcDelta'+p.id+'"></span>'
+        +'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>'
       +'</div>'
       +'<div class="lap-table-wrap">'
         +'<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead>'
@@ -131,7 +135,6 @@ function buildRaceCards(){
       val  : document.getElementById('rssiVal'+p.id),
       best : document.getElementById('rcBest'+p.id),
       badge: document.getElementById('rcBadge'+p.id),
-      delta: document.getElementById('rcDelta'+p.id),
       body : document.getElementById('lapBody'+p.id)
     };
   });
@@ -140,6 +143,7 @@ function buildRaceCards(){
   // Rebuilding the cards (another browser assigned pilots) keeps the laps.
   slots.forEach(p=>renderLapRows(p));
   renderRanking();
+  setBtns(raceRunning);   // the new cards' lap buttons
 }
 
 function updateRaceCard(p){
@@ -169,12 +173,6 @@ function lapRowEl(r,isBest,idx){
   tr.innerHTML='<td>'+r.label+'</td><td class="lap-time">'+fmt(r.lapMs)+'</td><td>'+fmt(r.cum)+'</td>';
   return tr;
 }
-function showDelta(p,lapMs){
-  var e=p.el,delta=e?e.delta:document.getElementById('rcDelta'+p.id);
-  if(!delta)return;
-  if(p.bestLapMs&&lapMs){var d=lapMs-p.bestLapMs;if(d===0){delta.textContent='★ BEST';delta.className='pilot-delta faster';}else{delta.textContent=fmtDelta(d);delta.className='pilot-delta '+(d<0?'faster':'slower');}}
-  else{delta.textContent='';delta.className='pilot-delta';}
-}
 // Redraw a card's lap table from the slot's lap history (p.rows).
 function renderLapRows(p){
   var e=p.el,tbody=e?e.body:document.getElementById('lapBody'+p.id);
@@ -188,7 +186,6 @@ function renderLapRows(p){
     tbody.appendChild(lapRowEl(r,isBest,i));
   }
   var last=p.rows[p.rows.length-1];
-  showDelta(p,last?last.lapMs:0);
 }
 function addLapRow(p, lapMs, cumMs, quiet){
   var r={label:lapMode==='immediate'?p.lapCount:(p.lapCount===1?'HS':(p.lapCount-1)),lapMs:lapMs,cum:cumMs};
@@ -198,7 +195,6 @@ function addLapRow(p, lapMs, cumMs, quiet){
   var isBest=(p.bestLapMs===lapMs&&lapMs>0);
   if(isBest)tbody.querySelectorAll('tr.best-row').forEach(r=>r.classList.remove('best-row'));
   tbody.insertBefore(lapRowEl(r,isBest,p.rows.length-1),tbody.firstChild);
-  showDelta(p,lapMs);
   if(quiet)return;
   var card=e?e.card:document.getElementById('rc-'+p.id);
   card.classList.remove('flash');void card.offsetWidth;card.classList.add('flash');
@@ -297,7 +293,6 @@ function resetLaps(){
     p.lapCount=0;p.bestLapMs=0;p.lapTimes=[];p.cumulative=0;p.rows=[];p.lastTs=0;p.done=false;
     var e=p.el;
     var b=e?e.body:document.getElementById('lapBody'+p.id);if(b)b.innerHTML='';
-    var d=e?e.delta:document.getElementById('rcDelta'+p.id);if(d)d.textContent='';
     updateRaceCard(p);
   });
   renderRanking();
@@ -312,8 +307,50 @@ function resetLaps(){
 var startWatchdog=null;
 function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);startWatchdog=null;}}
 
-function onRaceStart(ts){
+// ── Start delay (race_wait) ─────────────────────────────────────────────
+// The timer waits startDelaySec before "レディ". Every browser shows the
+// time left on the race clock and calls it out at the start of the wait
+// and every 10 s: a chime, then "レーススタートまで残り N 秒です。".
+var waitEnd=0,waitNextCall=0;
+function onRaceWait(sec,joined){
   clearStartWatchdog();
+  if(countdownH||raceRunning)return;
+  var s=Math.ceil(sec);
+  waitEnd=performance.now()+sec*1000;
+  // A fresh wait is called out at once; a browser joining one part way
+  // through waits for the next multiple of 10.
+  waitNextCall=joined?Math.floor((s-1)/10)*10:s;
+  if(waitH)clearInterval(waitH);
+  timerEl.classList.remove('running');timerEl.classList.add('waiting');
+  var lbl=document.getElementById('waitLabel');if(lbl)lbl.style.display='block';
+  var tick=()=>{
+    var rem=waitEnd-performance.now();
+    if(rem<=0){timerEl.textContent='00:00';return;}   // race_ready ends it
+    var left=Math.ceil(rem/1000);
+    timerEl.textContent=pad(Math.floor(left/60),2)+':'+pad(left%60,2);
+    if(waitNextCall>0&&left<=waitNextCall){
+      announceWait(waitNextCall);
+      waitNextCall=Math.floor((waitNextCall-1)/10)*10;
+    }
+  };
+  waitH=setInterval(tick,100);tick();
+  setBtns(raceRunning);
+}
+function announceWait(n){
+  ensureAudio();sfx.chime();
+  if(voiceEnabled&&announceMode!=='none'&&announceMode!=='beep')
+    setTimeout(()=>sayNow('レーススタートまで残り'+n+'秒です。'),450);
+}
+function endWait(){
+  if(!waitH)return;
+  clearInterval(waitH);waitH=null;
+  timerEl.classList.remove('waiting');
+  var lbl=document.getElementById('waitLabel');if(lbl)lbl.style.display='none';
+  setBtns(raceRunning);
+}
+
+function onRaceStart(ts){
+  clearStartWatchdog();endWait();
   raceRunning=true;raceStarted=true;setBtns(true);startTimer(ts);
   lapEpoch++;resetLaps();
 }
@@ -324,7 +361,7 @@ function onRaceResume(ts){
 // A start under way: "レディ" on every browser, then race_stage's countdown.
 var readyUntil=0;   // until then the 1 Hz status mustn't undo the start
 function onRaceReady(){
-  clearStartWatchdog();
+  clearStartWatchdog();endWait();
   if(countdownH)return;
   readyUntil=performance.now()+2500;
   ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
@@ -335,6 +372,7 @@ function onRaceReady(){
 // director); the browser that pressed Stop has already played it.
 var stopToneAt=-1e9;
 function onRaceStop(elapsed){
+  if(waitH){endWait();timerEl.textContent=raceClockText(timerFrozenMs);}   // start called off during the wait
   if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
   if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
   raceRunning=false;setBtns(false);stopTimer(elapsed);
@@ -391,6 +429,7 @@ async function clearAllLaps(){
 }
 // Clear from any browser (race_clear) or this one.
 function onRaceClear(){
+  endWait();
   stopTimer();
   timerFrozenMs=0;
   timerEl.textContent=raceClockText(0);
@@ -402,12 +441,24 @@ function onRaceClear(){
 
 function setBtns(running){
   // Viewers (unauthed) can never operate race controls regardless of state.
-  var locked=!isAuthed;
-  document.getElementById('btnStart').disabled=locked||running;
-  document.getElementById('btnStop').disabled=locked||!running;
+  var locked=!isAuthed,waiting=!!waitH;
+  document.getElementById('btnStart').disabled=locked||running||waiting;
+  // Stop also calls off a delayed start.
+  document.getElementById('btnStop').disabled=locked||(!running&&!waiting);
   // Clear is only allowed while stopped (not during a running race).
   var btnClear=document.getElementById('btnClear');
-  if(btnClear)btnClear.disabled=locked||running;
+  if(btnClear)btnClear.disabled=locked||running||waiting;
+  // Lap buttons on the race cards: admins, while the race runs.
+  document.querySelectorAll('.lap-btn').forEach(b=>b.disabled=locked||!running);
+}
+// Record a lap for this pilot now (a gate pass missed by the receiver).
+async function manualLap(slot,btn){
+  if(!isAuthed||!raceRunning)return;
+  if(btn){btn.classList.add('hit');setTimeout(()=>btn.classList.remove('hit'),300);}
+  try{
+    var r=await fetch('/api/laps/manual',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:slot})});
+    if(!r.ok)toast('⚠ レース中だけ記録できます');
+  }catch(e){toast('⚠ 接続エラー');}
 }
 // finished: the firmware's verdict for this lap (it knows the holeshot lap
 // doesn't count). Without it, count laps the same way: the holeshot isn't a lap.

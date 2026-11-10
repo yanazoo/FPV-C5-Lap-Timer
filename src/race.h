@@ -31,6 +31,9 @@ void raceDirectorSwitch(uint8_t state);
 // race::Core::deleteLap). Every browser reloads the laps; the goggles get the
 // new lap count, positions and best lap. False if there is no such pass.
 bool raceDeleteLap(int slot, int index, uint32_t lapMs);
+// The admin's lap button: a pass for this slot now (the cooldown applies).
+// False if no race is running or nobody is in the slot.
+bool raceManualLap(int slot);
 // Clear button: optionally save to SD, then forget the race.
 // Returns the JSON response for /api/race/save.
 String raceClear();

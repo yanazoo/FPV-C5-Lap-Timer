@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>FPV C5 Lap Timer</title>
+<!-- No tab icon of our own: an empty one, so the browser drops an icon it
+     cached for this address from another device's page (e.g. a logo). -->
+<link rel="icon" href="data:,">
 <style>
 :root {
   --bg:#0d1117;--sf:#161b22;--sf2:#21262d;--bd:#30363d;
@@ -50,6 +53,12 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 /* ── Race controls ── */
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
+#timer.waiting{color:var(--warn)}
+.pick-list{max-height:50vh;overflow-y:auto;margin:8px 0;display:flex;flex-direction:column;gap:6px}
+.pick-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--bd);border-radius:6px;cursor:pointer;font-size:13px}
+.pick-row>span{display:flex;flex-direction:column;gap:2px}.pick-row input{width:auto}
+.sd-item{display:flex;flex-direction:column;gap:2px;margin:12px 0 6px;font-size:13px}.sd-item:first-of-type{margin-top:0}.sd-item .res-muted{font-size:11px}
+#waitLabel{display:none;font-size:13px;font-weight:700;color:var(--warn);margin-bottom:-4px}
 #timer.running{color:var(--ok)}
 #timer.timeup,#timer.running.timeup{color:var(--err)}
 .race-buttons{display:flex;gap:8px;justify-content:center}
@@ -105,9 +114,11 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .rssi-mini-val{font-size:10px;color:var(--muted);min-width:36px;text-align:right}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
+.lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.lap-btn:disabled{opacity:.3;cursor:default}
+.lap-btn.hit{background:var(--accent);color:#fff}
+body.viewer .lap-btn{display:none}
 .pilot-best{font-size:14px;font-weight:700;color:var(--accent)}
-.pilot-delta{font-size:11px;font-weight:700;margin-left:auto}
-.pilot-delta.faster{color:var(--ok)}.pilot-delta.slower{color:var(--err)}
 .lap-table-wrap{overflow-x:auto;max-height:220px;overflow-y:auto}
 .lapTable{width:100%;border-collapse:collapse;font-size:11px}
 .lapTable thead th{background:var(--sf2);color:var(--muted);padding:3px 4px;text-align:center;font-weight:normal;font-size:10px;border-bottom:1px solid var(--bd);position:sticky;top:0}
@@ -217,6 +228,19 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .res-legend button.off{opacity:.35}
 .res-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}
 .res-bar{height:8px;border-radius:4px;background:var(--accent)}
+/* Connection QR codes */
+.qr-wrap{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+.qr-item{display:flex;flex-direction:column;align-items:center;gap:6px;max-width:220px}
+.qr-item .qr{background:#fff;padding:8px;border-radius:8px;line-height:0}
+.qr-item .qr svg{width:180px;height:180px}
+.qr-item .cap{font-size:12px;color:var(--tx);text-align:center;font-weight:600}
+.qr-item .sub{font-size:11px;color:var(--muted);text-align:center;word-break:break-all}
+.modal-box.qr-big{max-width:560px}
+.qr-big .qr-item{max-width:260px}.qr-big .qr-item .qr svg{width:240px;height:240px}
+/* Viewers (not logged in): the light spectator screen */
+#viewBadge{display:none;font-size:11px;color:var(--muted);border:1px solid var(--bd);border-radius:10px;padding:1px 8px;white-space:nowrap}
+body.viewer #viewBadge{display:inline-block}
+body.viewer .rssi-mini-bar,body.viewer .crossing-badge,body.viewer .race-buttons button:not(#btnVoiceTest){display:none!important}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
 .modal-box{background:var(--sf);border:1px solid var(--accent);border-radius:10px;padding:18px;width:100%;max-width:320px}
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
@@ -234,8 +258,6 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
 .lapTable tbody tr.deletable{cursor:pointer}
 .lapTable tbody tr.deletable:hover td{background:rgba(255,255,255,.05)}
 .tab-btn.locked::before{content:'🔒 ';font-size:10px}
-#authHint{font-size:11px;color:var(--muted);text-align:center;margin-top:4px;display:none}
-#authHint a{color:var(--accent);cursor:pointer;text-decoration:underline}
 
 @media(max-width:900px){.calib-grid{grid-template-columns:1fr 1fr}}
 /* Race cards: 8 across on wide PC windows, 4 across on phones held sideways
@@ -252,7 +274,6 @@ footer{background:var(--sf);border-top:1px solid var(--bd);text-align:center;pad
   .pilot-race-grid .rssi-mini-bar,.pilot-race-grid .pilot-best-row{padding:3px 6px}
   .pilot-race-grid .pilot-best-row{flex-wrap:wrap;gap:2px 6px}
   .pilot-race-grid .pilot-best{font-size:13px}
-  .pilot-race-grid .pilot-delta{font-size:10px}
   .pilot-race-grid .lapTable{font-size:10px}
   .pilot-race-grid .lapTable tbody td{padding:3px 2px}
   .pilot-race-grid .lapTable tbody td.lap-time{font-size:12px}
@@ -313,6 +334,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="logo">
       <h1>FPV C5 Lap Timer</h1>
       <span id="wsDot" class="ws-dot disconnected"></span>
+      <span id="viewBadge" title="ログインしていない端末は、計測時間・ラップ・順位だけを表示します">👀 観戦</span>
       <span id="c5Badge" class="c5-badge ng" title="C5 受信機 / ELRS netpack"><span class="st ng">C5<i>●</i></span></span>
     </div>
     <span id="statusMsg"></span>
@@ -331,6 +353,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <!-- ═══════════════════════════ RACE ═══════════════════════════ -->
 <section id="pane-race" class="tab-pane active">
   <div class="race-controls">
+    <div id="waitLabel">レーススタートまで</div>
     <div id="timer">00:00</div>
     <div class="race-buttons">
       <button id="btnStart" onclick="startRace()" class="btn-success">▶ スタート</button>
@@ -338,7 +361,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button id="btnClear" onclick="clearAllLaps()" class="btn-secondary">クリア</button>
       <button id="btnVoiceTest" onclick="testVoice()" class="btn-secondary">音声テスト</button>
     </div>
-    <div id="authHint">🔒 操作するには <a onclick="onAuthBtn()">ログイン</a> が必要です</div>
   </div>
   <div class="rank-panel" id="rankPanel">
     <div class="rank-head"><b>順位</b><span id="rankRule"></span></div>
@@ -370,6 +392,31 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="2">時間内の周回数（制限時間内に何周できたか）</option>
       </select>
     </div>
+    <div class="config-row">
+      <label>スタートの待ち時間</label>
+      <label class="toggle-sw" style="flex:1">
+        <input type="checkbox" id="startDelayToggle" onchange="toggleStartDelay()">
+        <span class="toggle-track"></span>
+        <span id="startDelayState">OFF</span>
+      </label>
+    </div>
+    <div class="config-row" id="startDelaySelRow" style="display:none">
+      <label>待ち時間</label>
+      <select id="startDelaySelect" onchange="onStartDelaySelect()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="10">10 秒</option>
+        <option value="15">15 秒</option>
+        <option value="30">30 秒</option>
+        <option value="60">60 秒</option>
+        <option value="custom">任意の秒数</option>
+      </select>
+    </div>
+    <div class="config-row" id="startDelayCustomRow" style="display:none">
+      <label>待ち時間（任意）</label>
+      <div class="slider-num">
+        <input type="number" id="startDelayCustom" min="1" max="600" value="20" onchange="saveStartDelay()" style="width:80px"><span class="unit">秒（1〜600）</span>
+      </div>
+    </div>
+    <p class="section-desc" style="margin-top:-2px">ON にすると、スタートボタン・ディレクターのスイッチで始めたとき、待ち時間だけ待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
     <div class="config-row rank-timed">
       <label>制限時間</label>
       <div class="slider-num">
@@ -425,11 +472,25 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 
   <div class="global-config-card" id="sdSection" style="display:none">
     <h3 class="global-title">💾 SDカード</h3>
-    <p class="section-desc">パイロット情報をSDカードにバックアップ・復元します（CSV形式）。</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 SDバックアップ保存</button>
-      <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 SDから復元</button>
+    <div class="sd-item"><b>👤 パイロット情報</b><span class="res-muted">名前・周波数・キャリブレーション・割り当て</span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 保存</button>
+      <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 復元</button>
     </div>
+    <!-- Everything but the pilots, to /settings.json. -->
+    <div class="sd-item"><b>⚙️ 設定情報</b><span class="res-muted">パイロット以外のすべての設定<span id="setBkInfo"></span></span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdSettingsBackup()" class="btn-secondary" style="flex:1">📥 保存</button>
+      <button onclick="sdSettingsRestore()" class="btn-secondary" style="flex:1">📤 復元</button>
+    </div>
+    <!-- The connection QR codes as one PNG, to print or put up at the field. -->
+    <div class="sd-item"><b>🔳 接続 QR 画像</b><span class="res-muted">印刷・掲示用の PNG</span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdSaveQrImage()" class="btn-secondary" style="flex:1">📥 保存</button>
+    </div>
+    <p class="section-desc" style="margin:10px 0 0">保存ファイルの名前には保存した日時が入り、復元のときに選べます。WiFi の設定は、復元後の再起動で切り替わります。設定情報と QR 画像には WiFi のパスワードが入るため、ダウンロードは管理者のみです。</p>
+  </div>
+    <p class="section-desc" style="margin:8px 0 0">WiFi の設定は、復元後にタイマーを再起動すると切り替わります。settings.json と QR 画像には WiFi のパスワードが入るため、SD タブからのダウンロードはログイン中の管理者だけができます。</p>
   </div>
 
   <div class="global-config-card">
@@ -557,7 +618,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── WiFi ── -->
   <div class="global-config-card">
     <h3 class="global-title">📶 WiFi</h3>
-    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く）。クライアントで設定した時間（15 / 30 / 60 秒）接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
+    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く。<code>.local</code> は IP に自動で切り替わります）。クライアントで設定した時間（15 / 30 / 60 秒）接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
     <div id="netStatus" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">動作モード</label>
       <select id="netMode" onchange="onNetMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
@@ -575,6 +636,22 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="30">30 秒接続できなければ</option>
           <option value="60">60 秒接続できなければ</option>
         </select></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
+        <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="0">自動（DHCP）</option>
+          <option value="1">固定</option>
+        </select></div>
+      <div class="net-ip-fixed">
+        <div class="config-row" style="gap:8px"><label style="width:110px">IP</label>
+          <input type="text" id="netIp" inputmode="decimal" placeholder="例 192.168.1.200" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">サブネットマスク</label>
+          <input type="text" id="netMask" inputmode="decimal" placeholder="255.255.255.0" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">ゲートウェイ</label>
+          <input type="text" id="netGw" inputmode="decimal" placeholder="例 192.168.1.1（ルーター）" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <div class="config-row" style="gap:8px"><label style="width:110px">DNS（任意）</label>
+          <input type="text" id="netDns" inputmode="decimal" placeholder="空欄ならゲートウェイ" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+        <p class="section-desc" style="margin-top:2px">ルーターの DHCP で配る範囲の外で、ほかの機器と重ならないアドレスにしてください。</p>
+      </div>
     </div>
     <p class="section-desc" style="margin-top:6px">ホスト（およびクライアント接続失敗時）のアクセスポイント</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">SSID</label>
@@ -583,6 +660,45 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <input type="text" id="netPass" maxlength="63" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
     <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
+  </div>
+
+  <!-- ── 接続用 QR コード ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">📱 接続用 QR コード</h3>
+    <p class="section-desc">スマホのカメラで読み取ると、WiFi に接続して（ホストモードはタイマーの WiFi、クライアントモードはルーターの WiFi）、タイマーの画面を開けます。WiFi のパスワードが入っているので、見せる相手に注意してください。</p>
+    <div id="qrWrap" class="qr-wrap"><span class="res-muted">読み込み中…</span></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button onclick="showQrBig()" class="btn-secondary">🔍 大きく表示</button></div>
+  </div>
+
+  <!-- ── 接続台数 ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">👥 接続台数</h3>
+    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログインした端末）は接続が切られず、上限を超えるログインはお断りします。<b>観戦</b>（ログインしていない端末）は計測時間・ラップ・順位だけの軽い画面で、上限を超えると古い接続から切断します。上限は、計測に影響しないよう余裕を持たせています。netpack（WiFi 接続）は台数に含まず、切断もしません。</p>
+    <div id="connNow" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">管理者（ログイン）</label>
+      <select id="connAdmin" onchange="onConnAdmin()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">観戦（ホストモード）</label>
+      <select id="connViewHost" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+    <p id="connHostNote" class="section-desc" style="margin:-2px 0 6px"></p>
+    <div class="config-row" style="gap:8px"><label style="width:150px">観戦（クライアントモード）</label>
+      <select id="connViewClient" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
+    <div class="config-row" style="gap:8px"><label style="width:150px">ログインの保持</label>
+      <select id="connHold" onchange="saveConnLimits()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="15">15 秒</option><option value="30">30 秒</option><option value="60">1 分</option><option value="180">3 分</option><option value="300">5 分</option>
+        <option value="600">10 分</option><option value="1800">30 分</option>
+      </select></div>
+    <p class="section-desc" style="margin-top:4px">ログインの保持：ブラウザーを閉じたり、スマホの画面が消えて接続が切れたりしてから、この時間がたつとログアウトと同じ扱いになり、管理者の枠が空きます（その間に戻ればログインのまま）。「ログアウト」を押せばすぐ空きます。</p>
+  </div>
+
+  <!-- ── 再起動 ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">🔄 再起動</h3>
+    <p class="section-desc">タイマー（XIAO ESP32-S3）を再起動します。C5 受信機と ESP-NOW ブリッジはそのまま動き続け、タイマーの起動後に自動でつながり直します。設定はそのまま残ります。再起動するとログインし直しになります。「全員の画面を再読み込み」は、つながっているすべての画面（観戦者も含む）を開き直します（タイマーは再起動しません）。</p>
+    <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
+      <button onclick="reloadAllPages()" class="btn-secondary">🔁 全員の画面を再読み込み</button>
+      <button onclick="restartAll()" class="btn-secondary">🔄 タイマーを再起動</button></div>
+    <p id="sysInfo" class="section-desc" style="margin:8px 0 0"></p>
   </div>
 
   <!-- ── 管理者パスワード ── -->
@@ -669,7 +785,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <div id="sdEraseModal" class="modal-overlay" onclick="if(event.target===this)closeSdErase()">
   <div class="modal-box" style="border-color:var(--err)">
     <h3 style="color:var(--err)">🧹 SDカードのフォーマット</h3>
-    <p style="color:var(--tx);font-size:13px">SDカードの<b>すべてのファイル</b>（レース結果・パイロットのバックアップ）を削除します。元に戻せません。</p>
+    <p style="color:var(--tx);font-size:13px">SDカードの<b>すべてのファイル</b>（レース結果・パイロットと設定のバックアップ・QR 画像）を削除します。元に戻せません。</p>
     <p>必要なファイルは、先に「📁 ファイル」からダウンロードしてください。続けるには管理者パスワードを入力します。</p>
     <input type="text" class="pw-mask" id="sdErasePw" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="パスワード"
       onkeydown="if(event.key==='Enter')confirmSdErase()">
@@ -677,6 +793,38 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="modal-actions">
       <button onclick="confirmSdErase()" class="btn-danger">すべて削除する</button>
       <button onclick="closeSdErase()" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Restore: pick one of the backups on the card (newest first). -->
+<div id="pickModal" class="modal-overlay" onclick="if(event.target===this)closePick(false)">
+  <div class="modal-box">
+    <h3 id="pickTitle">復元</h3>
+    <p id="pickWarn" style="color:var(--tx);font-size:13px"></p>
+    <div id="pickList" class="pick-list"></div>
+    <div class="modal-actions">
+      <button onclick="closePick(true)" class="btn-success">復元する</button>
+      <button onclick="closePick(false)" class="btn-secondary">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- Connection QR codes, large, to show to others. -->
+<div id="qrModal" class="modal-overlay" onclick="this.style.display='none'">
+  <div class="modal-box qr-big" onclick="event.stopPropagation()">
+    <div id="qrBig" class="qr-wrap"></div>
+    <div class="modal-actions"><button onclick="document.getElementById('qrModal').style.display='none'" class="btn-secondary">閉じる</button></div>
+  </div>
+</div>
+
+<!-- A viewer closed by the timer (too many viewers): no automatic reconnect. -->
+<div id="kickedModal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>📶 接続が切れました</h3>
+    <p id="kickedWhy" style="color:var(--tx);font-size:13px"></p>
+    <div class="modal-actions">
+      <button onclick="wsReconnectNow()" class="btn-success">再接続</button>
     </div>
   </div>
 </div>

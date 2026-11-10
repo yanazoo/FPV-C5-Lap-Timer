@@ -28,7 +28,9 @@ static void startAp() {
     }
     WiFi.mode(WIFI_AP);
     bool ok = WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
-    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL) && ok;
+    // All 10 stations: browsers are limited on the WebSocket (ws_handler),
+    // and the netpack XIAO must always find a place (wsLoop frees one).
+    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL, 0, AP_MAX_STATIONS) && ok;
     if (!ok) Serial.println("[WiFi] AP start failed");
     // Wildcard DNS for the captive portal.
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
@@ -60,6 +62,11 @@ void netBegin() {
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
         WiFi.setAutoReconnect(true);
+        if (staIp.fixed) {
+            IPAddress ip(staIp.ip), gw(staIp.gw), mask(staIp.mask), dns(staIp.dns ? staIp.dns : staIp.gw);
+            if (!WiFi.config(ip, gw, mask, dns)) Serial.println("[WiFi] fixed address rejected, using DHCP");
+            else Serial.printf("[WiFi] client: fixed address %s\n", ip.toString().c_str());
+        }
         WiFi.begin(staSsid.c_str(), staPass.c_str());
         // No modem sleep as a client: with it the radio dozes between beacons,
         // and the burst of requests for the web UI's page and scripts stalls

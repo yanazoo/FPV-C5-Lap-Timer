@@ -43,6 +43,12 @@ void sdInit() {
     else Serial.println("[SD] no card");
 }
 
+void sdShutdown() {
+    SdGuard g;
+    if (sdPresent) SD.end();
+    sdPresent = false;
+}
+
 void sdCheckHotplug(uint32_t now) {
     static uint32_t last = 0;
     if (now - last < (sdPresent ? 3000UL : 500UL)) return;
@@ -195,7 +201,33 @@ bool sdSaveRace() {
     return true;
 }
 
-bool sdBackupRoster() {
+String sdStampedName(const char* base, const char* ext) {
+    char p[48];
+    if (!clockValid) {
+        snprintf(p, sizeof p, "/%s%s", base, ext);
+        return p;
+    }
+    time_t local = time(nullptr) + (time_t)clockTzMin * 60;
+    struct tm lt = {};
+    gmtime_r(&local, &lt);
+    snprintf(p, sizeof p, "/%s_%04d%02d%02d_%02d%02d%s", base, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday,
+             lt.tm_hour, lt.tm_min, ext);
+    return p;
+}
+
+bool sdBackupName(const String& path, const char* base, const char* ext) {
+    String head = String("/") + base, tail = ext;
+    if (!path.startsWith(head) || !path.endsWith(tail)) return false;
+    String mid = path.substring(head.length(), path.length() - tail.length());
+    if (!mid.length()) return true;   // pilots.csv
+    if (mid.length() != 14 || mid[0] != '_' || mid[9] != '_') return false;   // _YYYYMMDD_HHMM
+    for (int i = 1; i < 14; i++)
+        if (i != 9 && !isdigit((unsigned char)mid[i])) return false;
+    return true;
+}
+
+bool sdBackupRoster(String& path) {
+    path = sdStampedName("pilots", ".csv");
     String csv = "\xEF\xBB\xBFname,yomi,freq,enter,exit,slot,bind,osd\n";
     {
         Guard g;
@@ -209,7 +241,7 @@ bool sdBackupRoster() {
     }
     SdGuard g;
     if (!sdPresent) return false;
-    File f = SD.open("/pilots.csv", FILE_WRITE);
+    File f = SD.open(path, FILE_WRITE);
     if (!f) return false;
     f.print(csv);
     f.close();
@@ -227,9 +259,10 @@ static String field(const String& line, int idx) {
     return line.substring(start, end < 0 ? line.length() : end);
 }
 
-int sdRestoreRoster() {
+int sdRestoreRoster(const String& path) {
+    if (!sdBackupName(path, "pilots", ".csv")) return -1;
     String csv;
-    if (!sdReadFile("/pilots.csv", csv)) return -1;
+    if (!sdReadFile(path, csv)) return -1;
     Guard g;
     rosterCount = 0;
     for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = -1;
@@ -298,6 +331,62 @@ bool sdReadFile(const String& path, String& out) {
     out.reserve(f.size());
     out = f.readString();
     f.close();
+    return true;
+}
+
+bool sdAppendFile(const String& path, const uint8_t* data, size_t len, bool first) {
+    if (!safePath(path)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    File f = SD.open(path, first ? FILE_WRITE : FILE_APPEND);
+    if (!f) return false;
+    size_t put = f.write(data, len);
+    f.close();
+    return put == len;
+}
+
+size_t sdReadAt(const String& path, size_t offset, uint8_t* out, size_t len) {
+    if (!safePath(path)) return 0;
+    SdGuard g;
+    if (!sdPresent) return 0;
+    File f = SD.open(path, FILE_READ);
+    if (!f) return 0;
+    size_t n = f.seek(offset) ? f.read(out, len) : 0;
+    f.close();
+    return n;
+}
+
+int32_t sdFileSize(const String& path) {
+    if (!safePath(path)) return -1;
+    SdGuard g;
+    if (!sdPresent) return -1;
+    File f = SD.open(path, FILE_READ);
+    if (!f || f.isDirectory()) { if (f) f.close(); return -1; }
+    int32_t n = (int32_t)f.size();
+    f.close();
+    return n;
+}
+
+bool sdReplaceFile(const String& from, const String& to) {
+    if (!safePath(from) || !safePath(to)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    if (SD.exists(to)) SD.remove(to);
+    bool ok = SD.rename(from, to);
+    if (ok) Serial.printf("[SD] wrote %s\n", to.c_str());
+    return ok;
+}
+
+bool sdWriteFile(const String& path, const uint8_t* data, size_t len) {
+    if (!safePath(path)) return false;
+    SdGuard g;
+    if (!sdPresent) return false;
+    File f = SD.open(path, FILE_WRITE);
+    if (!f) return false;
+    size_t put = f.write(data, len);
+    f.close();
+    if (put != len) { SD.remove(path); return false; }
+    Serial.printf("[SD] wrote %s (%u bytes)\n", path.c_str(), (unsigned)len);
     return true;
 }
 

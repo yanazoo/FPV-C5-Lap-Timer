@@ -9,6 +9,11 @@ int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
 RaceRules    raceRules;
+ConnLimits   connLimits;
+bool         startDelayOn = false;
+uint16_t     startDelaySec = 10;
+uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
+StaIpConfig  staIp;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -88,6 +93,15 @@ void saveSettings() {
     prefs.begin("settings", false);
     prefs.putBytes("s", &settings, sizeof settings);
     prefs.putBytes("r", &raceRules, sizeof raceRules);
+    prefs.putUShort("sdly", startDelaySec);
+    prefs.putBool("sdlyon", startDelayOn);
+    prefs.end();
+}
+
+void saveConnLimits() {
+    prefs.begin("settings", false);
+    prefs.putBytes("c", &connLimits, sizeof connLimits);
+    prefs.putUShort("hold", loginHoldSec);
     prefs.end();
 }
 
@@ -103,6 +117,12 @@ void saveAdminPassword(const String& pw) {
     adminPassword = pw;
     prefs.begin("auth", false);
     prefs.putString("pw", pw);
+    prefs.end();
+}
+
+void saveStaIp() {
+    prefs.begin("net", false);
+    prefs.putBytes("ipcfg", &staIp, sizeof staIp);
     prefs.end();
 }
 
@@ -158,7 +178,21 @@ void loadAll() {
     if (prefs.getBytes("s", &st, sizeof st) == sizeof st) settings = st;
     RaceRules rr;
     if (prefs.getBytes("r", &rr, sizeof rr) == sizeof rr) raceRules = rr;
+    // Before the switch, 0 s meant off.
+    uint16_t sd = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
+    startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
+    startDelaySec = sd ? sd : 10;
+    ConnLimits cl;
+    if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
+    loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);
+    if (!loginHoldValid(loginHoldSec)) loginHoldSec = LOGIN_HOLD_DEFAULT;
     prefs.end();
+    connLimits.adminMax   = constrain(connLimits.adminMax, (uint8_t)1, CONN_ADMIN_MAX);
+    // At least one viewer place: with none, a browser could never stay long
+    // enough to log in.
+    connLimits.viewHost   = constrain(connLimits.viewHost, (uint8_t)1, CONN_VIEW_HOST_MAX);
+    connLimits.viewClient = constrain(connLimits.viewClient, (uint8_t)1, CONN_VIEW_CLIENT_MAX);
+    connLimits.viewHost   = min(connLimits.viewHost, viewHostLimitFor(connLimits.adminMax));
     raceRules.rankMode     = raceRules.rankMode <= 2 ? raceRules.rankMode : 0;
     raceRules.timeLimitSec = constrain(raceRules.timeLimitSec, (uint16_t)30, (uint16_t)1800);
     // Raw bytes from flash: keep them in the ranges the API enforces.
@@ -188,6 +222,9 @@ void loadAll() {
     staSsid = prefs.getString("stassid", "");
     staPass = prefs.getString("stapass", "");
     netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
+    StaIpConfig ipc;
+    if (prefs.getBytes("ipcfg", &ipc, sizeof ipc) == sizeof ipc) staIp = ipc;
+    if (staIp.fixed && (!staIp.ip || !staIp.mask)) staIp.fixed = 0;
     if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
     prefs.end();
 }

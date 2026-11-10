@@ -90,7 +90,7 @@ also open in Excel.
 | GND | — | GND |
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
-  Each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv` (number, start date and time; `race_NNN.csv` when the timer has no date yet; numbers go 000–999 and start again; rotate mode keeps the last 20 races and deletes the oldest by the date in the name); the **SD tab** shows them (newest first; one race as results and a lap-time graph; per-pilot stats across all races after an estimate of how long reading them takes) and can format the card (under "⚠ その他の操作"; deletes every file, admin password asked again). The browser's clock is passed to the timer, so each file starts with a `#FPVC5,...` line holding the race's start time and rules.
+  Each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv` (number, start date and time; `race_NNN.csv` when the timer has no date yet; numbers go 000–999 and start again; rotate mode keeps the last 20 races and deletes the oldest by the date in the name); the **SD tab** shows them (newest first; one race as results and a lap-time graph; per-pilot stats across all races after an estimate of how long reading them takes) and can format the card (under "⚠ その他の操作"; deletes every file, admin password asked again). From the Settings tab's 💾 SDカード box (next to the pilot backup) the timer also saves and restores **every setting but the pilots** as `settings_YYYYMMDD_HHMM.json` (pilots as `pilots_YYYYMMDD_HHMM.csv`; Restore lists the saved files to pick from) (race content, detection, ELRS OSD, WiFi, fixed IP, connection limits, login hold, admin password; not during a race; WiFi changes take effect after a restart), saves the **connection QR codes as one PNG** to print (`qr_host_YYYYMMDD_HHMM.png` / `qr_client_YYYYMMDD_HHMM.png`; only a logged-in admin can download these files, they hold the WiFi password). The browser's clock is passed to the timer, so each file starts with a `#FPVC5,...` line holding the race's start time and rules.
 - Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
   (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
   straight to the S3 over UART; no netpack XIAO and no WiFi setup — see
@@ -150,7 +150,12 @@ channels.
 **🏁 レース内容** (race content, top of the Settings tab): total laps (0 =
 no limit) and the ranking rule: total time (most laps, then fastest), best
 lap, or **laps within a time limit** (30 s to 30 min; choose whether the last
-lap after time-up counts).
+lap after time-up counts). **Start delay** (スタートの待ち時間): an ON/OFF switch (off by
+default) and 10, 15, 30, 60 s or any 1–600 s. With it on, a start from the button or the director's switch
+waits this long before "ready → 3-2-1"; the timer shows the time left in
+orange, and at the start and every 10 s a chime is followed by the call-out
+"レーススタートまで残り○秒です。" (with voice on). Stop (or switching back)
+during the wait cancels the start.
 
 **Race director's switch** (optional): in 🥽 ELRS OSD, enter the race
 director's bind phrase ("ディレクターバインドフレーズ") and pick the switch
@@ -216,11 +221,29 @@ To cover lost packets:
 
 - **Host** (default): the timer is an access point, `http://20.0.0.1`.
 - **Client**: the timer joins an existing 2.4 GHz router and is reachable at
-  `http://fpv-c5-lt.local`. If it cannot connect for the chosen time (15, 30
+  `http://fpv-c5-lt.local` (it redirects to the IP address: Chrome's Local
+  Network Access blocks a plain-http page on a .local name from loading its
+  scripts). If it cannot connect for the chosen time (15, 30
   or 60 s, default 30 s; "ホストに切替" in the WiFi card), at boot or after
   losing the link, it falls back to host mode until the next reboot. The
   router password is stored on the device only and never sent back to the
   browser.
+
+## Restart and a fixed IP address
+
+- Settings → "🔄 再起動" → "タイマーを再起動" restarts the timer (XIAO ESP32-S3); the C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart.
+- "+LAP" on a race card (admins, during a race), next to BEST: records a lap for that pilot now (a pass the receiver missed), like a gate pass; ignored within the cooldown.
+- Settings → "📱 接続用 QR コード": scan to open the page. Host mode: join the timer's WiFi, then open the page; client mode: join the router's WiFi, then open the page by IP address (the router password reaches logged-in admins only). "大きく表示" shows them large.
+- Settings → WiFi → "IP アドレス" (client mode): DHCP by default, or fixed (address, subnet mask, gateway, optional DNS). Saving restarts the timer.
+
+## Connections and the spectator screen
+
+Browsers are **admins** (logged in) or **viewers**. Limits are in Settings → "👥 接続台数".
+
+- Admins: 1–4 (default 2). A login past the limit is refused with a message; admins are never disconnected. A login is released when no browser has used it for the hold time (15 s, 30 s, 1, 3, 5, 10 or 30 min, default 1 min; "ログインの保持"), or at once on logout; coming back within it keeps the login.
+- Viewers: the light spectator screen (race clock, laps, ranking; no RSSI). Host mode 1–8 (default 3; admins + viewers at most 9, so the netpack always has the 10th place on the access point: with 4 admins, 5 viewers), client mode 1–8 (default 6); past the limit the oldest viewer is disconnected (a "再接続" button reconnects).
+- The netpack (WiFi) is not counted and never disconnected. In host mode, when the timer's WiFi is full (10 stations) and the netpack is not connected, one station is sent off to make room: a device with no page open first, then a viewer, never an admin. That device is kept out for 30 s (until the netpack is back).
+- The timer's date (race file names) comes from logged-in browsers only.
 
 ## Layout
 
@@ -262,5 +285,6 @@ gear.
 ## Licences
 
 FPVGate C5MK (including `c5host`) is CC BY-NC-SA 4.0 (non-commercial);
-vrxc_elrs and elrs-netpack are GPL-3.0. The combined firmware is meant for
+vrxc_elrs and elrs-netpack are GPL-3.0; the QR code library
+(`data/js/qrcode.js`, qrcode-generator by Kazuhiko Arase) is MIT. The combined firmware is meant for
 personal, non-commercial use.

@@ -3,8 +3,9 @@
 // ── Soft auth ────────────────────────────────────────────────────────────
 // Accidental-clobber protection, not real security. A single shared admin
 // password (stored in NVS on the web node) gates the non-race tabs and the
-// race-control buttons. Session-scoped (sessionStorage) so a shared device
-// doesn't stay authed across a browser-close.
+// race-control buttons. The login is a token from the timer, kept in
+// localStorage; the timer drops it once no browser has used it for the hold
+// time set in settings (closed browser, phone screen off), or on logout.
 
 // Header button: login when logged out, logout when logged in.
 function onAuthBtn(){ if(isAuthed)logout(); else openLoginModal(); }
@@ -27,8 +28,15 @@ async function submitLogin(){
   try{
     var r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({password:v})});
-    if(r.ok){
-      isAuthed=true;sessionStorage.setItem('authed','1');
+    var j={};try{j=await r.json();}catch(e){}
+    if(r.status===409){
+      if(err){err.style.display='block';
+        err.textContent='管理者のログインは最大 '+(j.max||'')+' 台までです。ほかの端末でログアウトしてから、もう一度ログインしてください。';}
+      return;
+    }
+    if(r.ok&&j.token){
+      authToken=j.token;isAuthed=true;lsSet('authToken',authToken);
+      sendHello();   // this connection becomes an admin's (RSSI, the date)
       if(pw){pw.blur();pw.value='';}   // close the keyboard; leave no password behind
       closeLoginModal();applyAuthState();
       // Go to the tab that asked for the login; from the header button,
@@ -53,18 +61,25 @@ function tuckBrowserBars(){
 }
 
 function logout(){
-  isAuthed=false;sessionStorage.removeItem('authed');
-  applyAuthState();
+  var t=authToken;
+  fetch('/api/auth/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t})}).catch(()=>{});
+  dropAuth();
   switchTab('race');   // bounce viewers off admin panes
   toast('🔒 ログアウトしました');
 }
 
-// Reflect auth state: header button label, race controls, locked-tab marks.
+// Forget the login on this tab (logout, or the timer no longer knows it).
+function dropAuth(){
+  authToken='';isAuthed=false;lsSet('authToken','');
+  applyAuthState();
+}
+
+// Reflect auth state: header button label, race controls, locked-tab marks,
+// and the spectator screen for viewers.
 function applyAuthState(){
+  document.body.classList.toggle('viewer',!isAuthed);
   var ab=document.getElementById('authBtn');
   if(ab)ab.textContent=isAuthed?'🔓 ログアウト':'🔒 ログイン';
-  var hint=document.getElementById('authHint');
-  if(hint)hint.style.display=isAuthed?'none':'block';
   if(typeof setBtns==='function')setBtns(raceRunning);
   ['btnStart','btnStop','btnClear'].forEach(function(id){
     var b=document.getElementById(id);if(b)b.title=isAuthed?'':'管理者ログインが必要です';

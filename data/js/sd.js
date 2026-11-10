@@ -18,7 +18,8 @@ async function refreshSdFiles(){
 function downloadSdFile(path){
   if(raceRunning){toast('レース中はダウンロードできません');return;}
   var a=document.createElement('a');
-  a.href='/api/sd/file?path='+encodeURIComponent(path);
+  // The settings backup and the QR images hold passwords: sent with the login.
+  a.href='/api/sd/file?path='+encodeURIComponent(path)+(authToken?'&token='+encodeURIComponent(authToken):'');
   a.download=path.replace(/^\//,'');
   document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
@@ -39,6 +40,7 @@ async function deleteSdFile(path){
 }
 
 function renderSdFileList(){
+  showSettingsBackupInfo();
   var wrap=document.getElementById('sdFileListWrap');
   if(!wrap)return;
   if(!sdFileList.length){
@@ -62,4 +64,136 @@ function renderSdFileList(){
   });
   html+='</tbody></table></div>';
   wrap.innerHTML=html;
+}
+
+// ── Settings backup (everything but the pilots) ──────────────────────────
+function showSettingsBackupInfo(){
+  var el=document.getElementById('setBkInfo');if(!el)return;
+  var f=backupFiles('settings')[0];
+  el.textContent=!f?'':f.when?'（最新 '+f.when+'）':'（保存済み）';
+}
+
+// ── Backup files: pilots_YYYYMMDD_HHMM.csv, settings_YYYYMMDD_HHMM.json
+// (or pilots.csv / settings.json from before the timer knew the date).
+var BACKUP_KINDS={
+  pilots:{re:/^pilots(?:_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2}))?\.csv$/i,title:'👤 パイロット情報の復元',
+    warn:'今のパイロット情報（名前・周波数・キャリブレーション・割り当て）は上書きされます。'},
+  settings:{re:/^settings(?:_(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2}))?\.json$/i,title:'⚙️ 設定情報の復元',
+    warn:'今の設定（パイロット以外）は上書きされます。WiFi の設定は再起動後に切り替わります。'}
+};
+// Newest first: by the date in the name, files without one last.
+function backupFiles(kind){
+  var k=BACKUP_KINDS[kind],out=[];
+  (sdFileList||[]).forEach(function(f){
+    var m=k.re.exec(f.name);if(!m)return;
+    out.push({name:f.name,key:m[1]?m.slice(1,6).join(''):'',when:m[1]?m[1]+'/'+m[2]+'/'+m[3]+' '+m[4]+':'+m[5]:'',t:f.t||0});
+  });
+  return out.sort(function(a,b){return a.key===b.key?b.t-a.t:(b.key>a.key?1:-1);});
+}
+// Ask which backup to restore. Resolves to its path, or null.
+var pickResolve=null;
+async function pickBackup(kind){
+  if(!sdPresent){toast('SDカードがありません');return null;}
+  try{var r=await fetch('/api/sd/files');if(!r.ok)throw 0;sdFileList=await r.json();}
+  catch(e){toast('⚠️ ファイル一覧の取得に失敗しました');return null;}
+  if(typeof renderSdFileList==='function')renderSdFileList();
+  var files=backupFiles(kind),k=BACKUP_KINDS[kind];
+  if(!files.length){toast('SD カードに保存ファイルがありません');return null;}
+  document.getElementById('pickTitle').textContent=k.title;
+  document.getElementById('pickWarn').textContent=k.warn;
+  document.getElementById('pickList').innerHTML=files.map(function(f,i){
+    return '<label class="pick-row"><input type="radio" name="pickFile" value="/'+esc(f.name)+'"'+(i?'':' checked')+'>'
+      +'<span><b>'+esc(f.when||'日時なし')+'</b><span class="res-muted">'+esc(f.name)+'</span></span></label>';
+  }).join('');
+  document.getElementById('pickModal').style.display='flex';
+  return new Promise(function(ok){pickResolve=ok;});
+}
+function closePick(ok){
+  var el=document.querySelector('input[name="pickFile"]:checked');
+  document.getElementById('pickModal').style.display='none';
+  var r=pickResolve;pickResolve=null;
+  if(r)r(ok&&el?el.value:null);
+}
+function fmtSdTime(t){
+  var d=new Date(t*1000),p=function(n){return String(n).padStart(2,'0');};
+  return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+async function sdSettingsBackup(){
+  if(!sdPresent){toast('SDカードがありません');return;}
+  try{
+    var r=await fetch('/api/sd/settings/backup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    if(r.status===403){toast('⚠️ ログインし直してください');return;}
+    var j={};try{j=await r.json();}catch(e){}
+    toast(r.ok?'✅ 設定情報を '+(j.file||'SD カード')+' に保存しました':'⚠️ 保存できませんでした',3000);
+    if(r.ok)refreshSdFiles();
+  }catch(e){toast('⚠️ 接続エラー');}
+}
+var SETTINGS_RESTORE_ERR={nofile:'その保存ファイルがありません',badfile:'保存ファイルが読めません（このタイマーの設定ファイルではありません）',
+  race:'レース中は復元できません',login:'ログインし直してください'};
+async function sdSettingsRestore(){
+  if(!sdPresent){toast('SDカードがありません');return;}
+  var path=await pickBackup('settings');if(!path)return;
+  try{
+    var r=await fetch('/api/sd/settings/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken,path:path})});
+    var j={};try{j=await r.json();}catch(e){}
+    if(!r.ok||!j.ok){toast('⚠️ '+(SETTINGS_RESTORE_ERR[j.reason]||'復元できませんでした'),4000);return;}
+    // Race settings come back over the WebSocket; reload the other forms.
+    if(typeof loadElrsSettings==='function')loadElrsSettings();
+    if(typeof loadNetSettings==='function')loadNetSettings();
+    if(typeof loadConnLimits==='function')loadConnLimits();
+    var when=j.saved?'（'+fmtSdTime(j.saved)+' の保存）':'';
+    if(j.net){
+      if(confirm('設定を復元しました'+when+'。\nWiFi の設定は、タイマーを再起動すると切り替わります。今すぐ再起動しますか？')){fetch('/api/restart',{method:'POST'}).catch(()=>{});waitForRestart();}
+      else toast('✅ 設定を復元しました（WiFi は再起動後に切り替わります）',4000);
+    }else toast('✅ 設定を復元しました'+when+'（WiFi の設定は復元できませんでした）',4000);
+  }catch(e){toast('⚠️ 接続エラー');}
+}
+
+// ── Connection QR codes as one PNG on the card ──────────────────────────
+// Drawn here (the QR library is in the browser), then sent to the timer.
+async function sdSaveQrImage(){
+  if(!sdPresent){toast('SDカードがありません');return;}
+  var d,items;
+  try{
+    var r=await fetch('/api/net');if(!r.ok)throw 0;
+    d=await r.json();
+    items=await buildQrItems(d);
+    await loadQrLib();
+  }catch(e){toast('⚠️ QR コードを作れませんでした');return;}
+  // qr_host_20261110_1432.png: the date and time it was saved (this browser's clock).
+  var n=new Date(),p2=function(v){return String(v).padStart(2,'0');};
+  var name=((d.status&&d.status.ap)?'qr_host_':'qr_client_')+n.getFullYear()+p2(n.getMonth()+1)+p2(n.getDate())+'_'+p2(n.getHours())+p2(n.getMinutes())+'.png';
+  var cv=drawQrCard(items);
+  var blob=await new Promise(function(ok){cv.toBlob(ok,'image/png');});
+  try{
+    var u='/api/sd/upload?path='+encodeURIComponent('/'+name)+'&token='+encodeURIComponent(authToken||'');
+    var res=await fetch(u,{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:blob});
+    if(res.status===403){toast('⚠️ ログインし直してください');return;}
+    toast(res.ok?'✅ '+name+' を SD カードに保存しました':'⚠️ 保存できませんでした',3000);
+    if(res.ok)refreshSdFiles();
+  }catch(e){toast('⚠️ 接続エラー');}
+}
+// White card, black text: each QR with its caption, the SSID / URL and the
+// WiFi password under it.
+function drawQrCard(items){
+  var W=900,QR=520,PAD=40,font='"Hiragino Sans","Noto Sans JP","Yu Gothic",Meiryo,sans-serif';
+  var blockH=function(it){return 56+QR+20+44+(it.pass?40:0)+36;};
+  var H=PAD+70+items.reduce(function(a,it){return a+blockH(it);},0)+PAD;
+  var cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  var g=cv.getContext('2d');
+  g.fillStyle='#fff';g.fillRect(0,0,W,H);
+  g.fillStyle='#000';g.textAlign='center';g.textBaseline='alphabetic';
+  g.font='bold 40px '+font;g.fillText('FPV C5 Lap Timer への接続',W/2,PAD+42);
+  var y=PAD+70;
+  items.forEach(function(it){
+    g.fillStyle='#000';g.font='bold 34px '+font;g.fillText(it.cap,W/2,y+40);
+    var q=qrcode(0,'M');q.addData(it.text);q.make();
+    var n=q.getModuleCount(),cell=Math.floor(QR/(n+8)),size=cell*n,x0=Math.round((W-size)/2),y0=y+56+Math.round((QR-size)/2);
+    for(var r=0;r<n;r++)for(var c=0;c<n;c++)if(q.isDark(r,c))g.fillRect(x0+c*cell,y0+r*cell,cell,cell);
+    var ty=y+56+QR+20+30;
+    g.font='28px '+font;g.fillText(it.pass?'WiFi：'+it.sub:it.sub,W/2,ty);
+    if(it.pass){ty+=40;g.fillText('パスワード：'+it.pass,W/2,ty);}
+    y+=blockH(it);
+  });
+  return cv;
 }

@@ -79,6 +79,8 @@ var sfx={
       .forEach(n=>rhBeepAt(n[0],n[1],n[2],TONE_VOL,'triangle',0.15));
     rhBeepAt(390,500,1046.5,TONE_VOL*0.6,'triangle',0.6);
   },
+  // Start delay call-out: one soft "pong" (sine C6, ringing out).
+  chime: ()=>rhBeep(120,1046.5,TONE_VOL,'sine',1.2),
   // Countdown second without voice: a short 880 Hz tick.
   tick: ()=>rhBeep(60,880,TONE_VOL,'triangle',0.05),
   // Gate crossing, pitch per channel:

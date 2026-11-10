@@ -50,6 +50,8 @@ var cooldownMs   = parseInt(localStorage.getItem('cooldownMs')||'3000');
 var sdLogMode    = localStorage.getItem('sdLogMode')||'always';
 // Ranking rule (from the timer): 0 laps then total time, 1 best lap, 2 laps in a time limit.
 var rankMode=0, timeLimitSec=120, countLastLap=true;
+var seenBoot=0;   // the timer start this page was loaded under (init "boot")
+var startDelayOn=false, startDelaySec=10, waitH=null;   // start delay (settings) and its countdown
 function sdLogModeInt(m){return m==='off'?2:(m==='rotate'?1:0);}
 
 var c5Status = null;         // last "c5" WebSocket message (receiver + ELRS link)
@@ -60,7 +62,14 @@ var editingRosterId = null;
 // password, default "admin") get access to Config/Calib/SD + race controls.
 // Session-scoped: clears on tab close so a shared device doesn't stay
 // authed forever.
-var isAuthed = sessionStorage.getItem('authed')==='1';
+// Admin login: the timer's token (localStorage, so a page that a phone
+// reloads after its screen was off keeps it; the timer itself drops the
+// login after the hold time set in settings). Without one the page is a
+// viewer (light spectator screen).
+function lsGet(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){}}
+var authToken = lsGet('authToken');
+var isAuthed = !!authToken;
 var pendingTab = null;       // tab the user is trying to reach via login
 var sdPresent = false;
 var sdFileList = [];
@@ -84,7 +93,6 @@ function fmtTimer(ms){var h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/600
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // RSSI bar: floor (~100) to a strong close pass (~900).
 function rssiPct(v){return Math.max(0,Math.min(100,((v-100)/(900-100))*100));}
-function fmtDelta(ms){return(ms>0?'+':'')+(ms/1000).toFixed(3)+'s';}
 
 function switchTab(tab){
   // Soft auth gate — non-race tabs require admin login.
@@ -113,6 +121,6 @@ function switchTab(tab){
   if(tab==='sd') refreshSdFiles();
   if(tab==='config'){
     if(typeof loadPasswordField==='function')loadPasswordField();
-    loadElrsSettings();loadNetSettings();renderC5Status();renderVoiceInfo();
+    loadElrsSettings();loadNetSettings();loadConnLimits();loadSysInfo();renderC5Status();renderVoiceInfo();
   }
 }

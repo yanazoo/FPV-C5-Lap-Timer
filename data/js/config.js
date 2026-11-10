@@ -308,7 +308,13 @@ function elrsAnnounce(){
 function onNetMode(){
   var sta=document.getElementById('netMode').value==='1';
   document.querySelectorAll('.net-sta').forEach(e=>e.style.display=sta?'':'none');
+  onNetIpMode();
 }
+function onNetIpMode(){
+  var fixed=document.getElementById('netIpMode').value==='1';
+  document.querySelectorAll('.net-ip-fixed').forEach(e=>e.style.display=fixed?'':'none');
+}
+var IPV4=/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 async function loadNetSettings(){
   try{
     var r=await fetch('/api/net');if(!r.ok)return;
@@ -317,6 +323,11 @@ async function loadNetSettings(){
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
     document.getElementById('netStaSsid').value=d.staSsid||'';
     document.getElementById('netFallback').value=String(d.fallbackSec||30);
+    document.getElementById('netIpMode').value=d.ipFixed?'1':'0';
+    document.getElementById('netIp').value=d.ip||'';
+    document.getElementById('netMask').value=d.mask||'255.255.255.0';
+    document.getElementById('netGw').value=d.gw||'';
+    document.getElementById('netDns').value=d.dns||'';
     var sp=document.getElementById('netStaPass');sp.value='';
     sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
@@ -325,18 +336,28 @@ async function loadNetSettings(){
     else txt='ホスト（アクセスポイント） '+esc(st.ip);
     document.getElementById('netStatus').innerHTML='<span>現在</span><b>'+txt+'</b>';
     onNetMode();
+    renderConnQr(d);
   }catch(e){}
 }
 async function saveNetSettings(){
   var d={mode:parseInt(document.getElementById('netMode').value)||0,
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
     staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
-    fallbackSec:parseInt(document.getElementById('netFallback').value)||30};
+    fallbackSec:parseInt(document.getElementById('netFallback').value)||30,
+    ipFixed:document.getElementById('netIpMode').value==='1',
+    ip:document.getElementById('netIp').value.trim(),mask:document.getElementById('netMask').value.trim(),
+    gw:document.getElementById('netGw').value.trim(),dns:document.getElementById('netDns').value.trim()};
+  if(d.mode===1&&d.ipFixed){
+    if(!IPV4.test(d.ip)){toast('⚠️ IP アドレスを正しく入力してください');return;}
+    if(!IPV4.test(d.mask)){toast('⚠️ サブネットマスクを正しく入力してください');return;}
+    if(!IPV4.test(d.gw)){toast('⚠️ ゲートウェイを正しく入力してください');return;}
+    if(d.dns&&!IPV4.test(d.dns)){toast('⚠️ DNS を正しく入力してください');return;}
+  }
   if(d.apPass.length<8){toast('⚠️ アクセスポイントのパスワードは8文字以上');return;}
   if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
   if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
   var msg=d.mode===1
-    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は http://fpv-c5-lt.local（またはルーターが割り当てた IP）で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
+    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
     :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
   if(!confirm(msg))return;
   try{
@@ -351,14 +372,15 @@ async function saveNetSettings(){
 async function sdBackup(){
   try{
     var r=await fetch('/api/sd/pilots/backup',{method:'POST'});
-    toast(r.ok?'✅ SDカードにバックアップしました':'⚠️ バックアップエラー');
+    var j={};try{j=await r.json();}catch(e){}
+    toast(r.ok?'✅ パイロット情報を '+(j.file||'SD カード')+' に保存しました':'⚠️ 保存できませんでした',3000);
   }catch(e){toast('⚠️ 接続エラー');}
 }
 async function sdRestore(){
-  if(!confirm('SDカードからパイロット情報を復元します。現在のデータは上書きされます。よろしいですか？'))return;
+  var path=await pickBackup('pilots');if(!path)return;
   try{
-    var r=await fetch('/api/sd/pilots/restore',{method:'POST'});
-    if(!r.ok){toast('⚠️ 復元エラー（/pilots.csv がありません）');return;}
+    var r=await fetch('/api/sd/pilots/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path})});
+    if(!r.ok){toast('⚠️ 復元できませんでした');return;}
     var j=await r.json();
     await loadActive();await loadRoster();applyActiveToSlots();buildRaceCards();buildCalibCards();
     toast('✅ SDから'+j.pilots+'人分を復元しました',3000);
@@ -377,4 +399,211 @@ function updateSdSection(present){
     var wrap=document.getElementById('sdFileListWrap');
     if(wrap)wrap.innerHTML='<p style="color:var(--muted);font-size:12px">SDカードが挿入されていません</p>';
   }
+}
+
+// ── 接続台数 ────────────────────────────────────────────────────────────
+// Limits per role and WiFi mode; the timer sends the allowed maxima.
+function fillConnSelect(id,min,max,val,unit){
+  var s=document.getElementById(id);if(!s)return;
+  var h='';
+  for(var i=min;i<=max;i++)h+='<option value="'+i+'"'+(i===val?' selected':'')+'>'+i+' 台'+'</option>';
+  s.innerHTML=h;
+}
+async function loadConnLimits(){
+  try{
+    var r=await fetch('/api/conn');if(!r.ok)throw 0;
+    var c=await r.json();
+    connInfo=c;
+    fillConnSelect('connAdmin',1,c.adminLimit,c.adminMax);
+    // At least one viewer place: with none, a browser not logged in yet is
+    // closed within seconds and could never log in.
+    fillViewHost(c.adminMax,c.viewHost);
+    fillConnSelect('connViewClient',1,c.viewClientLimit,Math.max(1,c.viewClient));
+    var h=document.getElementById('connHold');if(h&&c.holdSec)h.value=String(c.holdSec);
+    var now=document.getElementById('connNow');
+    if(now)now.innerHTML='<span>現在（'+(c.ap?'ホスト':'クライアント')+'モード）</span><b>管理者 '+c.logins+' / '+c.adminMax
+      +' ・ 観戦 '+c.viewers+' / '+c.viewerLimit+'</b>';
+  }catch(e){}
+}
+// Host mode: admins + viewers fit our access point (hostTotal = 10 places
+// less one for the netpack), so the viewer choices follow the admin one.
+var connInfo=null;
+function viewHostMax(admins){
+  var c=connInfo||{},total=c.hostTotal||9;
+  return Math.max(1,Math.min(c.viewHostLimit||8,total-admins));
+}
+function fillViewHost(admins,val){
+  var max=viewHostMax(admins);
+  fillConnSelect('connViewHost',1,max,Math.min(max,Math.max(1,val)));
+  var n=document.getElementById('connHostNote');
+  if(n)n.textContent='ホストモードでは、管理者と観戦の合計が '+((connInfo&&connInfo.hostTotal)||9)+' 台まで（タイマーの WiFi は 10 台まで、うち 1 台は netpack 用）。管理者 '+admins+' 台なら観戦は '+max+' 台までです。';
+}
+function onConnAdmin(){
+  var v=id=>parseInt(document.getElementById(id).value,10);
+  fillViewHost(v('connAdmin'),v('connViewHost'));
+  saveConnLimits();
+}
+async function saveConnLimits(){
+  var v=id=>parseInt(document.getElementById(id).value,10);
+  try{
+    var r=await fetch('/api/conn',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({adminMax:v('connAdmin'),viewHost:v('connViewHost'),viewClient:v('connViewClient'),holdSec:v('connHold')})});
+    if(!r.ok)throw 0;
+    toast('✅ 接続台数を保存しました');
+    loadConnLimits();
+  }catch(e){toast('⚠️ 保存エラー');}
+}
+
+// ── 再起動 ──────────────────────────────────────────────────────────────
+async function restartAll(){
+  if(raceRunning){toast('レース中は再起動できません');return;}
+  if(!confirm('タイマーを再起動します。よろしいですか？\n（再起動後はログインし直してください）'))return;
+  try{
+    var r=await fetch('/api/restart',{method:'POST'});
+    if(!r.ok)throw 0;
+    waitForRestart();
+  }catch(e){toast('⚠️ 接続エラー');}
+}
+// Every open page (admins and viewers) reloads, this one too.
+async function reloadAllPages(){
+  if(!confirm('つながっているすべての画面（観戦者も含む）を再読み込みします。よろしいですか？'))return;
+  try{
+    var r=await fetch('/api/reload-all',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    if(r.status===403){toast('⚠️ ログインし直してください');return;}
+    if(!r.ok)throw 0;
+  }catch(e){toast('⚠️ 接続エラー');}
+}
+// After a restart: wait until the timer answers again, then reload the page.
+function waitForRestart(){
+  toast('🔄 再起動しています…（戻ったら自動で開き直します）',8000);
+  var t0=Date.now(),seenDown=false;
+  var poll=async()=>{
+    try{
+      var c=new AbortController();setTimeout(()=>c.abort(),1500);
+      var r=await fetch('/api/sys',{cache:'no-store',signal:c.signal});
+      if(r.ok){var j=await r.json();if(seenDown||j.uptime<20){location.reload();return;}}
+    }catch(e){seenDown=true;}
+    if(Date.now()-t0<90000)setTimeout(poll,2000);
+    else toast('⚠️ タイマーが戻りません。電源を入れ直してください',10000);
+  };
+  setTimeout(poll,3000);
+}
+
+// ── 状態（起動からの時間・前回の起動・空きメモリー） ──────────────────────
+var SYS_REASON={poweron:'電源オン',restart:'再起動ボタン',sw:'再起動',panic:'エラー（パニック）',watchdog:'エラー（ウォッチドッグ）',
+  brownout:'電源の電圧低下',reset:'リセットボタン',usb:'USB',other:'その他'};
+async function loadSysInfo(){
+  var el=document.getElementById('sysInfo');if(!el)return;
+  try{
+    var r=await fetch('/api/sys');if(!r.ok)throw 0;
+    var s=await r.json(),up=s.uptime,kb=v=>Math.round(v/1024)+' KB';
+    var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
+    var h='起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
+      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
+    if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
+      +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
+    el.innerHTML=h;
+  }catch(e){el.textContent='';}
+}
+
+// ── 接続用 QR コード ────────────────────────────────────────────────────
+// Host mode: ① join the timer's WiFi, ② open the page. Client mode: open
+// the page by IP address (the phone on the same router). The QR library
+// (qrcode-generator, MIT) is loaded only when this card is shown.
+var qrLib=null,qrItems=[];
+function loadQrLib(){
+  if(qrLib)return qrLib;
+  qrLib=new Promise((ok,ng)=>{
+    var s=document.createElement('script');s.src='/js/qrcode.js';
+    s.onload=()=>{qrcode.stringToBytes=qrcode.stringToBytesFuncs['UTF-8'];ok();};
+    s.onerror=()=>{qrLib=null;ng();};
+    document.head.appendChild(s);
+  });
+  return qrLib;
+}
+// WIFI: fields escape \ ; , : "
+function wifiEsc(s){return String(s).replace(/([\\;,:"])/g,'\\$1');}
+// Join a network: WPA with a password, or an open one.
+function wifiQr(ssid,pass){
+  return pass?'WIFI:T:WPA;S:'+wifiEsc(ssid)+';P:'+wifiEsc(pass)+';;':'WIFI:T:nopass;S:'+wifiEsc(ssid)+';;';
+}
+function qrSvg(text){
+  var q=qrcode(0,'M');q.addData(text);q.make();
+  return q.createSvgTag({cellSize:4,margin:2,scalable:true});
+}
+async function renderConnQr(d){
+  var wrap=document.getElementById('qrWrap');if(!wrap)return;
+  qrItems=await buildQrItems(d);
+  try{await loadQrLib();}catch(e){wrap.innerHTML='<span class="res-muted">QR コードを作れませんでした（再読み込みしてください）</span>';return;}
+  wrap.innerHTML=qrHtml();
+}
+// The connection QR codes for /api/net's answer d: [{cap,sub,text,pass}].
+async function buildQrItems(d){
+  var st=(d&&d.status)||{},ip=st.ip||location.hostname,url='http://'+ip+'/';
+  var qrItems=[];
+  if(st.ap){
+    qrItems.push({cap:'① タイマーの WiFi に接続',sub:d.apSsid,pass:d.apPass,text:wifiQr(d.apSsid,d.apPass)});
+    qrItems.push({cap:'② 画面を開く',sub:url,text:url});
+  }else{
+    // Client mode: the router's network (the password only comes to a
+    // logged-in admin), then the page.
+    var w=null;
+    try{
+      var r=await fetch('/api/net/wifi-qr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+      if(r.ok)w=await r.json();
+    }catch(e){}
+    if(w&&w.ssid){
+      qrItems.push({cap:'① ルーターの WiFi に接続',sub:w.ssid,pass:w.pass,text:wifiQr(w.ssid,w.pass)});
+      qrItems.push({cap:'② 画面を開く',sub:url,text:url});
+    }else{
+      qrItems.push({cap:'画面を開く（同じ WiFi に接続してから）',sub:url,text:url});
+    }
+  }
+  return qrItems;
+}
+function qrHtml(){
+  return qrItems.map(i=>'<div class="qr-item"><div class="qr">'+qrSvg(i.text)+'</div><div class="cap">'+esc(i.cap)+'</div><div class="sub">'+esc(i.sub)+'</div></div>').join('');
+}
+function showQrBig(){
+  if(!qrItems.length||typeof qrcode==='undefined')return;
+  document.getElementById('qrBig').innerHTML=qrHtml();
+  document.getElementById('qrModal').style.display='flex';
+}
+
+// ── Start delay (settings → レース内容) ─────────────────────────────────
+var START_DELAY_PRESETS=[10,15,30,60];
+function showStartDelay(){
+  var tg=document.getElementById('startDelayToggle');if(tg)tg.checked=startDelayOn;
+  var stl=document.getElementById('startDelayState');if(stl)stl.textContent=startDelayOn?'ON':'OFF';
+  var sr=document.getElementById('startDelaySelRow');if(sr)sr.style.display=startDelayOn?'':'none';
+  var sel=document.getElementById('startDelaySelect');if(!sel)return;
+  var preset=START_DELAY_PRESETS.indexOf(startDelaySec)>=0;
+  sel.value=preset?String(startDelaySec):'custom';
+  if(!preset)setField('startDelayCustom',startDelaySec);
+  var row=document.getElementById('startDelayCustomRow');if(row)row.style.display=preset||!startDelayOn?'none':'';
+}
+function toggleStartDelay(){
+  startDelayOn=document.getElementById('startDelayToggle').checked;
+  showStartDelay();
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startDelayOn:startDelayOn})})
+    .then(r=>toast(r.ok?(startDelayOn?'✓ スタートの待ち時間を ON（'+startDelaySec+' 秒）にしました':'✓ スタートの待ち時間を OFF にしました'):'⚠️ 保存エラー'))
+    .catch(()=>toast('⚠️ 接続エラー'));
+}
+function onStartDelaySelect(){
+  var v=document.getElementById('startDelaySelect').value;
+  var row=document.getElementById('startDelayCustomRow');
+  if(v==='custom'){if(row)row.style.display='';saveStartDelay();return;}
+  if(row)row.style.display='none';
+  postStartDelay(parseInt(v,10)||10);
+}
+function saveStartDelay(){
+  var n=Math.max(1,Math.min(600,parseInt(document.getElementById('startDelayCustom').value,10)||1));
+  setField('startDelayCustom',n);
+  postStartDelay(n);
+}
+function postStartDelay(n){
+  startDelaySec=n;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({startDelaySec:n})})
+    .then(r=>toast(r.ok?'✓ スタートの待ち時間を '+n+' 秒にしました':'⚠️ 保存エラー'))
+    .catch(()=>toast('⚠️ 接続エラー'));
 }
