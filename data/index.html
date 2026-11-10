@@ -54,6 +54,7 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .race-controls{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:14px 12px;margin-bottom:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
 #timer{font-size:44px;font-weight:bold;font-family:"Courier New",monospace;color:var(--accent);letter-spacing:3px}
 #timer.waiting{color:var(--warn)}
+.sd-item{display:flex;flex-direction:column;gap:2px;margin:12px 0 6px;font-size:13px}.sd-item:first-of-type{margin-top:0}.sd-item .res-muted{font-size:11px}
 #waitLabel{display:none;font-size:13px;font-weight:700;color:var(--warn);margin-bottom:-4px}
 #timer.running{color:var(--ok)}
 #timer.timeup,#timer.running.timeup{color:var(--err)}
@@ -461,22 +462,24 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 
   <div class="global-config-card" id="sdSection" style="display:none">
     <h3 class="global-title">💾 SDカード</h3>
-    <p class="section-desc" style="margin:0 0 6px">👤 <b>パイロット情報</b>（名前・読み・周波数・キャリブレーション・割り当て）を SD カードの pilots.csv にバックアップ・復元します。</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 パイロット情報の保存</button>
-      <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 パイロット情報の復元</button>
+    <div class="sd-item"><b>👤 パイロット情報</b><span class="res-muted">名前・周波数・キャリブレーション・割り当て</span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdBackup()" class="btn-secondary" style="flex:1">📥 保存</button>
+      <button onclick="sdRestore()" class="btn-secondary" style="flex:1">📤 復元</button>
     </div>
     <!-- Everything but the pilots, to /settings.json. -->
-    <p class="section-desc" style="margin:14px 0 6px">⚙️ <b>設定情報</b>（パイロット以外：レース内容・検出・ELRS OSD・WiFi・固定IP・接続数・ログインの保持・管理者パスワード）を SD カードの settings.json にバックアップ・復元します。<span id="setBkInfo"></span></p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="sdSettingsBackup()" class="btn-secondary" style="flex:1">📥 設定情報の保存</button>
-      <button onclick="sdSettingsRestore()" class="btn-secondary" style="flex:1">📤 設定情報の復元</button>
+    <div class="sd-item"><b>⚙️ 設定情報</b><span class="res-muted">パイロット以外のすべての設定<span id="setBkInfo"></span></span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdSettingsBackup()" class="btn-secondary" style="flex:1">📥 保存</button>
+      <button onclick="sdSettingsRestore()" class="btn-secondary" style="flex:1">📤 復元</button>
     </div>
     <!-- The connection QR codes as one PNG, to print or put up at the field. -->
-    <p class="section-desc" style="margin:14px 0 6px">🔳 <b>QR画像</b>：接続用 QR コードを 1 枚の PNG 画像にして SD カードに保存します（ホストモード qr_host.png／クライアントモード qr_client.png）。印刷して会場に貼れます。</p>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="sdSaveQrImage()" class="btn-secondary" style="flex:1">📥 QR画像の保存</button>
+    <div class="sd-item"><b>🔳 接続 QR 画像</b><span class="res-muted">印刷・掲示用の PNG</span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="sdSaveQrImage()" class="btn-secondary" style="flex:1">📥 保存</button>
     </div>
+    <p class="section-desc" style="margin:10px 0 0">WiFi の設定は、復元後の再起動で切り替わります。設定情報と QR 画像には WiFi のパスワードが入るため、ダウンロードは管理者のみです。</p>
+  </div>
     <p class="section-desc" style="margin:8px 0 0">WiFi の設定は、復元後にタイマーを再起動すると切り替わります。settings.json と QR 画像には WiFi のパスワードが入るため、SD タブからのダウンロードはログイン中の管理者だけができます。</p>
   </div>
 
