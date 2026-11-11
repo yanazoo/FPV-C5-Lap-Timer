@@ -3,6 +3,7 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
+#include "mic.h"
 #include "sd_store.h"
 #include "ws_handler.h"
 
@@ -108,7 +109,13 @@ bool raceResume() {
     return true;
 }
 
+// The microphone does not start a race for a while after a stop or clear
+// (the stop tone, cheering, the next pilots getting ready).
+static const uint32_t MIC_QUIET_MS = 5000;
+static uint32_t micQuietUntil = MIC_QUIET_MS;   // and in the first seconds after boot
+
 void raceStop() {
+    micQuietUntil = millis() + MIC_QUIET_MS;
     uint32_t elapsed;
     {
         Guard g;
@@ -145,6 +152,7 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
 }
 
 String raceClear() {
+    micQuietUntil = millis() + MIC_QUIET_MS;
     bool hadLaps, saved = false;
     const char* reason = "";
     {
@@ -232,7 +240,8 @@ static void sendTelemetry() {
             o["ex"]       = l.exits;
         }
     }
-    if (!arr.size() || !ws.count()) return;
+    if (micOk()) d["mic"] = micPeak();   // loudest 20 ms since the last send (Calibration graph)
+    if ((!arr.size() && !micOk()) || !ws.count()) return;
     String s;
     serializeJson(d, s);
     wsTelemetry(s);
@@ -468,8 +477,56 @@ bool raceManualLap(int slot) {
     return true;
 }
 
+// ── Microphone: start on a loud sound, false start in the countdown ───────
+// Each 20 ms window at or above a threshold extends a run; the run must
+// last micCfg.holdMs. Start: only with no race at all (not running, not
+// stopped mid-race, no start under way). False start: only between ARM NOW
+// and GO; the race is stopped and cleared, every browser says why and the
+// goggles show FALSE START.
+static uint32_t micSeq = 0;
+static uint16_t micStartRun = 0, micFsRun = 0;
+
+static void falseStart() {
+    Serial.println("[Race] false start (microphone)");
+    rdPhase = RD_IDLE;
+    JsonDocument d;
+    d["type"] = "false_start";
+    wsJson(d);
+    raceStop();
+    raceClear();
+    elrsAnnounce("FALSE START");
+}
+
+static void serviceMic(uint32_t now) {
+    if (!micOk() || (!micCfg.start && !micCfg.falseStart)) return;
+    uint8_t lvl;
+    uint32_t seq;
+    if (!micLatest(lvl, seq) || seq == micSeq) return;
+    uint32_t n = seq - micSeq;   // windows since the last look (normally 1)
+    micSeq = seq;
+    uint16_t add = n > 50 ? 1000 : (uint16_t)(n * 20);
+    bool idle;
+    {
+        Guard g;
+        idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
+    }
+    micStartRun = (micCfg.start && idle && (int32_t)(now - micQuietUntil) >= 0 && lvl >= micCfg.startLvl)
+                      ? micStartRun + add : 0;
+    micFsRun = (micCfg.falseStart && rdPhase == RD_COUNTDOWN && lvl >= micCfg.fsLvl) ? micFsRun + add : 0;
+    if (micStartRun >= micCfg.holdMs) {
+        micStartRun = 0;
+        Serial.printf("[Race] start by microphone (level %u)\n", lvl);
+        rdStart();
+    }
+    if (micFsRun >= micCfg.holdMs) {
+        micFsRun = 0;
+        falseStart();
+    }
+}
+
 void raceLoop() {
     serviceRaceDirector();
+    serviceMic(millis());
     C5Pass p;
     while (c5PopPass(&p)) onPass(p);
     if (manualPending) {

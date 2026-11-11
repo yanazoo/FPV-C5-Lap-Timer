@@ -125,6 +125,7 @@ function onMsg(d){
   if(d.type==='settings'){applySettings(d);return;}
   if(d.type==='hello'){onHelloReply(d);return;}
   if(d.type==='race_wait'){onRaceWait(d.sec,false);return;}
+  if(d.type==='false_start'){onFalseStart();return;}
   if(d.type==='calib'){
     // Thresholds saved on some browser (this one included).
     var rd=rosterById[d.id];if(rd){rd.enter=d.enter;rd.exit=d.exit;}
@@ -137,6 +138,7 @@ function onMsg(d){
     // Another browser saved these settings: reload the forms (not mid-edit).
     if(d.what==='elrs'&&typeof loadElrsSettings==='function'&&!editing('pane-config'))loadElrsSettings();
     if(d.what==='net'&&typeof loadNetSettings==='function'&&!editing('pane-config'))loadNetSettings();
+    if(d.what==='mic'&&activeTab==='calib'&&typeof loadMic==='function'&&!editing('pane-calib'))loadMic();
     return;
   }
   if(d.type==='active_update'){
@@ -160,6 +162,7 @@ function onMsg(d){
   }
   if(d.type==='rssi_all'){
     noteServerTime(d.ts);
+    if(d.mic!==undefined&&typeof pushMic==='function')pushMic(d.mic);
     (d.p||[]).forEach(x=>{x.type='rssi';x.ts=d.ts;onMsg(x);});
     return;
   }

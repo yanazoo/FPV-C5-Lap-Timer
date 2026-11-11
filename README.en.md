@@ -62,6 +62,23 @@ falls back below Exit.
 
 ![Calibration tab](docs/images/calib-pc.png)
 
+**🎤 Microphone (optional)**: the microphone on the XIAO ESP32-S3 **Sense**
+board (no wiring). At the bottom of the Calibration tab, a loudness graph
+(0–100) with the thresholds as dashed lines, set like a pilot's.
+
+- **Start by sound** (マイクでスタート): with no race on (after Clear), a
+  sound above the green line (a clap, a whistle, an air horn) lasting the set
+  time starts the race like the Start button (start delay → ready → 3-2-1).
+  Not within 5 s of a stop or clear.
+- **False start** (フライング検知): a sound above the red line (a quad
+  throttling up) between ARM NOW and GO **stops the race, announces
+  "フライングです。レースを中止します。" and clears the count**; the goggles
+  show FALSE START.
+- Keep the thresholds above the 3-2-1 tones and the phones' announcements.
+  The level is relative to the microphone's maximum (not a sound-level meter's
+  dB), so set it on site. Both are off by default, and are part of the
+  settings backup.
+
 ### 💾 SD card: look back at past races
 
 Every race is saved on the SD card when you press Clear (the file name holds
@@ -109,7 +126,7 @@ also open in Excel.
     every file, the admin password is asked again).
   - **Backups** (Settings → 💾 SDカード): **pilots** (`pilots_YYYYMMDD_HHMM.csv`)
     and **every other setting** (`settings_YYYYMMDD_HHMM.json`: race content,
-    detection, ELRS OSD, WiFi, fixed IP, connection limits, login hold, admin
+    detection, ELRS OSD, microphone, WiFi, fixed IP, connection limits, login hold, admin
     password), each with Save and Restore. Restore lists the saved files,
     newest first, to pick from. Settings can't be restored during a race, and
     restored WiFi settings take effect after a restart.

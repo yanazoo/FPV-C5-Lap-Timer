@@ -150,3 +150,88 @@ function syncCalibSliders(id,enter,exit_){
   var xEl=document.getElementById('calExit'+id),xN=document.getElementById('calExitN'+id);
   if(eEl)eEl.value=enter;if(eN)eN.value=enter;if(xEl)xEl.value=exit_;if(xN)xN.value=exit_;
 }
+
+// ── Microphone (Sense board): level graph and the two thresholds ─────────
+// Same look as a pilot's chart: the level (0-100, 10 per second from the
+// telemetry) over the last 20 s, the start threshold green, the false
+// start one red.
+var micChart=null,micDirty=false,micCfgLocal={start:false,falseStart:false,startLvl:80,fsLvl:80,holdMs:100};
+function initMicChart(){
+  var cv=document.getElementById('micCanvas');if(!cv)return;
+  cv.width=cv.offsetWidth||300;cv.height=150;
+  micChart={cv:cv,ctx:cv.getContext('2d'),data:new Float32Array(200).fill(0)};
+  drawMic();
+}
+function pushMic(lvl){
+  if(!micChart)return;
+  micChart.data.copyWithin(0,1);micChart.data[199]=lvl;micDirty=true;
+  if(activeTab==='calib'){var n=document.getElementById('micNow');if(n)n.textContent=lvl;}
+}
+(function micLoop(){
+  requestAnimationFrame(micLoop);
+  if(activeTab!=='calib'||!micDirty)return;
+  micDirty=false;drawMic();
+})();
+function drawMic(){
+  var c=micChart;if(!c)return;
+  var cv=c.cv;if(cv.offsetWidth&&cv.offsetWidth!==cv.width)cv.width=cv.offsetWidth;
+  var ctx=c.ctx,w=cv.width,h=cv.height,toY=v=>h-(Math.max(0,Math.min(100,v))/100)*h,dx=w/200;
+  ctx.fillStyle='#0d1117';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='#1e2530';ctx.lineWidth=1;ctx.setLineDash([]);
+  for(var t=20;t<100;t+=20){var ty=toY(t);ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(w,ty);ctx.stroke();
+    ctx.fillStyle='#444';ctx.font='9px monospace';ctx.fillText(String(t),2,ty-2);}
+  ctx.setLineDash([4,4]);
+  ctx.strokeStyle=micCfgLocal.start?'#3fb950':'#3fb95055';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.startLvl));ctx.lineTo(w,toY(micCfgLocal.startLvl));ctx.stroke();
+  ctx.strokeStyle=micCfgLocal.falseStart?'#f85149':'#f8514955';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.fsLvl));ctx.lineTo(w,toY(micCfgLocal.fsLvl));ctx.stroke();
+  ctx.setLineDash([]);
+  var col='#58a6ff';
+  ctx.beginPath();for(var j=0;j<200;j++){var x=j*dx,y=toY(c.data[j]);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle=col+'28';ctx.fill();
+  ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();
+  for(var k=0;k<200;k++){var x2=k*dx,y2=toY(c.data[k]);k===0?ctx.moveTo(x2,y2):ctx.lineTo(x2,y2);}
+  ctx.stroke();
+}
+function showMicCfg(){
+  var c=micCfgLocal,set=(id,v)=>{var e=document.getElementById(id);if(e)e.value=v;};
+  var st=document.getElementById('micStart');if(st)st.checked=!!c.start;
+  var fs=document.getElementById('micFs');if(fs)fs.checked=!!c.falseStart;
+  var a=document.getElementById('micStartState');if(a)a.textContent=c.start?'ON':'OFF';
+  var b=document.getElementById('micFsState');if(b)b.textContent=c.falseStart?'ON':'OFF';
+  set('micStartLvl',c.startLvl);set('micStartLvlN',c.startLvl);
+  set('micFsLvl',c.fsLvl);set('micFsLvlN',c.fsLvl);set('micHold',String(c.holdMs));
+  drawMic();
+}
+async function loadMic(){
+  try{
+    var r=await fetch('/api/mic');if(!r.ok)return;
+    var d=await r.json();
+    micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startLvl:d.startLvl,fsLvl:d.fsLvl,holdMs:d.holdMs};
+    var m=document.getElementById('micMissing');if(m)m.style.display=d.ok===false?'':'none';
+    if(!micChart)initMicChart();
+    showMicCfg();
+  }catch(e){}
+}
+function syncMic(w){
+  var v=parseInt(document.getElementById('mic'+w+'Lvl').value,10);
+  document.getElementById('mic'+w+'LvlN').value=v;
+  micCfgLocal[w==='Start'?'startLvl':'fsLvl']=v;drawMic();saveMicSoon(800);
+}
+function syncMicN(w){
+  var el=document.getElementById('mic'+w+'LvlN'),v=Math.max(0,Math.min(100,parseInt(el.value,10)||0));
+  el.value=v;document.getElementById('mic'+w+'Lvl').value=v;
+  micCfgLocal[w==='Start'?'startLvl':'fsLvl']=v;drawMic();saveMicSoon(0);
+}
+var micSaveT=null;
+function saveMicSoon(ms){
+  micCfgLocal.start=document.getElementById('micStart').checked;
+  micCfgLocal.falseStart=document.getElementById('micFs').checked;
+  micCfgLocal.holdMs=parseInt(document.getElementById('micHold').value,10)||100;
+  showMicCfg();
+  clearTimeout(micSaveT);
+  micSaveT=setTimeout(async()=>{
+    try{
+      var r=await fetch('/api/mic',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(micCfgLocal)});
+      toast(r.ok?'✓ マイクの設定を保存しました':'⚠️ 保存エラー');
+    }catch(e){toast('⚠️ 接続エラー');}
+  },ms);
+}

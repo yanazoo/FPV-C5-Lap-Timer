@@ -14,6 +14,7 @@ bool         startDelayOn = false;
 uint16_t     startDelaySec = 10;
 uint16_t     loginHoldSec = LOGIN_HOLD_DEFAULT;
 StaIpConfig  staIp;
+MicSettings  micCfg;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
 String       adminPassword = "admin";   // public default; changed from the Config tab
@@ -102,6 +103,12 @@ void saveConnLimits() {
     prefs.begin("settings", false);
     prefs.putBytes("c", &connLimits, sizeof connLimits);
     prefs.putUShort("hold", loginHoldSec);
+    prefs.end();
+}
+
+void saveMic() {
+    prefs.begin("mic", false);
+    prefs.putBytes("cfg", &micCfg, sizeof micCfg);
     prefs.end();
 }
 
@@ -201,6 +208,16 @@ void loadAll() {
     settings.sdLogMode  = settings.sdLogMode <= 2 ? settings.sdLogMode : 0;
     settings.totalLaps  = settings.totalLaps <= 99 ? settings.totalLaps : 0;
     settings.gain       = settings.gain <= 89 ? settings.gain : C5_DEFAULT_GAIN;
+
+    prefs.begin("mic", true);
+    MicSettings mc;
+    if (prefs.getBytes("cfg", &mc, sizeof mc) == sizeof mc) micCfg = mc;
+    prefs.end();
+    micCfg.start      = micCfg.start ? 1 : 0;
+    micCfg.falseStart = micCfg.falseStart ? 1 : 0;
+    micCfg.startLvl   = min(micCfg.startLvl, (uint8_t)100);
+    micCfg.fsLvl      = min(micCfg.fsLvl, (uint8_t)100);
+    if (!micHoldValid(micCfg.holdMs)) micCfg.holdMs = 100;
 
     prefs.begin("elrs", true);
     if (prefs.getUInt("ver", 0) == kElrsVer) {

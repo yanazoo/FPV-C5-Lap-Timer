@@ -72,6 +72,10 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
                                              ("れん", [13300, 11000, 9500]), ("ひな", [13300, 11000, 9500, 8900])])
               for lap, ms in [(0, 2000)] + list(enumerate(laps, 1)))).encode(), 1793030000)
 START = time.monotonic()
+# The Sense board's microphone: settings, and a loud sound faked with
+# GET /mock/loud?ms=600&lvl=92 (for the start / false start).
+MIC = {"start": False, "falseStart": False, "startLvl": 80, "fsLvl": 80, "holdMs": 100}
+MIC_LOUD = {"until": 0.0, "lvl": 0}
 BOOT_ID = random.randint(1, 2**31)
 state = {
     "pilots": [],
@@ -270,6 +274,13 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/mock/seed":
             seed()
             return self.reply({"ok": True})
+        if p == "/mock/loud":
+            q = parse_qs(u.query)
+            MIC_LOUD.update(until=time.monotonic() + int(q.get("ms", ["600"])[0]) / 1000,
+                            lvl=int(q.get("lvl", ["92"])[0]))
+            return self.reply({"ok": True})
+        if p == "/api/mic":
+            return self.reply({**MIC, "ok": True})
         if p == "/api/laps":
             return self.reply(state["race"]["laps"])
         if not p.startswith("/api/"):
@@ -390,6 +401,10 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply({"ok": False, "reason": "login"}, 403)
             broadcast({"type": "reload"})
             return self.reply({"ok": True})
+        if p == "/api/mic":
+            MIC.update({k: d[k] for k in MIC if k in d})
+            broadcast({"type": "config_changed", "what": "mic"})
+            return self.reply({"ok": True})
         if p == "/api/sd/settings/backup":
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)
@@ -478,7 +493,10 @@ class Handler(SimpleHTTPRequestHandler):
                     r["waitEnd"] = 0
                 broadcast({"type": "race_ready"}); time.sleep(1.5)
                 if r.get("seq") is not token: return
-                broadcast({"type": "race_stage"}); time.sleep(3.3)
+                broadcast({"type": "race_stage"})
+                r["phase"] = "countdown"
+                time.sleep(3.3)
+                r["phase"] = None
                 if r.get("seq") is not token: return
                 r["seq"] = None
                 r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
@@ -603,7 +621,23 @@ if __name__ == "__main__":
                 if phase < 0.8:
                     v += int(420 * (1 - abs(phase - 0.4) / 0.4))
                 p.append({"pilot": s, "rssi": v, "crossing": v > 350, "signal": True})
-            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p}, admins_only=True)
+            loud = time.monotonic() < MIC_LOUD["until"]
+            lvl = MIC_LOUD["lvl"] if loud else 36 + (n * 7) % 9
+            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p, "mic": lvl}, admins_only=True)
+            r = state["race"]
+            if loud and MIC["falseStart"] and r.get("phase") == "countdown" and lvl >= MIC["fsLvl"]:
+                r["seq"] = None
+                r["phase"] = None
+                MIC_LOUD["until"] = 0
+                broadcast({"type": "false_start"})
+                broadcast({"type": "race_stop", "elapsed": 0})
+                r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                broadcast({"type": "race_clear"})
+            elif (loud and MIC["start"] and lvl >= MIC["startLvl"] and not r["running"] and not r["paused"]
+                  and not r.get("seq")):
+                MIC_LOUD["until"] = 0
+                threading.Thread(target=lambda: __import__("urllib.request").request.urlopen(
+                    f"http://127.0.0.1:{port}/api/race/start", data=b""), daemon=True).start()
             n += 1
             if n % 5 == 0:
                 enforce_viewers()

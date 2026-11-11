@@ -371,6 +371,15 @@ function onRaceReady(){
 // The stop tone on every browser (Stop pressed elsewhere, or the race
 // director); the browser that pressed Stop has already played it.
 var stopToneAt=-1e9;
+// The microphone heard a false start (ARM NOW to GO): the timer stops and
+// clears the race right after this; every browser says why.
+function onFalseStart(){
+  if(countdownH){clearInterval(countdownH);countdownH=null;}
+  ensureAudio();sfx.stop();
+  toast('🚫 フライング — レースを中止しました',4000);
+  if(voiceEnabled&&announceMode!=='none'&&announceMode!=='beep')
+    setTimeout(()=>sayNow('フライングです。レースを中止します。'),500);
+}
 function onRaceStop(elapsed){
   if(waitH){endWait();timerEl.textContent=raceClockText(timerFrozenMs);}   // start called off during the wait
   if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
