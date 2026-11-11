@@ -2,7 +2,7 @@
 
 🌐 [日本語](README.md) | **English**
 
-### 🚁 Up to 8 quads timed at once
+### Up to 8 quads timed at once
 
 - **One receiver times up to 8 quads at the same time** (8 channels; each quad is told apart by its VTX frequency).
 - Nothing goes on the quads, so **8 pilots can race with the quads they already fly**: no transponders or beacons to fit.
