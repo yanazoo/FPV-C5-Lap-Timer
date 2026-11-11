@@ -58,7 +58,7 @@ function renderSdFileList(){
       +'<td style="text-align:left">'+esc(f.name)+'</td>'
       +'<td>'+kb+' KB</td>'
       +'<td style="display:flex;gap:4px;justify-content:center">'
-      +'<button onclick="downloadSdFile(\''+escaped+'\')" class="btn-secondary" style="padding:2px 8px;font-size:11px">⬇ DL</button>'
+      +'<button onclick="downloadSdFile(\''+escaped+'\')" class="btn-gray-soft" style="padding:2px 8px;font-size:11px">⬇ DL</button>'
       +'<button onclick="deleteSdFile(\''+escaped+'\')" class="btn-danger-soft" style="padding:2px 8px;font-size:11px">🗑</button>'
       +'</td></tr>';
   });
