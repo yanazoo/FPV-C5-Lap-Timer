@@ -105,7 +105,9 @@ extern uint16_t     startDelaySec;   // that wait, 1..START_DELAY_MAX s
 // The Sense board's microphone (mic.h): start the race on a loud sound,
 // and call a false start on one between ARM NOW and GO. Levels 0-100.
 struct MicSettings {
-    uint8_t  start      = 0;     // a loud sound while idle starts the race
+    uint8_t  start      = 0;     // a loud sound (or two claps) while idle starts the race
+    uint8_t  startClap  = 1;     // the start signal: 1 two claps, 0 a loud sound lasting startHoldMs
+    uint8_t  clapClear  = 0;     // three claps after a stop clear the race
     uint8_t  falseStart = 0;     // a loud sound in the countdown stops it
     uint8_t  startLvl   = 80;
     uint8_t  fsLvl      = 80;

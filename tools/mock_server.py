@@ -74,7 +74,8 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
 START = time.monotonic()
 # The Sense board's microphone: settings, and a loud sound faked with
 # GET /mock/loud?ms=600&lvl=92 (for the start / false start).
-MIC = {"start": False, "falseStart": False, "startLvl": 80, "fsLvl": 80, "startHoldMs": 100, "fsHoldMs": 100}
+MIC = {"start": False, "falseStart": False, "startClap": True, "clapClear": False, "startLvl": 80, "fsLvl": 80,
+       "startHoldMs": 100, "fsHoldMs": 100}
 MIC_LOUD = {"until": 0.0, "lvl": 0}
 MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
 BOOT_ID = random.randint(1, 2**31)
@@ -279,6 +280,25 @@ class Handler(SimpleHTTPRequestHandler):
             q = parse_qs(u.query)
             MIC_LOUD.update(until=time.monotonic() + int(q.get("ms", ["600"])[0]) / 1000,
                             lvl=int(q.get("lvl", ["92"])[0]))
+            return self.reply({"ok": True})
+        if p == "/mock/clap":   # n claps 0.3 s apart, then what the timer does with them
+            n = int(parse_qs(u.query).get("n", ["2"])[0])
+            def claps():
+                for _ in range(n):
+                    MIC_LOUD.update(until=time.monotonic() + 0.12, lvl=90)
+                    time.sleep(0.3)
+                time.sleep(0.9)
+                r = state["race"]
+                idle = not r["running"] and not r["paused"] and not r.get("seq")
+                stopped = not r["running"] and not r.get("seq") and (r["paused"] or bool(r["laps"]))
+                if n == 2 and MIC["start"] and MIC["startClap"] and idle:
+                    broadcast({"type": "mic_cmd", "cmd": "start"})
+                    __import__("urllib.request").request.urlopen(f"http://127.0.0.1:{PORT}/api/race/start", data=b"")
+                elif n == 3 and MIC["clapClear"] and stopped:
+                    broadcast({"type": "mic_cmd", "cmd": "clear"})
+                    r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                    broadcast({"type": "race_clear"})
+            threading.Thread(target=claps, daemon=True).start()
             return self.reply({"ok": True})
         if p == "/api/mic":
             return self.reply({**MIC, "ok": MIC_PRESENT})
@@ -605,6 +625,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    PORT = port
     print(f"mock FPV C5 Lap Timer on http://localhost:{port}")
     def telemetry():   # the firmware's 10 Hz rssi_all and 1 Hz status
         n = 0
@@ -639,7 +660,7 @@ if __name__ == "__main__":
                 broadcast({"type": "race_stop", "elapsed": 0})
                 r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
                 broadcast({"type": "race_clear"})
-            elif (loud and MIC["start"] and lvl >= MIC["startLvl"] and not r["running"] and not r["paused"]
+            elif (loud and MIC["start"] and not MIC["startClap"] and lvl >= MIC["startLvl"] and not r["running"] and not r["paused"]
                   and not r.get("seq")):
                 MIC_LOUD["until"] = 0
                 threading.Thread(target=lambda: __import__("urllib.request").request.urlopen(

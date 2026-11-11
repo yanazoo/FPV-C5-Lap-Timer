@@ -732,12 +732,17 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="calib-sliders">
       <div class="config-row"><label>マイクでスタート</label>
         <label class="toggle-sw" style="flex:1"><input type="checkbox" id="micStart" onchange="saveMicSoon(0)"><span class="toggle-track"></span><span id="micStartState">OFF</span></label></div>
+      <div class="config-row"><label>スタートの合図</label>
+        <select id="micStartMode" onchange="saveMicSoon(0)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="clap">パン・パン（手を 2 回叩く）</option>
+          <option value="loud">大きな音（検知時間だけ続く音）</option>
+        </select></div>
       <div class="config-row"><label style="color:#3fb950">スタートの閾値</label>
         <div class="slider-num">
           <input type="range" id="micStartLvl" min="0" max="100" step="1" value="80" oninput="syncMic('Start')">
           <input type="number" id="micStartLvlN" min="0" max="100" step="1" value="80" onchange="syncMicN('Start')">
         </div></div>
-      <div class="config-row"><label style="color:#3fb950">スタートの検知時間</label>
+      <div class="config-row" id="micStartHoldRow"><label style="color:#3fb950">スタートの検知時間</label>
         <select id="micStartHold" onchange="saveMicSoon(0)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="20">0.02 秒（一瞬の音でも）</option><option value="60">0.06 秒</option><option value="100">0.1 秒</option>
           <option value="200">0.2 秒</option><option value="300">0.3 秒</option><option value="500">0.5 秒</option>
@@ -754,9 +759,14 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="20">0.02 秒（一瞬の音でも）</option><option value="60">0.06 秒</option><option value="100">0.1 秒</option>
           <option value="200">0.2 秒</option><option value="300">0.3 秒</option><option value="500">0.5 秒</option>
         </select></div>
+      <div class="config-row"><label>パン×3 でクリア</label>
+        <label class="toggle-sw" style="flex:1"><input type="checkbox" id="micClapClear" onchange="saveMicSoon(0)"><span class="toggle-track"></span><span id="micClapClearState">OFF</span></label></div>
     </div>
     <p class="section-desc" style="margin:4px 12px 10px">
-      <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を超える音が「スタートの検知時間」だけ続くと、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。ストップ・クリアの後 5 秒は反応しません。<br>
+      <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、合図があるとスタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。ストップ・クリアの後 5 秒は反応しません。<br>
+      ・<b>パン・パン</b>：緑の線を超える短い音（手を叩く・箱をノックする）が 2 回（0.12〜0.8 秒の間隔）。1 回の大きな音や、長く続く音（モーター音など）では反応しません。<br>
+      ・<b>大きな音</b>：緑の線を超える音が「スタートの検知時間」だけ続くとき。<br>
+      <b>パン×3 でクリア</b>：ストップした後に、緑の線を超える短い音が 3 回で、クリアボタンと同じようにクリアします（SD への保存も同じ）。<br>
       <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「フライングの検知時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
     </p>
   </div>

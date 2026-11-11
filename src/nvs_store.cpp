@@ -215,6 +215,8 @@ void loadAll() {
     prefs.end();
     micCfg.start      = micCfg.start ? 1 : 0;
     micCfg.falseStart = micCfg.falseStart ? 1 : 0;
+    micCfg.startClap  = micCfg.startClap ? 1 : 0;
+    micCfg.clapClear  = micCfg.clapClear ? 1 : 0;
     micCfg.startLvl   = min(micCfg.startLvl, (uint8_t)100);
     micCfg.fsLvl      = min(micCfg.fsLvl, (uint8_t)100);
     if (!micHoldValid(micCfg.startHoldMs)) micCfg.startHoldMs = 100;

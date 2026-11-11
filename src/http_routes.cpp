@@ -228,6 +228,8 @@ void elrsFromJson(JsonVariantConst d) {
 void micToJson(JsonObject d) {
     d["start"]      = micCfg.start != 0;
     d["falseStart"] = micCfg.falseStart != 0;
+    d["startClap"]  = micCfg.startClap != 0;
+    d["clapClear"]  = micCfg.clapClear != 0;
     d["startLvl"]   = micCfg.startLvl;
     d["fsLvl"]      = micCfg.fsLvl;
     d["startHoldMs"] = micCfg.startHoldMs;
@@ -236,6 +238,8 @@ void micToJson(JsonObject d) {
 void micFromJson(JsonVariantConst d) {
     if (!d["start"].isNull()) micCfg.start = (d["start"] | false) ? 1 : 0;
     if (!d["falseStart"].isNull()) micCfg.falseStart = (d["falseStart"] | false) ? 1 : 0;
+    if (!d["startClap"].isNull()) micCfg.startClap = (d["startClap"] | false) ? 1 : 0;
+    if (!d["clapClear"].isNull()) micCfg.clapClear = (d["clapClear"] | false) ? 1 : 0;
     if (!d["startLvl"].isNull()) micCfg.startLvl = (uint8_t)constrain((int)d["startLvl"], 0, 100);
     if (!d["fsLvl"].isNull()) micCfg.fsLvl = (uint8_t)constrain((int)d["fsLvl"], 0, 100);
     if (!d["startHoldMs"].isNull() && micHoldValid(d["startHoldMs"] | 0)) micCfg.startHoldMs = d["startHoldMs"] | 0;

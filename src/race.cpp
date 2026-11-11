@@ -497,8 +497,62 @@ static void falseStart() {
     elrsAnnounce("FALSE START");
 }
 
+// Claps: a sound above the start threshold that is gone again within
+// CLAP_MAX_MS counts as one clap; claps 120-800 ms apart make a series,
+// closed 900 ms after the last one. A longer sound (motors, music) spoils
+// the series. Two claps start the race (with startClap), three clear a
+// stopped race (with clapClear).
+static const uint16_t CLAP_MAX_MS = 250, CLAP_MIN_GAP_MS = 120, CLAP_MAX_GAP_MS = 800, CLAP_END_MS = 900;
+static uint8_t  clapCount = 0;
+static uint32_t clapAt = 0;
+static uint16_t clapLoudMs = 0;
+static bool     clapLoud = false, clapSpoilt = false;
+
+static void micCommand(const char* cmd) {
+    JsonDocument d;
+    d["type"] = "mic_cmd";   // every browser says what the claps did
+    d["cmd"]  = cmd;
+    wsJson(d);
+}
+
+static void serviceClaps(uint32_t now, uint8_t lvl, uint16_t add) {
+    bool loud = lvl >= micCfg.startLvl;
+    if (loud) {
+        if (!clapLoud) {   // a new sound starts
+            if (clapCount && now - clapAt > CLAP_MAX_GAP_MS) clapCount = 0, clapSpoilt = false;
+            if (!clapCount || now - clapAt >= CLAP_MIN_GAP_MS) {
+                clapCount = clapCount < 9 ? clapCount + 1 : 9;
+                clapAt = now;
+            }
+            clapLoudMs = 0;
+        }
+        clapLoudMs += add;
+        if (clapLoudMs > CLAP_MAX_MS) clapSpoilt = true;   // not a clap
+    }
+    clapLoud = loud;
+    if (!clapCount || clapLoud || now - clapAt < CLAP_END_MS) return;
+    uint8_t n = clapCount;
+    bool spoilt = clapSpoilt;
+    clapCount = 0, clapSpoilt = false;
+    if (spoilt) return;
+    bool idle, stopped;
+    {
+        Guard g;
+        idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
+        stopped = rdPhase == RD_IDLE && !raceCore.running() && (raceCore.paused() || raceCore.lapCount() > 0);
+    }
+    Serial.printf("[Mic] %u claps\n", n);
+    if (n == 2 && micCfg.start && micCfg.startClap && idle && (int32_t)(now - micQuietUntil) >= 0) {
+        micCommand("start");
+        rdStart();
+    } else if (n == 3 && micCfg.clapClear && stopped) {
+        micCommand("clear");
+        raceClear();
+    }
+}
+
 static void serviceMic(uint32_t now) {
-    if (!micOk() || (!micCfg.start && !micCfg.falseStart)) return;
+    if (!micOk() || (!micCfg.start && !micCfg.falseStart && !micCfg.clapClear)) return;
     uint8_t lvl;
     uint32_t seq;
     if (!micLatest(lvl, seq) || seq == micSeq) return;
@@ -510,8 +564,10 @@ static void serviceMic(uint32_t now) {
         Guard g;
         idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
     }
-    micStartRun = (micCfg.start && idle && (int32_t)(now - micQuietUntil) >= 0 && lvl >= micCfg.startLvl)
+    micStartRun = (micCfg.start && !micCfg.startClap && idle && (int32_t)(now - micQuietUntil) >= 0 &&
+                   lvl >= micCfg.startLvl)
                       ? micStartRun + add : 0;
+    serviceClaps(now, lvl, add);
     micFsRun = (micCfg.falseStart && rdPhase == RD_COUNTDOWN && lvl >= micCfg.fsLvl) ? micFsRun + add : 0;
     if (micStartRun >= micCfg.startHoldMs) {
         micStartRun = 0;
