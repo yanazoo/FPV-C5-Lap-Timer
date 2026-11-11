@@ -76,6 +76,7 @@ START = time.monotonic()
 # GET /mock/loud?ms=600&lvl=92 (for the start / false start).
 MIC = {"start": False, "falseStart": False, "startLvl": 80, "fsLvl": 80, "holdMs": 100}
 MIC_LOUD = {"until": 0.0, "lvl": 0}
+MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
 BOOT_ID = random.randint(1, 2**31)
 state = {
     "pilots": [],
@@ -280,7 +281,7 @@ class Handler(SimpleHTTPRequestHandler):
                             lvl=int(q.get("lvl", ["92"])[0]))
             return self.reply({"ok": True})
         if p == "/api/mic":
-            return self.reply({**MIC, "ok": True})
+            return self.reply({**MIC, "ok": MIC_PRESENT})
         if p == "/api/laps":
             return self.reply(state["race"]["laps"])
         if not p.startswith("/api/"):
@@ -623,9 +624,14 @@ if __name__ == "__main__":
                 p.append({"pilot": s, "rssi": v, "crossing": v > 350, "signal": True})
             loud = time.monotonic() < MIC_LOUD["until"]
             lvl = MIC_LOUD["lvl"] if loud else 36 + (n * 7) % 9
-            broadcast({"type": "rssi_all", "ts": now_ms(), "p": p, "mic": lvl}, admins_only=True)
+            msg = {"type": "rssi_all", "ts": now_ms(), "p": p}
+            if MIC_PRESENT:
+                msg["mic"] = lvl
+            broadcast(msg, admins_only=True)
             r = state["race"]
-            if loud and MIC["falseStart"] and r.get("phase") == "countdown" and lvl >= MIC["fsLvl"]:
+            if not MIC_PRESENT:
+                pass
+            elif loud and MIC["falseStart"] and r.get("phase") == "countdown" and lvl >= MIC["fsLvl"]:
                 r["seq"] = None
                 r["phase"] = None
                 MIC_LOUD["until"] = 0

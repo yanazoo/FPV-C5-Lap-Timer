@@ -723,12 +723,12 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- The Sense board's microphone: start on a loud sound, false start in
        the countdown. The same kind of graph as the pilots', with the two
        thresholds as dashed lines. -->
+  <div id="micSection" style="display:none">
   <h2 class="section-title" style="margin-top:18px">🎤 マイク</h2>
   <p class="section-desc">拡張ボード（XIAO ESP32-S3 Sense）のマイクの音量（0〜100）です。会場で手を叩いたり笛を吹いたりして、グラフを見ながら閾値を決めます。</p>
   <div class="calib-card mic-card">
     <div class="calib-header mic-header"><span>🎤 音量</span><span class="rssi-live-badge">今: <strong id="micNow">---</strong></span></div>
     <canvas id="micCanvas"></canvas>
-    <p id="micMissing" class="section-desc" style="display:none;margin:8px 12px;color:var(--warn)">⚠ マイクが見つかりません（XIAO ESP32-S3 Sense の拡張ボードが必要です）。</p>
     <div class="calib-sliders">
       <div class="config-row"><label>マイクでスタート</label>
         <label class="toggle-sw" style="flex:1"><input type="checkbox" id="micStart" onchange="saveMicSoon(0)"><span class="toggle-track"></span><span id="micStartState">OFF</span></label></div>
@@ -754,6 +754,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を超える音が「続く時間」だけ続くと、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。ストップ・クリアの後 5 秒は反応しません。<br>
       <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「続く時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
     </p>
+  </div>
   </div>
 </section>
 

@@ -1,6 +1,7 @@
 #include "mic.h"
 #include <ESP_I2S.h>
 #include <math.h>
+#include <driver/gpio.h>
 
 namespace {
 
@@ -10,7 +11,11 @@ constexpr uint32_t kRate    = 16000;
 constexpr size_t   kWindow  = kRate / 50;   // 20 ms
 
 I2SClass i2s;
-volatile bool     ok = false;
+volatile bool     started = false;
+// Seen at least one window with sound in it. Without the Sense board the
+// data line is held low (pull-down): every sample is the same, level 0. A
+// microphone always gives some noise, even in a quiet room.
+volatile bool     present = false;
 volatile uint8_t  lastLevel = 0, peakLevel = 0;
 volatile uint32_t windows = 0;
 portMUX_TYPE      mux = portMUX_INITIALIZER_UNLOCKED;
@@ -42,6 +47,10 @@ void micTask(void*) {
         if (lvl > peakLevel) peakLevel = lvl;
         windows = windows + 1;
         portEXIT_CRITICAL(&mux);
+        if (lvl > 0 && !present) {
+            present = true;
+            Serial.println("[Mic] microphone found (Sense board)");
+        }
     }
 }
 
@@ -53,12 +62,14 @@ void micBegin() {
         Serial.println("[Mic] PDM microphone not started");
         return;
     }
-    ok = true;
+    // No board: the data pin would float and read as noise; hold it low.
+    gpio_pulldown_en((gpio_num_t)kDataPin);
+    started = true;
     xTaskCreatePinnedToCore(micTask, "mic", 4096, nullptr, 1, nullptr, 0);
     Serial.println("[Mic] PDM microphone on GPIO42/41, 16 kHz");
 }
 
-bool micOk() { return ok; }
+bool micOk() { return started && present; }
 
 bool micLatest(uint8_t& level, uint32_t& seq) {
     portENTER_CRITICAL(&mux);

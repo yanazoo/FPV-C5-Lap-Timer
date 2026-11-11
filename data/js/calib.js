@@ -206,7 +206,9 @@ async function loadMic(){
     var r=await fetch('/api/mic');if(!r.ok)return;
     var d=await r.json();
     micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startLvl:d.startLvl,fsLvl:d.fsLvl,holdMs:d.holdMs};
-    var m=document.getElementById('micMissing');if(m)m.style.display=d.ok===false?'':'none';
+    // Only with the Sense board's microphone: otherwise the section stays hidden.
+    var sec=document.getElementById('micSection');if(sec)sec.style.display=d.ok?'':'none';
+    if(!d.ok)return;
     if(!micChart)initMicChart();
     showMicCfg();
   }catch(e){}

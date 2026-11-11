@@ -12,7 +12,10 @@
 #include <Arduino.h>
 
 void    micBegin();
-bool    micOk();                 // the microphone started
+// The microphone is there (the Sense board) and running: it has picked up
+// sound at least once since boot. Until then the features stay off and the
+// web UI hides them.
+bool    micOk();
 // The newest 20 ms window: its level and a counter that goes up by one per
 // window (to see how many arrived since the last look). False: none yet.
 bool    micLatest(uint8_t& level, uint32_t& seq);

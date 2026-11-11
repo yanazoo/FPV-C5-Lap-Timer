@@ -63,7 +63,9 @@ falls back below Exit.
 ![Calibration tab](docs/images/calib-pc.png)
 
 **🎤 Microphone (optional)**: the microphone on the XIAO ESP32-S3 **Sense**
-board (no wiring). At the bottom of the Calibration tab, a loudness graph
+board (no wiring). It only works, and only shows, when the microphone is
+found (nothing appears without the Sense board). At the bottom of the
+Calibration tab, a loudness graph
 (0–100) with the thresholds as dashed lines, set like a pilot's.
 
 - **Start by sound** (マイクでスタート): with no race on (after Clear), a
