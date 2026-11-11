@@ -85,7 +85,7 @@ Calibration tab, a loudness graph
   show FALSE START.
 - Keep the thresholds above the 3-2-1 tones and the phones' announcements.
   The level is relative to the microphone's maximum (not a sound-level meter's
-  dB), so set it on site. Both are off by default, and are part of the
+  dB), so set it on site. All of them are off by default, and are part of the
   settings backup.
 
 ### 💾 SD card: look back at past races
