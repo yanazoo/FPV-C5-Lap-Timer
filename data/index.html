@@ -737,7 +737,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <input type="range" id="micStartLvl" min="0" max="100" step="1" value="80" oninput="syncMic('Start')">
           <input type="number" id="micStartLvlN" min="0" max="100" step="1" value="80" onchange="syncMicN('Start')">
         </div></div>
-      <div class="config-row"><label style="color:#3fb950">スタートの続く時間</label>
+      <div class="config-row"><label style="color:#3fb950">スタートの検知時間</label>
         <select id="micStartHold" onchange="saveMicSoon(0)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="20">0.02 秒（一瞬の音でも）</option><option value="60">0.06 秒</option><option value="100">0.1 秒</option>
           <option value="200">0.2 秒</option><option value="300">0.3 秒</option><option value="500">0.5 秒</option>
@@ -749,15 +749,15 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <input type="range" id="micFsLvl" min="0" max="100" step="1" value="80" oninput="syncMic('Fs')">
           <input type="number" id="micFsLvlN" min="0" max="100" step="1" value="80" onchange="syncMicN('Fs')">
         </div></div>
-      <div class="config-row"><label style="color:#f85149">フライングの続く時間</label>
+      <div class="config-row"><label style="color:#f85149">フライングの検知時間</label>
         <select id="micFsHold" onchange="saveMicSoon(0)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="20">0.02 秒（一瞬の音でも）</option><option value="60">0.06 秒</option><option value="100">0.1 秒</option>
           <option value="200">0.2 秒</option><option value="300">0.3 秒</option><option value="500">0.5 秒</option>
         </select></div>
     </div>
     <p class="section-desc" style="margin:4px 12px 10px">
-      <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を超える音が「スタートの続く時間」だけ続くと、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。ストップ・クリアの後 5 秒は反応しません。<br>
-      <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「フライングの続く時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
+      <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を超える音が「スタートの検知時間」だけ続くと、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。ストップ・クリアの後 5 秒は反応しません。<br>
+      <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「フライングの検知時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
     </p>
   </div>
   </div>
