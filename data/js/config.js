@@ -71,7 +71,7 @@ function renderRoster(){
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
           +'<button onclick="startEdit('+r.id+')" class="btn-secondary" style="font-size:11px;padding:3px 8px">編集</button>'
-          +'<button onclick="deleteRosterPilot('+r.id+')" class="btn-danger" style="font-size:11px;padding:3px 8px">削除</button>'
+          +'<button onclick="deleteRosterPilot('+r.id+')" class="btn-danger-soft" style="font-size:11px;padding:3px 8px">削除</button>'
         +'</div>';
     }
     list.appendChild(item);
