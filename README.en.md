@@ -11,6 +11,13 @@ goggles through the ESP-NOW bridge of
 ELRS backpack, using a firmware port of
 **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs)**'s OSD logic.
 
+### 🚁 Up to 8 quads timed at once
+
+- **One receiver times up to 8 quads at the same time** (8 channels; each quad is told apart by its VTX frequency).
+- Nothing goes on the quads, so **8 pilots can race with the quads they already fly**: no transponders or beacons to fit.
+- **Register up to 20 pilots** and assign 8 of them to the channels for each race.
+- Laps and positions for all 8 show live **in the web UI, in voice announcements and on each pilot's HDZero goggles (OSD)**.
+
 > [!IMPORTANT]
 > **The goggle OSD works with HDZero goggles (with an ELRS backpack) only.**
 > Other goggles show no OSD; lap timing, the web UI and voice announcements
