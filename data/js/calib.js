@@ -94,9 +94,10 @@ function drawChart(id){
     ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(w,ty);ctx.stroke();
     ctx.fillStyle='#444';ctx.font='9px monospace';ctx.fillText(String(db),2,ty-2);
   }
-  ctx.setLineDash([4,4]);ctx.lineWidth=1;
-  ctx.strokeStyle='#3fb95088';ctx.beginPath();ctx.moveTo(0,toY(p.enterRssi));ctx.lineTo(w,toY(p.enterRssi));ctx.stroke();
-  ctx.strokeStyle='#f8514988';ctx.beginPath();ctx.moveTo(0,toY(p.exitRssi));ctx.lineTo(w,toY(p.exitRssi));ctx.stroke();
+  // Thresholds: solid colours, 2 px dashes, so they stand out from the trace.
+  ctx.setLineDash([6,4]);ctx.lineWidth=2;
+  ctx.strokeStyle='#3fb950';ctx.beginPath();ctx.moveTo(0,toY(p.enterRssi));ctx.lineTo(w,toY(p.enterRssi));ctx.stroke();
+  ctx.strokeStyle='#f85149';ctx.beginPath();ctx.moveTo(0,toY(p.exitRssi));ctx.lineTo(w,toY(p.exitRssi));ctx.stroke();
   ctx.setLineDash([]);
   ctx.beginPath();
   for(var j=0;j<200;j++){var x=j*dx,y=toY(c.data[j]);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
@@ -180,9 +181,9 @@ function drawMic(){
   ctx.strokeStyle='#1e2530';ctx.lineWidth=1;ctx.setLineDash([]);
   for(var t=20;t<100;t+=20){var ty=toY(t);ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(w,ty);ctx.stroke();
     ctx.fillStyle='#444';ctx.font='9px monospace';ctx.fillText(String(t),2,ty-2);}
-  ctx.setLineDash([4,4]);
-  ctx.strokeStyle=micCfgLocal.start?'#3fb950':'#3fb95055';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.startLvl));ctx.lineTo(w,toY(micCfgLocal.startLvl));ctx.stroke();
-  ctx.strokeStyle=micCfgLocal.falseStart?'#f85149':'#f8514955';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.fsLvl));ctx.lineTo(w,toY(micCfgLocal.fsLvl));ctx.stroke();
+  ctx.setLineDash([6,4]);ctx.lineWidth=2;
+  ctx.strokeStyle=micCfgLocal.start?'#3fb950':'#3fb95099';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.startLvl));ctx.lineTo(w,toY(micCfgLocal.startLvl));ctx.stroke();
+  ctx.strokeStyle=micCfgLocal.falseStart?'#f85149':'#f8514999';ctx.beginPath();ctx.moveTo(0,toY(micCfgLocal.fsLvl));ctx.lineTo(w,toY(micCfgLocal.fsLvl));ctx.stroke();
   ctx.setLineDash([]);
   var col='#58a6ff';
   ctx.beginPath();for(var j=0;j<200;j++){var x=j*dx,y=toY(c.data[j]);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
