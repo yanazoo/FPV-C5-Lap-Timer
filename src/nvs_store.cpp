@@ -217,7 +217,8 @@ void loadAll() {
     micCfg.falseStart = micCfg.falseStart ? 1 : 0;
     micCfg.startLvl   = min(micCfg.startLvl, (uint8_t)100);
     micCfg.fsLvl      = min(micCfg.fsLvl, (uint8_t)100);
-    if (!micHoldValid(micCfg.holdMs)) micCfg.holdMs = 100;
+    if (!micHoldValid(micCfg.startHoldMs)) micCfg.startHoldMs = 100;
+    if (!micHoldValid(micCfg.fsHoldMs)) micCfg.fsHoldMs = 100;
 
     prefs.begin("elrs", true);
     if (prefs.getUInt("ver", 0) == kElrsVer) {

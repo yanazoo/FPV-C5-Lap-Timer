@@ -155,7 +155,7 @@ function syncCalibSliders(id,enter,exit_){
 // Same look as a pilot's chart: the level (0-100, 10 per second from the
 // telemetry) over the last 20 s, the start threshold green, the false
 // start one red.
-var micChart=null,micDirty=false,micCfgLocal={start:false,falseStart:false,startLvl:80,fsLvl:80,holdMs:100};
+var micChart=null,micDirty=false,micCfgLocal={start:false,falseStart:false,startLvl:80,fsLvl:80,startHoldMs:100,fsHoldMs:100};
 function initMicChart(){
   var cv=document.getElementById('micCanvas');if(!cv)return;
   cv.width=cv.offsetWidth||300;cv.height=150;
@@ -198,14 +198,15 @@ function showMicCfg(){
   var a=document.getElementById('micStartState');if(a)a.textContent=c.start?'ON':'OFF';
   var b=document.getElementById('micFsState');if(b)b.textContent=c.falseStart?'ON':'OFF';
   set('micStartLvl',c.startLvl);set('micStartLvlN',c.startLvl);
-  set('micFsLvl',c.fsLvl);set('micFsLvlN',c.fsLvl);set('micHold',String(c.holdMs));
+  set('micFsLvl',c.fsLvl);set('micFsLvlN',c.fsLvl);
+  set('micStartHold',String(c.startHoldMs));set('micFsHold',String(c.fsHoldMs));
   drawMic();
 }
 async function loadMic(){
   try{
     var r=await fetch('/api/mic');if(!r.ok)return;
     var d=await r.json();
-    micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startLvl:d.startLvl,fsLvl:d.fsLvl,holdMs:d.holdMs};
+    micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startLvl:d.startLvl,fsLvl:d.fsLvl,startHoldMs:d.startHoldMs,fsHoldMs:d.fsHoldMs};
     // Only with the Sense board's microphone: otherwise the section stays hidden.
     var sec=document.getElementById('micSection');if(sec)sec.style.display=d.ok?'':'none';
     if(!d.ok)return;
@@ -227,7 +228,8 @@ var micSaveT=null;
 function saveMicSoon(ms){
   micCfgLocal.start=document.getElementById('micStart').checked;
   micCfgLocal.falseStart=document.getElementById('micFs').checked;
-  micCfgLocal.holdMs=parseInt(document.getElementById('micHold').value,10)||100;
+  micCfgLocal.startHoldMs=parseInt(document.getElementById('micStartHold').value,10)||100;
+  micCfgLocal.fsHoldMs=parseInt(document.getElementById('micFsHold').value,10)||100;
   showMicCfg();
   clearTimeout(micSaveT);
   micSaveT=setTimeout(async()=>{

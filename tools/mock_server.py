@@ -74,7 +74,7 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
 START = time.monotonic()
 # The Sense board's microphone: settings, and a loud sound faked with
 # GET /mock/loud?ms=600&lvl=92 (for the start / false start).
-MIC = {"start": False, "falseStart": False, "startLvl": 80, "fsLvl": 80, "holdMs": 100}
+MIC = {"start": False, "falseStart": False, "startLvl": 80, "fsLvl": 80, "startHoldMs": 100, "fsHoldMs": 100}
 MIC_LOUD = {"until": 0.0, "lvl": 0}
 MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
 BOOT_ID = random.randint(1, 2**31)

@@ -69,11 +69,11 @@ Calibration tab, a loudness graph
 (0–100) with the thresholds as dashed lines, set like a pilot's.
 
 - **Start by sound** (マイクでスタート): with no race on (after Clear), a
-  sound above the green line (a clap, a whistle, an air horn) lasting the set
+  sound above the green line (a clap, a whistle, an air horn) lasting its own set
   time starts the race like the Start button (start delay → ready → 3-2-1).
   Not within 5 s of a stop or clear.
 - **False start** (フライング検知): a sound above the red line (a quad
-  throttling up) between ARM NOW and GO **stops the race, announces
+  throttling up) lasting its own set time between ARM NOW and GO **stops the race, announces
   "フライングです。レースを中止します。" and clears the count**; the goggles
   show FALSE START.
 - Keep the thresholds above the 3-2-1 tones and the phones' announcements.

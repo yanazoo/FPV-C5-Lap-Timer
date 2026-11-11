@@ -109,7 +109,8 @@ struct MicSettings {
     uint8_t  falseStart = 0;     // a loud sound in the countdown stops it
     uint8_t  startLvl   = 80;
     uint8_t  fsLvl      = 80;
-    uint16_t holdMs     = 100;   // how long the sound must last
+    uint16_t startHoldMs = 100;  // how long the sound must last: start
+    uint16_t fsHoldMs    = 100;  // and false start
 };
 constexpr uint16_t MIC_HOLD_CHOICES[] = {20, 60, 100, 200, 300, 500};
 inline bool micHoldValid(int ms) {

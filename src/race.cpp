@@ -479,7 +479,7 @@ bool raceManualLap(int slot) {
 
 // ── Microphone: start on a loud sound, false start in the countdown ───────
 // Each 20 ms window at or above a threshold extends a run; the run must
-// last micCfg.holdMs. Start: only with no race at all (not running, not
+// last micCfg.startHoldMs / fsHoldMs. Start: only with no race at all (not running, not
 // stopped mid-race, no start under way). False start: only between ARM NOW
 // and GO; the race is stopped and cleared, every browser says why and the
 // goggles show FALSE START.
@@ -513,12 +513,12 @@ static void serviceMic(uint32_t now) {
     micStartRun = (micCfg.start && idle && (int32_t)(now - micQuietUntil) >= 0 && lvl >= micCfg.startLvl)
                       ? micStartRun + add : 0;
     micFsRun = (micCfg.falseStart && rdPhase == RD_COUNTDOWN && lvl >= micCfg.fsLvl) ? micFsRun + add : 0;
-    if (micStartRun >= micCfg.holdMs) {
+    if (micStartRun >= micCfg.startHoldMs) {
         micStartRun = 0;
         Serial.printf("[Race] start by microphone (level %u)\n", lvl);
         rdStart();
     }
-    if (micFsRun >= micCfg.holdMs) {
+    if (micFsRun >= micCfg.fsHoldMs) {
         micFsRun = 0;
         falseStart();
     }
