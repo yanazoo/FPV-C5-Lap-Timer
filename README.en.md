@@ -2,6 +2,13 @@
 
 🌐 [日本語](README.md) | **English**
 
+### 🚁 Up to 8 quads timed at once
+
+- **One receiver times up to 8 quads at the same time** (8 channels; each quad is told apart by its VTX frequency).
+- Nothing goes on the quads, so **8 pilots can race with the quads they already fly**: no transponders or beacons to fit.
+- **Register up to 20 pilots** and assign 8 of them to the channels for each race.
+- Laps and positions for all 8 show live **in the web UI, in voice announcements and on each pilot's HDZero goggles (OSD)**.
+
 An FPV drone lap timer. No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
