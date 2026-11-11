@@ -8,6 +8,7 @@ void saveActive();
 void saveSettings();
 void saveElrs();
 void saveConnLimits();
+void saveMic();
 void saveStaIp();             // client mode address (applied after a reboot)
 void saveAdminPassword(const String& pw);
 // WiFi mode and both credential sets (applied after a reboot).

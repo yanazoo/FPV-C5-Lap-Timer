@@ -109,6 +109,7 @@ function switchTab(tab){
   fetch('/api/sd/poll',{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({enable:sdActive})}).catch(()=>{});
   if(tab==='calib'){
+    loadMic();
     setTimeout(()=>{
       slots.forEach(p=>{
         var c=charts[p.id];if(!c)return;

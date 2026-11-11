@@ -14,6 +14,7 @@ void applyGateConfig();
 
 void raceStage();          // countdown started (ARM NOW on the goggles)
 void raceStart();
+void raceStartAt(uint32_t atMs);   // the clock starts at atMs (millis), e.g. when a start signal sounded
 bool raceResume();
 void raceStop();
 // The web Start / Stop buttons. Start runs the same sequence as the race

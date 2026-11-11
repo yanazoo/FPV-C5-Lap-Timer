@@ -15,6 +15,7 @@
 #include "data_model.h"
 #include "elrs.h"
 #include "http_routes.h"
+#include "mic.h"
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
@@ -42,6 +43,7 @@ void setup() {
     c5Begin();
     elrsBegin();
     raceBegin();
+    micBegin();
 
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");

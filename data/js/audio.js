@@ -60,6 +60,8 @@ var sfx={
     [0,1000,2000].forEach(at=>rhBeepAt(at,100,440,TONE_VOL,'triangle'));
     rhBeepAt(3000,700,880,TONE_VOL,'triangle',0.25);
   },
+  // GO alone (a start without the countdown): the start tone.
+  go: ()=>rhBeepAt(0,700,880,TONE_VOL,'triangle',0.25),
   // Stop: the countdown's 440 Hz falling an octave, A4 -> E4 -> A3
   // (triangle, 90 ms each, 150 ms apart; the last one rings out).
   stop: ()=>{

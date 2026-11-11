@@ -102,6 +102,26 @@ extern ConnLimits   connLimits;
 constexpr uint16_t START_DELAY_MAX = 600;
 extern bool         startDelayOn;    // wait before the start (settings switch)
 extern uint16_t     startDelaySec;   // that wait, 1..START_DELAY_MAX s
+// The Sense board's microphone (mic.h): start the race on a set number of
+// sounds over the start threshold, clear a stopped race on three, and call a
+// false start on a loud sound between ARM NOW and GO. Levels 0-100.
+struct MicSettings {
+    uint8_t  start      = 0;     // startCount threshold crossings while idle start the race
+    uint8_t  startCount = 2;     // crossings in a row (1-9), each lasting startHoldMs
+    uint8_t  startNow   = 0;     // 1: the signal itself is GO (no start delay, no countdown)
+    uint8_t  clapClear  = 0;     // three crossings after a stop clear the race
+    uint8_t  falseStart = 0;     // a loud sound in the countdown stops it
+    uint8_t  startLvl   = 80;
+    uint8_t  fsLvl      = 80;
+    uint16_t startHoldMs = 100;  // how long the sound must last: start
+    uint16_t fsHoldMs    = 100;  // and false start
+};
+constexpr uint16_t MIC_HOLD_CHOICES[] = {20, 60, 100, 200, 300, 500};
+inline bool micHoldValid(int ms) {
+    for (uint16_t c : MIC_HOLD_CHOICES) if (c == ms) return true;
+    return false;
+}
+extern MicSettings micCfg;
 extern ElrsSettings elrsCfg;
 // Race director's TX switch: 0 toggle (on = start, off = stop), 1 push
 // (each press starts or stops). Its own NVS key, so ElrsSettings' stored

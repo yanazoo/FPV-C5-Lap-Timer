@@ -7,6 +7,7 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
+#include "mic.h"
 #include "nvs_store.h"
 #include "race.h"
 #include "sd_store.h"
@@ -223,6 +224,31 @@ void elrsFromJson(JsonVariantConst d) {
     else elrsConfigChanged();
 }
 
+// Microphone start / false start (mic.h); saves.
+void micToJson(JsonObject d) {
+    d["start"]      = micCfg.start != 0;
+    d["falseStart"] = micCfg.falseStart != 0;
+    d["startCount"] = micCfg.startCount;
+    d["startNow"]   = micCfg.startNow != 0;
+    d["clapClear"]  = micCfg.clapClear != 0;
+    d["startLvl"]   = micCfg.startLvl;
+    d["fsLvl"]      = micCfg.fsLvl;
+    d["startHoldMs"] = micCfg.startHoldMs;
+    d["fsHoldMs"]    = micCfg.fsHoldMs;
+}
+void micFromJson(JsonVariantConst d) {
+    if (!d["start"].isNull()) micCfg.start = (d["start"] | false) ? 1 : 0;
+    if (!d["falseStart"].isNull()) micCfg.falseStart = (d["falseStart"] | false) ? 1 : 0;
+    if (!d["startCount"].isNull()) micCfg.startCount = (uint8_t)constrain((int)d["startCount"], 1, 9);
+    if (!d["startNow"].isNull()) micCfg.startNow = (d["startNow"] | false) ? 1 : 0;
+    if (!d["clapClear"].isNull()) micCfg.clapClear = (d["clapClear"] | false) ? 1 : 0;
+    if (!d["startLvl"].isNull()) micCfg.startLvl = (uint8_t)constrain((int)d["startLvl"], 0, 100);
+    if (!d["fsLvl"].isNull()) micCfg.fsLvl = (uint8_t)constrain((int)d["fsLvl"], 0, 100);
+    if (!d["startHoldMs"].isNull() && micHoldValid(d["startHoldMs"] | 0)) micCfg.startHoldMs = d["startHoldMs"] | 0;
+    if (!d["fsHoldMs"].isNull() && micHoldValid(d["fsHoldMs"] | 0)) micCfg.fsHoldMs = d["fsHoldMs"] | 0;
+    saveMic();
+}
+
 // Connection limits and the login hold time; saves.
 void connFromJson(JsonVariantConst d) {
     if (!d["adminMax"].isNull()) connLimits.adminMax = constrain((int)d["adminMax"], 1, (int)CONN_ADMIN_MAX);
@@ -294,6 +320,7 @@ String settingsBackupJson() {
         settingsToJson(doc["settings"].to<JsonObject>());
         elrsToJson(doc["elrs"].to<JsonObject>());
     }
+    micToJson(doc["mic"].to<JsonObject>());
     JsonObject c = doc["conn"].to<JsonObject>();
     c["adminMax"]   = connLimits.adminMax;
     c["viewHost"]   = connLimits.viewHost;
@@ -660,6 +687,10 @@ void registerHttpRoutes() {
             wsText(R"({"type":"config_changed","what":"elrs"})");
         }
         if (v["conn"].is<JsonObjectConst>()) connFromJson(v["conn"]);
+        if (v["mic"].is<JsonObjectConst>()) {
+            micFromJson(v["mic"]);
+            wsText(R"({"type":"config_changed","what":"mic"})");
+        }
         const char* pw = v["auth"]["password"] | "";
         if (strlen(pw) >= 1 && strlen(pw) <= 32) saveAdminPassword(String(pw));
         const char* netWhy = "missing";
@@ -875,6 +906,19 @@ void registerHttpRoutes() {
         ok(req);
         sysRequestRestart(500);
     });
+    // The Sense board's microphone: start / false start settings.
+    server.on(AsyncURIMatcher::exact("/api/mic"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        JsonDocument d;
+        micToJson(d.to<JsonObject>());
+        d["ok"] = micOk();   // the microphone is there and running
+        sendJson(req, d);
+    });
+    onJson("/api/mic", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        micFromJson(d.as<JsonVariantConst>());
+        ok(req);
+        wsText(R"({"type":"config_changed","what":"mic"})");
+    });
+
     // Reload every open page (admins and viewers). Admin only (token).
     onJson("/api/reload-all", [](AsyncWebServerRequest* req, JsonDocument& d) {
         if (!wsTokenValid(String(d["token"] | ""))) {

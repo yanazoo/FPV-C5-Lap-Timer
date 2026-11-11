@@ -62,6 +62,33 @@ falls back below Exit.
 
 ![Calibration tab](docs/images/calib-pc.png)
 
+**🎤 Microphone (optional)**: the microphone on the XIAO ESP32-S3 **Sense**
+board (no wiring). It only works, and only shows, when the microphone is
+found (nothing appears without the Sense board). At the bottom of the
+Calibration tab, a loudness graph
+(0–100) with the thresholds as dashed lines, set like a pilot's.
+
+- **Start by sound** (マイクでスタート): with no race on (after Clear), sounds
+  above the green line, each lasting at least the start detection time, the
+  **set number of times** (閾値越えカウント回数, 1–9, default 2; at most 0.8 s
+  between them) start the race like the Start button (start delay → ready →
+  3-2-1). Only an exact count does, so 2 or more rarely starts by mistake.
+  Not within 5 s of a stop or clear. For example two claps = 2 times,
+  0.02 s; one whistle or air horn = 1 time, 0.2 s.
+  With **即スタート** (start now) on, the signal itself is GO: no start
+  delay, no ready, no 3-2-1; the clock runs from when the last sound began,
+  as soon as the count is reached.
+- **Three to clear** (閾値越え 3 回でクリア): after a stop, three such sounds
+  clear the race like the Clear button (saved to SD the same way).
+- **False start** (フライング検知): a sound above the red line (a quad
+  throttling up) lasting its own set time between ARM NOW and GO **stops the race, announces
+  "フライングです。レースを中止します。" and clears the count**; the goggles
+  show FALSE START.
+- Keep the thresholds above the 3-2-1 tones and the phones' announcements.
+  The level is relative to the microphone's maximum (not a sound-level meter's
+  dB), so set it on site. All of them are off by default, and are part of the
+  settings backup.
+
 ### 💾 SD card: look back at past races
 
 Every race is saved on the SD card when you press Clear (the file name holds
@@ -109,7 +136,7 @@ also open in Excel.
     every file, the admin password is asked again).
   - **Backups** (Settings → 💾 SDカード): **pilots** (`pilots_YYYYMMDD_HHMM.csv`)
     and **every other setting** (`settings_YYYYMMDD_HHMM.json`: race content,
-    detection, ELRS OSD, WiFi, fixed IP, connection limits, login hold, admin
+    detection, ELRS OSD, microphone, WiFi, fixed IP, connection limits, login hold, admin
     password), each with Save and Restore. Restore lists the saved files,
     newest first, to pick from. Settings can't be restored during a race, and
     restored WiFi settings take effect after a restart.

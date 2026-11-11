@@ -70,8 +70,8 @@ function renderRoster(){
         +osd+activeBadge+warn
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
-          +'<button onclick="startEdit('+r.id+')" class="btn-secondary" style="font-size:11px;padding:3px 8px">編集</button>'
-          +'<button onclick="deleteRosterPilot('+r.id+')" class="btn-danger" style="font-size:11px;padding:3px 8px">削除</button>'
+          +'<button onclick="startEdit('+r.id+')" class="btn-gray-soft" style="font-size:11px;padding:3px 8px">編集</button>'
+          +'<button onclick="deleteRosterPilot('+r.id+')" class="btn-danger-soft" style="font-size:11px;padding:3px 8px">削除</button>'
         +'</div>';
     }
     list.appendChild(item);
@@ -393,7 +393,7 @@ function updateSdSection(present){
   if(sec)sec.style.display=present?'block':'none';
   var st=document.getElementById('sdTabStatus');
   if(st)st.innerHTML=present
-    ?'<p style="color:var(--ok);font-size:12px">✅ SDカード検出済み — レース中はダウンロードしないでください</p>'
+    ?'<p style="color:var(--ok);font-size:12px">✅ SDカード検出済み — レース中は操作できません。</p>'
     :'<p style="color:var(--err);font-size:12px">⚠ SDカードが見つかりません</p>';
   if(!present){
     var wrap=document.getElementById('sdFileListWrap');

@@ -3,6 +3,8 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
+#include "mic.h"
+#include "sound_count.h"
 #include "sd_store.h"
 #include "ws_handler.h"
 
@@ -75,8 +77,9 @@ void raceStage() {
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
 
-void raceStart() {
-    uint32_t now = millis();
+void raceStart() { raceStartAt(millis()); }
+
+void raceStartAt(uint32_t now) {
     {
         Guard g;
         applyRaceRules();
@@ -108,7 +111,13 @@ bool raceResume() {
     return true;
 }
 
+// The microphone does not start a race for a while after a stop or clear
+// (the stop tone, cheering, the next pilots getting ready).
+static const uint32_t MIC_QUIET_MS = 5000;
+static uint32_t micQuietUntil = MIC_QUIET_MS;   // and in the first seconds after boot
+
 void raceStop() {
+    micQuietUntil = millis() + MIC_QUIET_MS;
     uint32_t elapsed;
     {
         Guard g;
@@ -145,6 +154,7 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
 }
 
 String raceClear() {
+    micQuietUntil = millis() + MIC_QUIET_MS;
     bool hadLaps, saved = false;
     const char* reason = "";
     {
@@ -232,7 +242,8 @@ static void sendTelemetry() {
             o["ex"]       = l.exits;
         }
     }
-    if (!arr.size() || !ws.count()) return;
+    if (micOk()) d["mic"] = micPeak();   // loudest 20 ms since the last send (Calibration graph)
+    if ((!arr.size() && !micOk()) || !ws.count()) return;
     String s;
     serializeJson(d, s);
     wsTelemetry(s);
@@ -253,6 +264,10 @@ void sendC5Status() {
     d["records"]  = c.records;
     d["gaps"]     = c.seqGaps;
     d["bad"]      = c.badRecords;
+    // The S3's own chip temperature (its internal sensor; runs 10-20 C above
+    // the air around it), for the header.
+    float t = temperatureRead();
+    if (t == t && t > -40 && t < 150) d["cpuTemp"] = (int)lroundf(t);
     JsonArray rate = d["rate"].to<JsonArray>();
     for (int i = 0; i < 8; i++) rate.add(c.rate[i]);
     JsonObject el = d["elrs"].to<JsonObject>();
@@ -468,8 +483,91 @@ bool raceManualLap(int slot) {
     return true;
 }
 
+// ── Microphone: start on a loud sound, false start in the countdown ───────
+// Each 20 ms window at or above a threshold extends a run; the run must
+// last micCfg.startHoldMs / fsHoldMs. Start: only with no race at all (not running, not
+// stopped mid-race, no start under way). False start: only between ARM NOW
+// and GO; the race is stopped and cleared, every browser says why and the
+// goggles show FALSE START.
+static uint32_t micSeq = 0;
+static uint16_t micFsRun = 0;
+
+static void falseStart() {
+    Serial.println("[Race] false start (microphone)");
+    rdPhase = RD_IDLE;
+    JsonDocument d;
+    d["type"] = "false_start";
+    wsJson(d);
+    raceStop();
+    raceClear();
+    elrsAnnounce("FALSE START");
+}
+
+// Threshold crossings (sound_count.h): sounds at or above the start
+// threshold for at least startHoldMs, in a series. A series of exactly
+// startCount starts the race (with no race on); one of 3 clears a stopped
+// race (with clapClear).
+static const uint8_t CLEAR_COUNT = 3;
+static sound::CrossCounter crossings;
+
+static void micCommand(const char* cmd) {
+    JsonDocument d;
+    d["type"] = "mic_cmd";   // every browser says what the sound did
+    d["cmd"]  = cmd;
+    wsJson(d);
+}
+
+static void serviceCrossings(uint32_t now, uint8_t lvl, uint16_t add) {
+    uint8_t before = crossings.count();
+    uint8_t n = crossings.feed(now, lvl >= micCfg.startLvl, add, micCfg.startHoldMs);
+    bool idle, stopped;
+    {
+        Guard g;
+        idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
+        stopped = rdPhase == RD_IDLE && !raceCore.running() && (raceCore.paused() || raceCore.lapCount() > 0);
+    }
+    // Start on the signal itself (startNow): GO as soon as the set count is
+    // reached, the clock from when that sound began; no delay, no countdown.
+    bool quietOk = (int32_t)(now - micQuietUntil) >= 0;
+    if (micCfg.start && micCfg.startNow && idle && quietOk && crossings.count() != before &&
+        crossings.count() == micCfg.startCount) {
+        uint32_t at = crossings.lastRise();
+        crossings.reset();
+        Serial.printf("[Mic] start now on %u crossings\n", micCfg.startCount);
+        micCommand("start_now");
+        raceStartAt(at);
+        return;
+    }
+    if (!n) return;
+    Serial.printf("[Mic] %u threshold crossings\n", n);
+    if (n == micCfg.startCount && micCfg.start && !micCfg.startNow && idle && quietOk) {
+        micCommand("start");
+        rdStart();
+    } else if (n == CLEAR_COUNT && micCfg.clapClear && stopped) {
+        micCommand("clear");
+        raceClear();
+    }
+}
+
+static void serviceMic(uint32_t now) {
+    if (!micOk() || (!micCfg.start && !micCfg.falseStart && !micCfg.clapClear)) return;
+    uint8_t lvl;
+    uint32_t seq;
+    if (!micLatest(lvl, seq) || seq == micSeq) return;
+    uint32_t n = seq - micSeq;   // windows since the last look (normally 1)
+    micSeq = seq;
+    uint16_t add = n > 50 ? 1000 : (uint16_t)(n * 20);
+    serviceCrossings(now, lvl, add);
+    micFsRun = (micCfg.falseStart && rdPhase == RD_COUNTDOWN && lvl >= micCfg.fsLvl) ? micFsRun + add : 0;
+    if (micFsRun >= micCfg.fsHoldMs) {
+        micFsRun = 0;
+        falseStart();
+    }
+}
+
 void raceLoop() {
     serviceRaceDirector();
+    serviceMic(millis());
     C5Pass p;
     while (c5PopPass(&p)) onPass(p);
     if (manualPending) {
