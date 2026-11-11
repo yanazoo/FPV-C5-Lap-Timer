@@ -666,7 +666,7 @@ if __name__ == "__main__":
             if n % 10 == 0:
                 r = state["race"]
                 act = sum(1 for a in state["active"] if a >= 0)
-                broadcast({"type": "c5", "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
+                broadcast({"type": "c5", "cpuTemp": 47 + (n // 10) % 3, "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
                            "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART"},
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),

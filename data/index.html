@@ -300,6 +300,7 @@ body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
 /* FPV C5 additions */
 .c5-badge{font-size:11px;font-family:monospace;padding:2px 7px;border-radius:10px;border:1px solid var(--bd);white-space:nowrap}
 .c5-badge{color:var(--muted);display:inline-flex;gap:8px;align-items:center}
+.cpu-temp{font-size:11px;font-family:monospace;color:var(--muted);white-space:nowrap}
 .c5-badge.ok{border-color:var(--ok)}.c5-badge.ng{border-color:var(--err)}
 /* Each link has its own lamp: green = connected, red = not connected. */
 .st{display:inline-flex;gap:3px;align-items:center}
@@ -349,6 +350,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <span id="wsDot" class="ws-dot disconnected"></span>
       <span id="viewBadge" title="ログインしていない端末は、計測時間・ラップ・順位だけを表示します">👀 観戦</span>
       <span id="c5Badge" class="c5-badge ng" title="C5 受信機 / ELRS netpack"><span class="st ng">C5<i>●</i></span></span>
+      <span id="cpuTemp" class="cpu-temp" title="タイマー（ESP32-S3）のチップの温度"></span>
     </div>
     <span id="statusMsg"></span>
     <nav class="tab-bar">

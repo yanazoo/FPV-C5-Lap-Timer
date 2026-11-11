@@ -263,6 +263,10 @@ void sendC5Status() {
     d["records"]  = c.records;
     d["gaps"]     = c.seqGaps;
     d["bad"]      = c.badRecords;
+    // The S3's own chip temperature (its internal sensor; runs 10-20 C above
+    // the air around it), for the header.
+    float t = temperatureRead();
+    if (t == t && t > -40 && t < 150) d["cpuTemp"] = (int)lroundf(t);
     JsonArray rate = d["rate"].to<JsonArray>();
     for (int i = 0; i < 8; i++) rate.add(c.rate[i]);
     JsonObject el = d["elrs"].to<JsonObject>();

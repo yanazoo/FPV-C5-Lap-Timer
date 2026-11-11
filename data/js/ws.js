@@ -230,6 +230,8 @@ function updateHeaderStatus(){
   el.innerHTML=lamp('C5',ok)+(e.enabled?lamp('OSD',!!e.connected):'');
   el.className='c5-badge '+(ok&&(!e.enabled||e.connected)?'ok':'ng');
   el.title='C5: '+(c.online?c.state:'OFFLINE')+(e.enabled?' / ELRS: '+(e.connected?e.peer:'未接続'):'');
+  var t=document.getElementById('cpuTemp');
+  if(t)t.textContent=c.cpuTemp!==undefined?'CPU '+c.cpuTemp+'℃':'';
 }
 
 async function loadRoster(){
