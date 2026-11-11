@@ -68,17 +68,15 @@ found (nothing appears without the Sense board). At the bottom of the
 Calibration tab, a loudness graph
 (0–100) with the thresholds as dashed lines, set like a pilot's.
 
-- **Start by sound** (マイクでスタート): with no race on (after Clear), a
-  signal starts the race like the Start button (start delay → ready →
-  3-2-1); not within 5 s of a stop or clear. The signal is either
-  - **two claps** (パン・パン, the default): two short sounds above the green
-    line (claps, knocks on the box) 0.12–0.8 s apart. One loud sound or a
-    long one (motors) does nothing, so it rarely starts by mistake; or
-  - **a loud sound** (大きな音) above the green line lasting its own set time
-    (a whistle, an air horn).
-- **Three claps to clear** (パン×3 でクリア): after a stop, three short sounds
-  above the green line clear the race like the Clear button (saved to SD the
-  same way).
+- **Start by sound** (マイクでスタート): with no race on (after Clear), sounds
+  above the green line, each lasting at least the start detection time, the
+  **set number of times** (閾値越えカウント回数, 1–9, default 2; at most 0.8 s
+  between them) start the race like the Start button (start delay → ready →
+  3-2-1). Only an exact count does, so 2 or more rarely starts by mistake.
+  Not within 5 s of a stop or clear. For example two claps = 2 times,
+  0.02 s; one whistle or air horn = 1 time, 0.2 s.
+- **Three to clear** (閾値越え 3 回でクリア): after a stop, three such sounds
+  clear the race like the Clear button (saved to SD the same way).
 - **False start** (フライング検知): a sound above the red line (a quad
   throttling up) lasting its own set time between ARM NOW and GO **stops the race, announces
   "フライングです。レースを中止します。" and clears the count**; the goggles

@@ -74,7 +74,7 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
 START = time.monotonic()
 # The Sense board's microphone: settings, and a loud sound faked with
 # GET /mock/loud?ms=600&lvl=92 (for the start / false start).
-MIC = {"start": False, "falseStart": False, "startClap": True, "clapClear": False, "startLvl": 80, "fsLvl": 80,
+MIC = {"start": False, "falseStart": False, "startCount": 2, "clapClear": False, "startLvl": 80, "fsLvl": 80,
        "startHoldMs": 100, "fsHoldMs": 100}
 MIC_LOUD = {"until": 0.0, "lvl": 0}
 MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
@@ -291,7 +291,7 @@ class Handler(SimpleHTTPRequestHandler):
                 r = state["race"]
                 idle = not r["running"] and not r["paused"] and not r.get("seq")
                 stopped = not r["running"] and not r.get("seq") and (r["paused"] or bool(r["laps"]))
-                if n == 2 and MIC["start"] and MIC["startClap"] and idle:
+                if n == MIC["startCount"] and MIC["start"] and idle:
                     broadcast({"type": "mic_cmd", "cmd": "start"})
                     __import__("urllib.request").request.urlopen(f"http://127.0.0.1:{PORT}/api/race/start", data=b"")
                 elif n == 3 and MIC["clapClear"] and stopped:
@@ -660,11 +660,6 @@ if __name__ == "__main__":
                 broadcast({"type": "race_stop", "elapsed": 0})
                 r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
                 broadcast({"type": "race_clear"})
-            elif (loud and MIC["start"] and not MIC["startClap"] and lvl >= MIC["startLvl"] and not r["running"] and not r["paused"]
-                  and not r.get("seq")):
-                MIC_LOUD["until"] = 0
-                threading.Thread(target=lambda: __import__("urllib.request").request.urlopen(
-                    f"http://127.0.0.1:{port}/api/race/start", data=b""), daemon=True).start()
             n += 1
             if n % 5 == 0:
                 enforce_viewers()

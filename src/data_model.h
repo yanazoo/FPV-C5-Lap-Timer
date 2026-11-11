@@ -102,12 +102,13 @@ extern ConnLimits   connLimits;
 constexpr uint16_t START_DELAY_MAX = 600;
 extern bool         startDelayOn;    // wait before the start (settings switch)
 extern uint16_t     startDelaySec;   // that wait, 1..START_DELAY_MAX s
-// The Sense board's microphone (mic.h): start the race on a loud sound,
-// and call a false start on one between ARM NOW and GO. Levels 0-100.
+// The Sense board's microphone (mic.h): start the race on a set number of
+// sounds over the start threshold, clear a stopped race on three, and call a
+// false start on a loud sound between ARM NOW and GO. Levels 0-100.
 struct MicSettings {
-    uint8_t  start      = 0;     // a loud sound (or two claps) while idle starts the race
-    uint8_t  startClap  = 1;     // the start signal: 1 two claps, 0 a loud sound lasting startHoldMs
-    uint8_t  clapClear  = 0;     // three claps after a stop clear the race
+    uint8_t  start      = 0;     // startCount threshold crossings while idle start the race
+    uint8_t  startCount = 2;     // crossings in a row (1-9), each lasting startHoldMs
+    uint8_t  clapClear  = 0;     // three crossings after a stop clear the race
     uint8_t  falseStart = 0;     // a loud sound in the countdown stops it
     uint8_t  startLvl   = 80;
     uint8_t  fsLvl      = 80;

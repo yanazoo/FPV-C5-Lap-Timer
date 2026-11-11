@@ -17,6 +17,7 @@
 #include "osd_engine.h"
 #include "race_core.h"
 #include "race_files.h"
+#include "sound_count.h"
 
 namespace {
 
@@ -886,6 +887,40 @@ void testRaceFiles() {
     CHECK(older("race_003.csv", "race_004.csv"));
 }
 
+// The microphone's sound signal: feed 20 ms windows from a script of
+// (loud?, ms) pieces; collect what feed() reports.
+std::vector<int> soundSeries(std::vector<std::pair<bool, int>> script, uint16_t holdMs) {
+    sound::CrossCounter c;
+    std::vector<int> got;
+    uint32_t t = 1000;
+    script.push_back({false, 3000});   // and quiet after
+    for (auto& piece : script)
+        for (int ms = 0; ms < piece.second; ms += 20) {
+            t += 20;
+            uint8_t n = c.feed(t, piece.first, 20, holdMs);
+            if (n) got.push_back(n);
+        }
+    return got;
+}
+
+void testSoundCount() {
+    // Two claps (40 ms, 300 ms apart), 0.02 s detection: one series of 2.
+    CHECK((soundSeries({{true, 40}, {false, 300}, {true, 40}}, 20) == std::vector<int>{2}));
+    // Three claps: 3.
+    CHECK((soundSeries({{true, 40}, {false, 300}, {true, 40}, {false, 300}, {true, 40}}, 20) == std::vector<int>{3}));
+    // A clap shorter than the detection time does not count.
+    CHECK((soundSeries({{true, 40}}, 200).empty()));
+    // An air horn of 0.6 s with 0.2 s detection: 1.
+    CHECK((soundSeries({{true, 600}}, 200) == std::vector<int>{1}));
+    // Two sounds 1.2 s apart are two series of 1.
+    CHECK((soundSeries({{true, 40}, {false, 1200}, {true, 40}}, 20) == std::vector<int>{1, 1}));
+    // A short blip under the detection time between two counted sounds
+    // neither counts nor breaks the series.
+    CHECK((soundSeries({{true, 100}, {false, 200}, {true, 20}, {false, 200}, {true, 100}}, 60) == std::vector<int>{2}));
+    // Continuous noise: nothing while it lasts, then one when it stops.
+    CHECK((soundSeries({{true, 5000}}, 20) == std::vector<int>{1}));
+}
+
 int runTests() {
     testMsp();
     testUid();
@@ -907,6 +942,7 @@ int runTests() {
     testOsdLapEdit();
     testFormat();
     testRaceFiles();
+    testSoundCount();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;
 }

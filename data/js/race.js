@@ -373,10 +373,10 @@ function onRaceReady(){
 var stopToneAt=-1e9;
 // The microphone heard a false start (ARM NOW to GO): the timer stops and
 // clears the race right after this; every browser says why.
-// Claps did something (mic_cmd): say so on every browser.
+// The microphone's sound signal did something (mic_cmd): say so on every browser.
 function onMicCmd(cmd){
-  if(cmd==='start')toast('👏 パン・パン — スタートします',3000);
-  else if(cmd==='clear')toast('👏 パン×3 — クリアしました',3000);
+  if(cmd==='start')toast('🎤 音の合図でスタートします',3000);
+  else if(cmd==='clear')toast('🎤 音の合図でクリアしました',3000);
 }
 function onFalseStart(){
   if(countdownH){clearInterval(countdownH);countdownH=null;}

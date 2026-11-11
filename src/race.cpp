@@ -4,6 +4,7 @@
 #include "data_model.h"
 #include "elrs.h"
 #include "mic.h"
+#include "sound_count.h"
 #include "sd_store.h"
 #include "ws_handler.h"
 
@@ -484,7 +485,7 @@ bool raceManualLap(int slot) {
 // and GO; the race is stopped and cleared, every browser says why and the
 // goggles show FALSE START.
 static uint32_t micSeq = 0;
-static uint16_t micStartRun = 0, micFsRun = 0;
+static uint16_t micFsRun = 0;
 
 static void falseStart() {
     Serial.println("[Race] false start (microphone)");
@@ -497,55 +498,34 @@ static void falseStart() {
     elrsAnnounce("FALSE START");
 }
 
-// Claps: a sound above the start threshold that is gone again within
-// CLAP_MAX_MS counts as one clap; claps 120-800 ms apart make a series,
-// closed 900 ms after the last one. A longer sound (motors, music) spoils
-// the series. Two claps start the race (with startClap), three clear a
-// stopped race (with clapClear).
-static const uint16_t CLAP_MAX_MS = 250, CLAP_MIN_GAP_MS = 120, CLAP_MAX_GAP_MS = 800, CLAP_END_MS = 900;
-static uint8_t  clapCount = 0;
-static uint32_t clapAt = 0;
-static uint16_t clapLoudMs = 0;
-static bool     clapLoud = false, clapSpoilt = false;
+// Threshold crossings (sound_count.h): sounds at or above the start
+// threshold for at least startHoldMs, in a series. A series of exactly
+// startCount starts the race (with no race on); one of 3 clears a stopped
+// race (with clapClear).
+static const uint8_t CLEAR_COUNT = 3;
+static sound::CrossCounter crossings;
 
 static void micCommand(const char* cmd) {
     JsonDocument d;
-    d["type"] = "mic_cmd";   // every browser says what the claps did
+    d["type"] = "mic_cmd";   // every browser says what the sound did
     d["cmd"]  = cmd;
     wsJson(d);
 }
 
-static void serviceClaps(uint32_t now, uint8_t lvl, uint16_t add) {
-    bool loud = lvl >= micCfg.startLvl;
-    if (loud) {
-        if (!clapLoud) {   // a new sound starts
-            if (clapCount && now - clapAt > CLAP_MAX_GAP_MS) clapCount = 0, clapSpoilt = false;
-            if (!clapCount || now - clapAt >= CLAP_MIN_GAP_MS) {
-                clapCount = clapCount < 9 ? clapCount + 1 : 9;
-                clapAt = now;
-            }
-            clapLoudMs = 0;
-        }
-        clapLoudMs += add;
-        if (clapLoudMs > CLAP_MAX_MS) clapSpoilt = true;   // not a clap
-    }
-    clapLoud = loud;
-    if (!clapCount || clapLoud || now - clapAt < CLAP_END_MS) return;
-    uint8_t n = clapCount;
-    bool spoilt = clapSpoilt;
-    clapCount = 0, clapSpoilt = false;
-    if (spoilt) return;
+static void serviceCrossings(uint32_t now, uint8_t lvl, uint16_t add) {
+    uint8_t n = crossings.feed(now, lvl >= micCfg.startLvl, add, micCfg.startHoldMs);
+    if (!n) return;
     bool idle, stopped;
     {
         Guard g;
         idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
         stopped = rdPhase == RD_IDLE && !raceCore.running() && (raceCore.paused() || raceCore.lapCount() > 0);
     }
-    Serial.printf("[Mic] %u claps\n", n);
-    if (n == 2 && micCfg.start && micCfg.startClap && idle && (int32_t)(now - micQuietUntil) >= 0) {
+    Serial.printf("[Mic] %u threshold crossings\n", n);
+    if (n == micCfg.startCount && micCfg.start && idle && (int32_t)(now - micQuietUntil) >= 0) {
         micCommand("start");
         rdStart();
-    } else if (n == 3 && micCfg.clapClear && stopped) {
+    } else if (n == CLEAR_COUNT && micCfg.clapClear && stopped) {
         micCommand("clear");
         raceClear();
     }
@@ -559,21 +539,8 @@ static void serviceMic(uint32_t now) {
     uint32_t n = seq - micSeq;   // windows since the last look (normally 1)
     micSeq = seq;
     uint16_t add = n > 50 ? 1000 : (uint16_t)(n * 20);
-    bool idle;
-    {
-        Guard g;
-        idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
-    }
-    micStartRun = (micCfg.start && !micCfg.startClap && idle && (int32_t)(now - micQuietUntil) >= 0 &&
-                   lvl >= micCfg.startLvl)
-                      ? micStartRun + add : 0;
-    serviceClaps(now, lvl, add);
+    serviceCrossings(now, lvl, add);
     micFsRun = (micCfg.falseStart && rdPhase == RD_COUNTDOWN && lvl >= micCfg.fsLvl) ? micFsRun + add : 0;
-    if (micStartRun >= micCfg.startHoldMs) {
-        micStartRun = 0;
-        Serial.printf("[Race] start by microphone (level %u)\n", lvl);
-        rdStart();
-    }
     if (micFsRun >= micCfg.fsHoldMs) {
         micFsRun = 0;
         falseStart();
