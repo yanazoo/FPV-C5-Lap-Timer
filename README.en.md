@@ -97,7 +97,26 @@ also open in Excel.
 | GND | — | GND |
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
-  Each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv` (number, start date and time; `race_NNN.csv` when the timer has no date yet; numbers go 000–999 and start again; rotate mode keeps the last 20 races and deletes the oldest by the date in the name); the **SD tab** shows them (newest first; one race as results and a lap-time graph; per-pilot stats across all races after an estimate of how long reading them takes) and can format the card (under "⚠ その他の操作"; deletes every file, admin password asked again). From the Settings tab's 💾 SDカード box (next to the pilot backup) the timer also saves and restores **every setting but the pilots** as `settings_YYYYMMDD_HHMM.json` (pilots as `pilots_YYYYMMDD_HHMM.csv`; Restore lists the saved files to pick from) (race content, detection, ELRS OSD, WiFi, fixed IP, connection limits, login hold, admin password; not during a race; WiFi changes take effect after a restart), saves the **connection QR codes as one PNG** to print (`qr_host_YYYYMMDD_HHMM.png` / `qr_client_YYYYMMDD_HHMM.png`; only a logged-in admin can download these files, they hold the WiFi password). The browser's clock is passed to the timer, so each file starts with a `#FPVC5,...` line holding the race's start time and rules.
+  - **Races**: each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv`
+    (number, start date and time; `race_NNN.csv` when the timer has no date
+    yet). Numbers go 000–999 and start again; rotate mode keeps the last 20
+    races and deletes the one with the oldest date in its name. The browser's
+    clock is passed to the timer, so each file starts with a `#FPVC5,...` line
+    holding the race's start time and rules.
+  - **SD tab**: the races, newest first; one race as results and a lap-time
+    graph; per-pilot stats across all races (after an estimate of how long
+    reading them takes); formatting the card (under "⚠ その他の操作": deletes
+    every file, the admin password is asked again).
+  - **Backups** (Settings → 💾 SDカード): **pilots** (`pilots_YYYYMMDD_HHMM.csv`)
+    and **every other setting** (`settings_YYYYMMDD_HHMM.json`: race content,
+    detection, ELRS OSD, WiFi, fixed IP, connection limits, login hold, admin
+    password), each with Save and Restore. Restore lists the saved files,
+    newest first, to pick from. Settings can't be restored during a race, and
+    restored WiFi settings take effect after a restart.
+  - **Connection QR image** (same box): the connection QR codes as one PNG to
+    print (`qr_host_YYYYMMDD_HHMM.png` / `qr_client_YYYYMMDD_HHMM.png`).
+  - Settings backups and QR images hold the WiFi password, so only a
+    logged-in admin can download them.
 - Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
   (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
   straight to the S3 over UART; no netpack XIAO and no WiFi setup — see
@@ -172,7 +191,8 @@ the TX, assign the switch to Lua → Backpack → **DVR Rec**.
 
 ## Racing
 
-- **Start** (or the race director's switch): "レディ" is said, then a 3 s
+- **Start** (or the race director's switch): after the start delay, if it is
+  on, "レディ" is said, then a 3 s
   countdown (**ARM NOW** and 3, 2, 1 on the goggles), then **GO!**. The timer
   runs this sequence, so every open browser and every goggle follow it at the
   same moment.
@@ -254,6 +274,8 @@ Browsers are **admins** (logged in) or **viewers**. Limits are in Settings → "
 - Viewers: the light spectator screen (race clock, laps, ranking; no RSSI). Host mode 1–8 (default 3; admins + viewers at most 9, so the netpack always has the 10th place on the access point: with 4 admins, 5 viewers), client mode 1–8 (default 6); past the limit the oldest viewer is disconnected (a "再接続" button reconnects).
 - The netpack (WiFi) is not counted and never disconnected. In host mode, when the timer's WiFi is full (10 stations) and the netpack is not connected, one station is sent off to make room: a device with no page open first, then a viewer, never an admin. That device is kept out for 30 s (until the netpack is back).
 - The timer's date (race file names) comes from logged-in browsers only.
+- A viewer closed for being past the limit is told how many viewer places
+  there are (e.g. "ホストモード：3 台").
 
 ## Layout
 
