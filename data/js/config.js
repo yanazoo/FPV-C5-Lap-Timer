@@ -393,7 +393,7 @@ function updateSdSection(present){
   if(sec)sec.style.display=present?'block':'none';
   var st=document.getElementById('sdTabStatus');
   if(st)st.innerHTML=present
-    ?'<p style="color:var(--ok);font-size:12px">✅ SDカード検出済み — レース中はダウンロードしないでください</p>'
+    ?'<p style="color:var(--ok);font-size:12px">✅ SDカード検出済み — レース中は操作できません。</p>'
     :'<p style="color:var(--err);font-size:12px">⚠ SDカードが見つかりません</p>';
   if(!present){
     var wrap=document.getElementById('sdFileListWrap');
