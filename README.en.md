@@ -75,6 +75,9 @@ Calibration tab, a loudness graph
   3-2-1). Only an exact count does, so 2 or more rarely starts by mistake.
   Not within 5 s of a stop or clear. For example two claps = 2 times,
   0.02 s; one whistle or air horn = 1 time, 0.2 s.
+  With **即スタート** (start now) on, the signal itself is GO: no start
+  delay, no ready, no 3-2-1; the clock runs from when the last sound began,
+  as soon as the count is reached.
 - **Three to clear** (閾値越え 3 回でクリア): after a stop, three such sounds
   clear the race like the Clear button (saved to SD the same way).
 - **False start** (フライング検知): a sound above the red line (a quad

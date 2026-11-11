@@ -919,6 +919,20 @@ void testSoundCount() {
     CHECK((soundSeries({{true, 100}, {false, 200}, {true, 20}, {false, 200}, {true, 100}}, 60) == std::vector<int>{2}));
     // Continuous noise: nothing while it lasts, then one when it stops.
     CHECK((soundSeries({{true, 5000}}, 20) == std::vector<int>{1}));
+    // Starting on the signal: the count is known as each sound counts, and
+    // lastRise() is when that sound began (not when it was recognised).
+    {
+        sound::CrossCounter c;
+        uint32_t t = 1000;
+        auto win = [&](bool loud) { t += 20; return c.feed(t, loud, 20, 60); };
+        for (int i = 0; i < 10; i++) win(false);
+        win(true);   // the window 1200..1220 is loud
+        CHECK(c.count() == 0);   // not yet 60 ms
+        win(true);
+        win(true);
+        CHECK(c.count() == 1);
+        CHECK(c.lastRise() == 1200);
+    }
 }
 
 int runTests() {

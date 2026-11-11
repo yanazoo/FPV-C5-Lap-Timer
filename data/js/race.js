@@ -376,6 +376,7 @@ var stopToneAt=-1e9;
 // The microphone's sound signal did something (mic_cmd): say so on every browser.
 function onMicCmd(cmd){
   if(cmd==='start')toast('🎤 音の合図でスタートします',3000);
+  else if(cmd==='start_now'){ensureAudio();sfx.go();toast('🎤 音の合図でスタート（計測開始）',3000);}
   else if(cmd==='clear')toast('🎤 音の合図でクリアしました',3000);
 }
 function onFalseStart(){

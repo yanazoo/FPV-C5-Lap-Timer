@@ -753,6 +753,8 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <div class="slider-num">
           <input type="number" id="micStartCount" min="1" max="9" step="1" value="2" onchange="saveMicSoon(0)" style="width:70px"><span class="unit">回（1〜9）</span>
         </div></div>
+      <div class="config-row"><label style="color:#3fb950">即スタート</label>
+        <label class="toggle-sw" style="flex:1"><input type="checkbox" id="micStartNow" onchange="saveMicSoon(0)"><span class="toggle-track"></span><span id="micStartNowState">OFF（待ち時間・カウントダウンあり）</span></label></div>
       <div class="config-row"><label style="color:#3fb950">スタートの検知時間</label>
         <select id="micStartHold" onchange="saveMicSoon(0)" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="20">0.02 秒（一瞬の音でも）</option><option value="60">0.06 秒</option><option value="100">0.1 秒</option>
@@ -776,6 +778,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <p class="section-desc" style="margin:4px 12px 10px">
       <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を「スタートの検知時間」以上越える音が「閾値越えカウント回数」だけ続くと（音と音の間は 0.8 秒以内）、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。回数がちょうど同じときだけ反応します。ストップ・クリアの後 5 秒は反応しません。<br>
       例：手を 2 回叩いてスタート ＝ 2 回・0.02 秒、笛やエアホーン 1 回でスタート ＝ 1 回・0.2 秒。<br>
+      <b>即スタート</b>：ON にすると、スタートの待ち時間・レディ・3-2-1 を飛ばし、合図の音そのものを GO として計測を始めます（時計は、最後の音が鳴り始めた瞬間から）。決めた回数に届いた時点ですぐ始まります。<br>
       <b>閾値越え 3 回でクリア</b>：ストップした後に、同じ条件の音が 3 回で、クリアボタンと同じようにクリアします（SD への保存も同じ）。<br>
       <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「フライングの検知時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
     </p>

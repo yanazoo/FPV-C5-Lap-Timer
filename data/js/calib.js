@@ -156,7 +156,7 @@ function syncCalibSliders(id,enter,exit_){
 // Same look as a pilot's chart: the level (0-100, 10 per second from the
 // telemetry) over the last 20 s, the start threshold green, the false
 // start one red.
-var micChart=null,micDirty=false,micCfgLocal={start:false,falseStart:false,startCount:2,clapClear:false,startLvl:80,fsLvl:80,startHoldMs:100,fsHoldMs:100};
+var micChart=null,micDirty=false,micCfgLocal={start:false,falseStart:false,startCount:2,startNow:false,clapClear:false,startLvl:80,fsLvl:80,startHoldMs:100,fsHoldMs:100};
 function initMicChart(){
   var cv=document.getElementById('micCanvas');if(!cv)return;
   cv.width=cv.offsetWidth||300;cv.height=150;
@@ -201,6 +201,8 @@ function showMicCfg(){
   var cc=document.getElementById('micClapClear');if(cc)cc.checked=!!c.clapClear;
   var ccs=document.getElementById('micClapClearState');if(ccs)ccs.textContent=c.clapClear?'ON':'OFF';
   set('micStartCount',c.startCount);
+  var sn=document.getElementById('micStartNow');if(sn)sn.checked=!!c.startNow;
+  var sns=document.getElementById('micStartNowState');if(sns)sns.textContent=c.startNow?'ON（合図で即計測）':'OFF（待ち時間・カウントダウンあり）';
   set('micStartLvl',c.startLvl);set('micStartLvlN',c.startLvl);
   set('micFsLvl',c.fsLvl);set('micFsLvlN',c.fsLvl);
   set('micStartHold',String(c.startHoldMs));set('micFsHold',String(c.fsHoldMs));
@@ -210,7 +212,7 @@ async function loadMic(){
   try{
     var r=await fetch('/api/mic');if(!r.ok)return;
     var d=await r.json();
-    micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startCount:d.startCount||2,clapClear:!!d.clapClear,startLvl:d.startLvl,fsLvl:d.fsLvl,startHoldMs:d.startHoldMs,fsHoldMs:d.fsHoldMs};
+    micCfgLocal={start:!!d.start,falseStart:!!d.falseStart,startCount:d.startCount||2,startNow:!!d.startNow,clapClear:!!d.clapClear,startLvl:d.startLvl,fsLvl:d.fsLvl,startHoldMs:d.startHoldMs,fsHoldMs:d.fsHoldMs};
     // Only with the Sense board's microphone: otherwise the section stays hidden.
     var sec=document.getElementById('micSection');if(sec)sec.style.display=d.ok?'':'none';
     if(!d.ok)return;
@@ -233,6 +235,7 @@ function saveMicSoon(ms){
   micCfgLocal.start=document.getElementById('micStart').checked;
   micCfgLocal.falseStart=document.getElementById('micFs').checked;
   micCfgLocal.clapClear=document.getElementById('micClapClear').checked;
+  micCfgLocal.startNow=document.getElementById('micStartNow').checked;
   var cn=document.getElementById('micStartCount');
   micCfgLocal.startCount=Math.max(1,Math.min(9,parseInt(cn.value,10)||2));cn.value=micCfgLocal.startCount;
   micCfgLocal.startHoldMs=parseInt(document.getElementById('micStartHold').value,10)||100;

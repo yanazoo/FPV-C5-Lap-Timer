@@ -74,7 +74,7 @@ SD_FILES["race_016_20261116_1639.csv"] = ((
 START = time.monotonic()
 # The Sense board's microphone: settings, and a loud sound faked with
 # GET /mock/loud?ms=600&lvl=92 (for the start / false start).
-MIC = {"start": False, "falseStart": False, "startCount": 2, "clapClear": False, "startLvl": 80, "fsLvl": 80,
+MIC = {"start": False, "falseStart": False, "startCount": 2, "startNow": False, "clapClear": False, "startLvl": 80, "fsLvl": 80,
        "startHoldMs": 100, "fsHoldMs": 100}
 MIC_LOUD = {"until": 0.0, "lvl": 0}
 MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
@@ -291,7 +291,11 @@ class Handler(SimpleHTTPRequestHandler):
                 r = state["race"]
                 idle = not r["running"] and not r["paused"] and not r.get("seq")
                 stopped = not r["running"] and not r.get("seq") and (r["paused"] or bool(r["laps"]))
-                if n == MIC["startCount"] and MIC["start"] and idle:
+                if n >= MIC["startCount"] and MIC["start"] and MIC["startNow"] and idle:
+                    broadcast({"type": "mic_cmd", "cmd": "start_now"})
+                    r.update(running=True, paused=False, t0=time.monotonic() - 1.2, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                    broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
+                elif n == MIC["startCount"] and MIC["start"] and idle:
                     broadcast({"type": "mic_cmd", "cmd": "start"})
                     __import__("urllib.request").request.urlopen(f"http://127.0.0.1:{PORT}/api/race/start", data=b"")
                 elif n == 3 and MIC["clapClear"] and stopped:

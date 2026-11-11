@@ -24,6 +24,7 @@ public:
                 if (count_ && now - end_ > kMaxGapMs) count_ = 0;
                 above_ = 0;
                 counted_ = false;
+                rise_ = now - addMs;   // the start of this window
             }
             above_ = above_ + addMs > 60000 ? 60000 : above_ + addMs;
             if (!counted_ && above_ >= holdMs) {
@@ -40,10 +41,14 @@ public:
         return n;
     }
     void reset() { count_ = 0, loud_ = false, counted_ = false, above_ = 0; }
+    // The series so far (before it is finished), and when its latest sound
+    // began: for starting the clock on the signal itself.
+    uint8_t  count() const { return count_; }
+    uint32_t lastRise() const { return rise_; }
 
 private:
     uint8_t  count_ = 0;
-    uint32_t end_ = 0;
+    uint32_t end_ = 0, rise_ = 0;
     uint16_t above_ = 0;
     bool     loud_ = false, counted_ = false;
 };

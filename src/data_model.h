@@ -108,6 +108,7 @@ extern uint16_t     startDelaySec;   // that wait, 1..START_DELAY_MAX s
 struct MicSettings {
     uint8_t  start      = 0;     // startCount threshold crossings while idle start the race
     uint8_t  startCount = 2;     // crossings in a row (1-9), each lasting startHoldMs
+    uint8_t  startNow   = 0;     // 1: the signal itself is GO (no start delay, no countdown)
     uint8_t  clapClear  = 0;     // three crossings after a stop clear the race
     uint8_t  falseStart = 0;     // a loud sound in the countdown stops it
     uint8_t  startLvl   = 80;

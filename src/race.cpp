@@ -77,8 +77,9 @@ void raceStage() {
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
 
-void raceStart() {
-    uint32_t now = millis();
+void raceStart() { raceStartAt(millis()); }
+
+void raceStartAt(uint32_t now) {
     {
         Guard g;
         applyRaceRules();
@@ -517,16 +518,29 @@ static void micCommand(const char* cmd) {
 }
 
 static void serviceCrossings(uint32_t now, uint8_t lvl, uint16_t add) {
+    uint8_t before = crossings.count();
     uint8_t n = crossings.feed(now, lvl >= micCfg.startLvl, add, micCfg.startHoldMs);
-    if (!n) return;
     bool idle, stopped;
     {
         Guard g;
         idle = rdPhase == RD_IDLE && !raceCore.running() && !raceCore.paused();
         stopped = rdPhase == RD_IDLE && !raceCore.running() && (raceCore.paused() || raceCore.lapCount() > 0);
     }
+    // Start on the signal itself (startNow): GO as soon as the set count is
+    // reached, the clock from when that sound began; no delay, no countdown.
+    bool quietOk = (int32_t)(now - micQuietUntil) >= 0;
+    if (micCfg.start && micCfg.startNow && idle && quietOk && crossings.count() != before &&
+        crossings.count() == micCfg.startCount) {
+        uint32_t at = crossings.lastRise();
+        crossings.reset();
+        Serial.printf("[Mic] start now on %u crossings\n", micCfg.startCount);
+        micCommand("start_now");
+        raceStartAt(at);
+        return;
+    }
+    if (!n) return;
     Serial.printf("[Mic] %u threshold crossings\n", n);
-    if (n == micCfg.startCount && micCfg.start && idle && (int32_t)(now - micQuietUntil) >= 0) {
+    if (n == micCfg.startCount && micCfg.start && !micCfg.startNow && idle && quietOk) {
         micCommand("start");
         rdStart();
     } else if (n == CLEAR_COUNT && micCfg.clapClear && stopped) {
