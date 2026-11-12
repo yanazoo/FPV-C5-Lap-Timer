@@ -32,7 +32,7 @@ static RTC_NOINIT_ATTR ProbeState rtcProbe;   // survives the restart (deep slee
 static bool     probing = false;
 static uint32_t probeAt = 0;
 static uint8_t  fallbackReason = 0;   // the disconnect reason that made it fall back
-static bool     crashFallback = false;   // fell back because joining crashed the timer
+static bool     stayOnAp = false;   // access point by a crash while joining, or the BOOT button: don't leave it by itself
 
 // Why the last attempt to join failed (WiFi disconnect reason, 0: none yet).
 static volatile uint8_t lastReason = 0;
@@ -68,6 +68,12 @@ static bool     apUp = false;
 static bool     staMode = false;     // trying / running as a client
 static bool     staJoined = false;
 static bool     everJoined = false;  // joined the network since this boot
+// BOOT button (GPIO0, pressed = low): in client mode, held for 1 s it starts
+// the access point for this boot (the way back in with "never fall back"
+// and a wrong router setting).
+static const uint8_t  kBootPin = 0;
+static uint32_t bootDownAt = 0;
+static uint32_t apCheckAt = 0;
 static bool     fellBack = false;
 static uint32_t staSinceMs = 0;      // start of the current wait for a link
 
@@ -111,11 +117,12 @@ void netBegin() {
         if (rtcProbe.magic != kProbeMagic) rtcProbe = {kProbeMagic, 0};   // power on
         if (crashedWhileTrying()) {
             Serial.println("[WiFi] client: crashed while joining last time, starting the access point");
-            crashFallback = true;   // don't go back to it by itself (it would crash again)
+            stayOnAp = true;   // don't go back to it by itself (it would crash again)
             fellBack = true;
             startAp();
             return;
         }
+        pinMode(kBootPin, INPUT_PULLUP);
         WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
@@ -143,7 +150,10 @@ void netBegin() {
         staMode = true;
         staSinceMs = millis();
         rtcStaTrying = kStaTrying;
-        Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %us)\n", staSsid.c_str(), netFallbackSec);
+        if (netFallbackSec)
+            Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %us)\n", staSsid.c_str(), netFallbackSec);
+        else
+            Serial.printf("[WiFi] client: joining \"%s\" (no AP fallback; BOOT button for the AP)\n", staSsid.c_str());
     } else {
         startAp();
     }
@@ -160,7 +170,7 @@ static bool raceKeepsUs() {
 // then (see ProbeState), and restart into client mode once it is there.
 static void probeForNetwork(uint32_t now) {
     if (!fellBack || netMode != NET_STA || !staSsid.length()) return;
-    if (crashFallback || passwordRefused(fallbackReason) || rtcProbe.restarts >= kProbeRestarts) return;
+    if (stayOnAp || passwordRefused(fallbackReason) || rtcProbe.restarts >= kProbeRestarts) return;
     if (probing) {
         int16_t n = WiFi.scanComplete();
         if (n == WIFI_SCAN_RUNNING) return;
@@ -194,11 +204,44 @@ void netLoop() {
     }
     if (apUp) {
         dnsServer.processNextRequest();
+        // Fallen back, and yet joined to the router (both on at once): the
+        // phones on the access point get pages that point at the router and
+        // show nothing. Back to client mode only, for real.
+        if (fellBack && !stayOnAp && netMode == NET_STA && WiFi.status() == WL_CONNECTED && !raceKeepsUs() &&
+            WiFi.softAPgetStationNum() == 0) {
+            Serial.println("[WiFi] joined the router while the access point is up: restarting into client mode");
+            sysRequestRestart(200);
+            fellBack = false;   // once
+        }
         probeForNetwork(millis());
         return;
     }
     if (!staMode) return;
     uint32_t now = millis();
+    // Client mode: the access point stays off. Whatever turned it on, a
+    // second network with the timer's name (and pages that can't work
+    // there) is not what client mode means.
+    if (now - apCheckAt >= 2000) {
+        apCheckAt = now;
+        if (WiFi.getMode() & WIFI_MODE_AP) {
+            Serial.println("[WiFi] client mode: access point found on, turning it off");
+            WiFi.enableAP(false);
+        }
+    }
+    // BOOT held for 1 s: the access point for this boot (see kBootPin).
+    if (digitalRead(kBootPin) == LOW) {
+        if (!bootDownAt) bootDownAt = now ? now : 1;
+        else if (now - bootDownAt >= 1000) {
+            Serial.println("[WiFi] BOOT button: starting the access point for this boot");
+            fellBack = true;
+            stayOnAp = true;   // it was asked for: no going back by itself
+            fallbackReason = lastReason;
+            startAp();
+            return;
+        }
+    } else {
+        bootDownAt = 0;
+    }
     if (WiFi.status() == WL_CONNECTED) {
         if (!staJoined) {
             staJoined = true;
@@ -226,7 +269,7 @@ void netLoop() {
         staSinceMs = now;
         return;
     }
-    if (now - staSinceMs >= netFallbackSec * 1000UL) {
+    if (netFallbackSec && now - staSinceMs >= netFallbackSec * 1000UL) {
         Serial.printf("[WiFi] client: no link to \"%s\" for %us, starting the access point\n", staSsid.c_str(),
                       netFallbackSec);
         fellBack = true;
@@ -248,7 +291,7 @@ NetStatus netStatus() {
     s.ip = netIp();
     s.rssi = s.connected ? WiFi.RSSI() : 0;
     s.reason = s.connected ? 0 : (fellBack ? fallbackReason : lastReason);
-    s.retrying = fellBack && !crashFallback && netMode == NET_STA && staSsid.length() && !passwordRefused(fallbackReason) &&
+    s.retrying = fellBack && !stayOnAp && netMode == NET_STA && staSsid.length() && !passwordRefused(fallbackReason) &&
                  rtcProbe.restarts < kProbeRestarts;
     return s;
 }

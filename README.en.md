@@ -285,7 +285,10 @@ To cover lost packets:
   client mode once the router is back (a router that started later than the
   timer); not during a race or with laps not cleared, and not after a wrong
   password. Losing the link during a race, it stays a client and waits for
-  the router. The router password is stored on the device only and never
+  the router. With "ホストに切替" set to "しない" (never) client mode never
+  starts the access point; if a wrong setting locks you out, hold the
+  timer's BOOT button for 1 s to get the access point (`http://20.0.0.1`)
+  for that boot. While joined as a client, the access point is kept off. The router password is stored on the device only and never
   sent back to the browser.
 
 ## Restart and a fixed IP address
