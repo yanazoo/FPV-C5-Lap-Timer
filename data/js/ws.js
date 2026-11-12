@@ -60,7 +60,7 @@ var seenEpoch=null;
 function reconcileRace(r){
   noteServerTime(r.now);
   // A delayed start under way (joined late, or race_wait lost).
-  if(r.wait>0&&!waitH&&!countdownH&&!raceRunning&&performance.now()>=readyUntil){onRaceWait(r.wait/1000,true);return;}
+  if(r.wait>0&&!waitH&&!countdownH&&!raceRunning&&performance.now()>=readyUntil){onRaceWait(r.wait/1000,true,r.now);return;}
   if(waitH){
     if(!r.wait&&!r.run&&performance.now()>waitEnd+2000)endWait();   // called off elsewhere, race_stop lost
     else return;
@@ -124,7 +124,7 @@ function onMsg(d){
   }
   if(d.type==='settings'){applySettings(d);return;}
   if(d.type==='hello'){onHelloReply(d);return;}
-  if(d.type==='race_wait'){onRaceWait(d.sec,false);return;}
+  if(d.type==='race_wait'){if(d.now)noteServerTime(d.now);onRaceWait(d.sec,false,d.now);return;}
   if(d.type==='false_start'){onFalseStart();return;}
   if(d.type==='mic_cmd'){onMicCmd(d.cmd);return;}
   if(d.type==='calib'){
