@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "utf8.h"
 #include "msp_v2.h"
 #include "osd_engine.h"
 #include "race_core.h"
@@ -854,6 +855,25 @@ void testOsdStartClearsStage() {
     CHECK(g.shows(1, "POSN: 1 | LAP: 1") && g.shows(5, "GO!"));
 }
 
+void testUtf8() {
+    char b[32];
+    // 11 three-byte characters are 33 bytes: 10 fit, none is cut in half.
+    const char* eleven = "\xE3\x81\x82\xE3\x81\x84\xE3\x81\x86\xE3\x81\x88\xE3\x81\x8A"
+                         "\xE3\x81\x8B\xE3\x81\x8D\xE3\x81\x8F\xE3\x81\x91\xE3\x81\x93\xE3\x81\x95";
+    CHECK(utf8::copy(b, eleven, sizeof b) == 30 && strlen(b) == 30 && memcmp(b, eleven, 30) == 0);
+    CHECK(utf8::copy(b, "Yana", sizeof b) == 4 && strcmp(b, "Yana") == 0);
+    // ASCII then a character that no longer fits whole.
+    char c[6];
+    CHECK(utf8::copy(c, "abcd\xE3\x81\x82", sizeof c) == 4 && strcmp(c, "abcd") == 0);
+    // Bytes that are not UTF-8 (Shift-JIS, a lone continuation, an overlong form) are left out.
+    CHECK(utf8::copy(b, "A\x83\x70" "B\x80\xC0\xAF" "C", sizeof b) == 4 && strcmp(b, "ApBC") == 0);
+    // A string already cut in half is repaired in place.
+    char d[8] = "ab\xE3\x81";
+    CHECK(utf8::copy(d, d, sizeof d) == 2 && strcmp(d, "ab") == 0);
+    // Four-byte characters (emoji) stay whole.
+    CHECK(utf8::copy(b, "\xF0\x9F\x8F\x81", sizeof b) == 4);
+}
+
 void testOsdLapEdit() {
     Goggles g("p");
     Capture cap;
@@ -978,6 +998,7 @@ int runTests() {
     testOsdStageCountAndStopTime();
     testOsdLapEdit();
     testOsdStartClearsStage();
+    testUtf8();
     testFormat();
     testRaceFiles();
     testSoundCount();

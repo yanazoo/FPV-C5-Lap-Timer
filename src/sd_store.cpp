@@ -5,6 +5,7 @@
 #include <time.h>
 #include "sd_store.h"
 #include "race_files.h"
+#include "utf8.h"
 #include "data_model.h"
 #include "nvs_store.h"
 #include "race.h"
@@ -296,14 +297,14 @@ int sdRestoreRoster(const String& path) {
         int id = rosterCount++;
         PilotRoster& p = roster[id];
         memset(&p, 0, sizeof p);
-        strlcpy(p.name, field(line, 0).c_str(), sizeof p.name);
-        strlcpy(p.yomi, field(line, 1).c_str(), sizeof p.yomi);
+        utf8::copy(p.name, field(line, 0).c_str(), sizeof p.name);
+        utf8::copy(p.yomi, field(line, 1).c_str(), sizeof p.yomi);
         p.freqMhz = (uint16_t)field(line, 2).toInt();
         rosterCal[id].enterRssi = field(line, 3).length() ? field(line, 3).toInt() : DEFAULT_ENTER;
         rosterCal[id].exitRssi  = field(line, 4).length() ? field(line, 4).toInt() : DEFAULT_EXIT;
         int slot = field(line, 5).length() ? field(line, 5).toInt() : -1;
         if (slot >= 0 && slot < MAX_ACTIVE) activePilots[slot] = id;
-        strlcpy(p.bind, field(line, 6).c_str(), sizeof p.bind);
+        utf8::copy(p.bind, field(line, 6).c_str(), sizeof p.bind);
         p.osd = field(line, 7).toInt() != 0;
     }
     saveRosterAll();

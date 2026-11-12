@@ -105,8 +105,13 @@ function readPilotForm(prefix){
   };
 }
 
+// The timer keeps a name in 31 bytes: 31 letters, or 10 Japanese characters.
+function utf8Bytes(s){try{return new TextEncoder().encode(s).length;}catch(e){return unescape(encodeURIComponent(s)).length;}}
 function validPilot(p){
   if(!p.name){toast('⚠️ 名前を入力してください');return false;}
+  if(utf8Bytes(p.name)>31){toast('⚠️ 名前が長すぎます（日本語は 10 文字、英数字は 31 文字まで）',5000);return false;}
+  if(utf8Bytes(p.yomi)>31){toast('⚠️ よみかたが長すぎます（ひらがなは 10 文字まで）',5000);return false;}
+  if(utf8Bytes(p.bind)>32){toast('⚠️ バインドフレーズが長すぎます（英数字 32 文字まで）',5000);return false;}
   if(p.enter<=p.exit){toast('⚠️ 入 > 出 にしてください');return false;}
   return true;
 }
@@ -168,6 +173,7 @@ async function deleteRosterPilot(id){
   if(editingRosterId===id)editingRosterId=null;
   try{
     var res=await fetch('/api/pilots/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+    if(res.status===409){toast('⚠️ レースをクリアしてから削除してください（ラップが残っています）',5000);return;}
     await loadActive();await loadRoster();applyActiveToSlots();buildRaceCards();buildCalibCards();
     toast(res.ok?'削除しました':'⚠️ 削除エラー');
   }catch(e){toast('⚠️ 接続エラー');}
@@ -380,6 +386,7 @@ async function sdRestore(){
   var path=await pickBackup('pilots');if(!path)return;
   try{
     var r=await fetch('/api/sd/pilots/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:path})});
+    if(r.status===409){toast('⚠️ レースをクリアしてから復元してください（ラップが残っています）',5000);return;}
     if(!r.ok){toast('⚠️ 復元できませんでした');return;}
     var j=await r.json();
     await loadActive();await loadRoster();applyActiveToSlots();buildRaceCards();buildCalibCards();

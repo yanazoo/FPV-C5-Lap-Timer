@@ -483,6 +483,9 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast({"type": "active_update", "pilots": active_json()})
             return self.reply({"ok": True, "id": pid})
         if p == "/api/pilots/delete":
+            rc = state["race"]
+            if rc["running"] or rc["paused"] or rc["laps"]:   # as the firmware: not until cleared
+                return self.reply({"ok": False, "reason": "race"}, 409)
             pid = d["id"]
             del state["pilots"][pid]
             state["active"] = [-1 if a == pid else (a - 1 if a > pid else a) for a in state["active"]]
