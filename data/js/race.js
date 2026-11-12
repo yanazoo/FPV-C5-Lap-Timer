@@ -312,11 +312,16 @@ function clearStartWatchdog(){if(startWatchdog){clearTimeout(startWatchdog);star
 // time left on the race clock and calls it out at the start of the wait
 // and every 10 s: a chime, then "レーススタートまで残り N 秒です。".
 var waitEnd=0,waitNextCall=0;
-function onRaceWait(sec,joined){
+// srvAt: the timer's clock when it sent this (race_wait / status now), so
+// the time the message spent on the way is taken off: counted from its
+// arrival, the wait here ended a little after the timer's, and "レディ"
+// came while the clock still showed 00:01.
+function onRaceWait(sec,joined,srvAt){
   clearStartWatchdog();
   if(countdownH||raceRunning)return;
   var s=Math.ceil(sec);
-  waitEnd=performance.now()+sec*1000;
+  var late=srvAt!==undefined&&srvOff!==null?Math.min(2000,Math.max(0,serverNow()-srvAt)):0;
+  waitEnd=performance.now()+sec*1000-late;
   // A fresh wait is called out at once; a browser joining one part way
   // through waits for the next multiple of 10.
   waitNextCall=joined?Math.floor((s-1)/10)*10:s;
@@ -345,6 +350,7 @@ function endWait(){
   if(!waitH)return;
   clearInterval(waitH);waitH=null;
   timerEl.classList.remove('waiting');
+  timerEl.textContent=raceClockText(timerFrozenMs);   // not the wait's last second
   var lbl=document.getElementById('waitLabel');if(lbl)lbl.style.display='none';
   setBtns(raceRunning);
 }
@@ -366,6 +372,7 @@ function onRaceReady(){
   readyUntil=performance.now()+2500;
   ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
   timerEl.classList.remove('running');
+  timerEl.textContent=raceClockText(0);   // the race clock at its start until 3-2-1
   announceStart();
 }
 // The stop tone on every browser (Stop pressed elsewhere, or the race
@@ -387,7 +394,7 @@ function onFalseStart(){
     setTimeout(()=>sayNow('フライングです。レースを中止します。'),500);
 }
 function onRaceStop(elapsed){
-  if(waitH){endWait();timerEl.textContent=raceClockText(timerFrozenMs);}   // start called off during the wait
+  if(waitH)endWait();   // start called off during the wait
   if(raceRunning&&performance.now()-stopToneAt>2000){ensureAudio();sfx.stop();}
   if(countdownH){clearInterval(countdownH);countdownH=null;}   // stopped before the start
   raceRunning=false;setBtns(false);stopTimer(elapsed);
