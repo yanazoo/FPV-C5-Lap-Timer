@@ -518,9 +518,12 @@ void registerHttpRoutes() {
         {
             Guard g;
             if (!rosterValid(id)) { bad(req, "bad id"); return; }
-            rosterCal[id].enterRssi = constrain((int)(doc["enter"] | rosterCal[id].enterRssi), 0, 1023);
-            rosterCal[id].exitRssi  = constrain((int)(doc["exit"] | rosterCal[id].exitRssi), 0, 1023);
-            en = rosterCal[id].enterRssi, ex = rosterCal[id].exitRssi;
+            en = constrain((int)(doc["enter"] | rosterCal[id].enterRssi), 0, 1023);
+            ex = constrain((int)(doc["exit"] | rosterCal[id].exitRssi), 0, 1023);
+            // Enter must be above exit, or the gate never sees a pass end.
+            if (en <= ex) { bad(req, "enter must be above exit"); return; }
+            rosterCal[id].enterRssi = en;
+            rosterCal[id].exitRssi  = ex;
             saveRosterPilot(id);
         }
         applyGateConfig();
