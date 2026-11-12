@@ -831,6 +831,29 @@ void testOsdStageCountAndStopTime() {
 
 // A deleted lap: the goggles show the new lap count, position and best,
 // and the (maybe deleted) last lap time goes; FINISHED! goes if unfinished.
+// A start the OSD task got to a few ms late is still a fresh start: the
+// staging screen (the event name) goes. Only a resumed race keeps its rows.
+void testOsdStartClearsStage() {
+    Capture cap;
+    osd::Engine e(cap);
+    Goggles g("p");
+    e.setRecipient(0, true, g.uid);
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStage(0, "Cup", 3);
+    at(3000);
+    CHECK(g.shows(0, "CUP"));
+    e.onRaceStart(3304, 4, 0, false);   // 4 ms into the race
+    at(3320);
+    CHECK(!g.shows(0, "CUP") && g.shows(5, "GO!"));
+    // Stopped and resumed: the lap rows stay.
+    e.onLap(10000, 0, {1, false, 6700, 6700, 6700, 1});
+    at(10020);
+    e.onRaceStop(11000);
+    e.onRaceStart(15000, 7700, 0, true);
+    at(15020);
+    CHECK(g.shows(1, "POSN: 1 | LAP: 1") && g.shows(5, "GO!"));
+}
+
 void testOsdLapEdit() {
     Goggles g("p");
     Capture cap;
@@ -954,6 +977,7 @@ int runTests() {
     testOsdCountdownClock();
     testOsdStageCountAndStopTime();
     testOsdLapEdit();
+    testOsdStartClearsStage();
     testFormat();
     testRaceFiles();
     testSoundCount();
