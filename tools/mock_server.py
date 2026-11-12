@@ -98,7 +98,8 @@ state = {
     },
     "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30,
             "ipFixed": False, "ip": "", "mask": "", "gw": "", "dns": "",
-            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
+            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0,
+                       "reason": 0, "retrying": False}},
     "password": "admin",
     "posts": [],   # every POST, for tests
     "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": [], "epoch": 0},
@@ -274,6 +275,11 @@ class Handler(SimpleHTTPRequestHandler):
             lap_ms = ts - (mine[-1]["ts"] if mine else int(r["t0"] * 1000))
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
+            return self.reply({"ok": True})
+        if p == "/mock/fallback":   # client mode failed: ?reason=201&retrying=1
+            q = parse_qs(u.query)
+            state["net"]["status"].update(fallback=True, reason=int(q.get("reason", ["201"])[0]),
+                                          retrying=q.get("retrying", ["1"])[0] == "1")
             return self.reply({"ok": True})
         if p == "/mock/seed":
             seed()

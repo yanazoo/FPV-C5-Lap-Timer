@@ -321,6 +321,16 @@ function onNetIpMode(){
   document.querySelectorAll('.net-ip-fixed').forEach(e=>e.style.display=fixed?'':'none');
 }
 var IPV4=/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
+// Why the timer could not join the client network (WiFi disconnect reason).
+function netReasonText(r){
+  if(!r)return '';
+  if(r===201)return '接続先の WiFi が見つかりません（SSID の綴り、ルーターの電源、2.4GHz が有効か、距離を確認）';
+  if(r===210||r===211)return '接続先は見つかりましたが、暗号化の方式に対応していません（WPA2 / WPA3 にしてください）';
+  if(r===202||r===15||r===204||r===14)return 'パスワードが違う可能性があります';
+  if(r===200)return '電波が弱く、接続が切れました';
+  if(r===5)return 'ルーターの接続台数がいっぱいです';
+  return 'エラー '+r;
+}
 async function loadNetSettings(){
   try{
     var r=await fetch('/api/net');if(!r.ok)return;
@@ -338,7 +348,14 @@ async function loadNetSettings(){
     sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
     if(st.connected)txt='クライアント接続中 '+esc(st.ip)+'（'+st.rssi+' dBm）';
-    else if(st.fallback)txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
+    else if(st.fallback){
+      txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
+      var why=netReasonText(st.reason);
+      if(why)txt+='<br><span style="font-weight:normal">理由：'+why+'</span>';
+      txt+='<br><span style="font-weight:normal;color:var(--muted)">'+(st.retrying
+        ?'接続先が見つかり次第、自動で再起動して接続します（このアクセスポイントに誰もつないでいない間・レース中以外）'
+        :'自動では戻りません。設定を確認してから再起動してください')+'</span>';
+    }
     else txt='ホスト（アクセスポイント） '+esc(st.ip);
     document.getElementById('netStatus').innerHTML='<span>現在</span><b>'+txt+'</b>';
     onNetMode();
