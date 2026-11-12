@@ -34,6 +34,8 @@ static void sendStatus() {
     wsText(buf);
 }
 
+static void sdHotplugTask(void*);
+
 void sdInit() {
     sdMutex = xSemaphoreCreateRecursiveMutex();
     sdSpi.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
@@ -41,6 +43,7 @@ void sdInit() {
     sdPresent = mount();
     if (sdPresent) Serial.printf("[SD] card OK  %lluMB\n", SD.cardSize() / (1024ULL * 1024ULL));
     else Serial.println("[SD] no card");
+    xTaskCreatePinnedToCore(sdHotplugTask, "sdplug", 6144, nullptr, 1, nullptr, 1);
 }
 
 void sdShutdown() {
@@ -49,16 +52,30 @@ void sdShutdown() {
     sdPresent = false;
 }
 
-void sdCheckHotplug(uint32_t now) {
+// Is the card still there / has one been put in? The only way to tell is
+// to mount it again, which takes a while (longer with no card). So this
+// runs in a task of its own, not in loop(): there it held up the race loop
+// (start requests, telemetry, the microphone) every time it ran. Only while
+// an admin has the settings or SD tab open, and never during a race or a
+// start (the card is left alone then).
+static void sdCheckHotplug(uint32_t now) {
     static uint32_t last = 0;
-    if (now - last < (sdPresent ? 3000UL : 500UL)) return;
+    if (now - last < (sdPresent ? 3000UL : 1000UL)) return;
     last = now;
     SdGuard g;
+    if (raceActive()) return;   // a start came while waiting for the card
     bool present = mount();
     if (present != sdPresent) {
         sdPresent = present;
         Serial.printf("[SD] %s\n", present ? "inserted" : "removed");
         sendStatus();
+    }
+}
+
+static void sdHotplugTask(void*) {
+    for (;;) {
+        if (sdPollEnabled && !raceActive()) sdCheckHotplug(millis());
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 

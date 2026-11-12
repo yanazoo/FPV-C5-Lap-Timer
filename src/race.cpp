@@ -380,6 +380,8 @@ void raceDirectorSwitch(uint8_t state) {
 }
 
 static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
+// A race is running or a start is under way (wait, レディ, 3-2-1).
+bool raceActive() { return raceBusy(); }
 
 // The start delay still to wait, ms (0: not waiting).
 static uint32_t startWaitLeft(uint32_t now) {
