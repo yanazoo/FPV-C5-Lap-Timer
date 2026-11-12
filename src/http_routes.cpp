@@ -272,7 +272,7 @@ const char* netFromJson(JsonVariantConst d) {
     if (apP.length() < 8 || apP.length() > 63) return "AP password 8..63";
     if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) return "client SSID 1..32";
     int fbSec = d["fallbackSec"] | (int)netFallbackSec;
-    if (!netFallbackValid(fbSec)) return "fallbackSec 0/15/30/60";
+    if (!netFallbackValid(fbSec)) return "fallbackSec 15/30/60";
     // Empty client password keeps the stored one (the UI never shows it);
     // "staPassClear" switches to an open network.
     if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;

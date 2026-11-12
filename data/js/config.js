@@ -311,10 +311,6 @@ function elrsAnnounce(){
 }
 
 // ── WiFi (host / client) ──────────────────────────────────────────────────
-function onNetFallback(){
-  var n=document.getElementById('netFallbackNote'),f=document.getElementById('netFallback');
-  if(n&&f)n.style.display=f.value==='0'?'block':'none';
-}
 function onNetMode(){
   var sta=document.getElementById('netMode').value==='1';
   document.querySelectorAll('.net-sta').forEach(e=>e.style.display=sta?'':'none');
@@ -342,7 +338,7 @@ async function loadNetSettings(){
     document.getElementById('netMode').value=String(d.mode);
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
     document.getElementById('netStaSsid').value=d.staSsid||'';
-    document.getElementById('netFallback').value=String(d.fallbackSec===0?0:(d.fallbackSec||30));onNetFallback();
+    document.getElementById('netFallback').value=String(d.fallbackSec||30);
     document.getElementById('netIpMode').value=d.ipFixed?'1':'0';
     document.getElementById('netIp').value=d.ip||'';
     document.getElementById('netMask').value=d.mask||'255.255.255.0';
@@ -370,7 +366,7 @@ async function saveNetSettings(){
   var d={mode:parseInt(document.getElementById('netMode').value)||0,
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
     staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
-    fallbackSec:(v=>isNaN(v)?30:v)(parseInt(document.getElementById('netFallback').value)),
+    fallbackSec:parseInt(document.getElementById('netFallback').value)||30,
     ipFixed:document.getElementById('netIpMode').value==='1',
     ip:document.getElementById('netIp').value.trim(),mask:document.getElementById('netMask').value.trim(),
     gw:document.getElementById('netGw').value.trim(),dns:document.getElementById('netDns').value.trim()};
@@ -384,7 +380,7 @@ async function saveNetSettings(){
   if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
   if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
   var msg=d.mode===1
-    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+(d.fallbackSec?d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。':'接続できなくてもアクセスポイントは出しません（開けなくなったら BOOT ボタンを 1 秒押す）。')+'よろしいですか？'
+    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
     :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
   if(!confirm(msg))return;
   try{

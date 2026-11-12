@@ -646,13 +646,11 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <div class="config-row" style="gap:8px"><label style="width:110px">接続先パスワード</label>
         <input type="text" class="pw-mask" id="netStaPass" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
       <div class="config-row" style="gap:8px"><label style="width:110px">ホストに切替</label>
-        <select id="netFallback" onchange="onNetFallback()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <select id="netFallback" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="15">15 秒接続できなければ</option>
           <option value="30">30 秒接続できなければ</option>
           <option value="60">60 秒接続できなければ</option>
-          <option value="0">しない（クライアント専用・電波を出さない）</option>
         </select></div>
-      <div id="netFallbackNote" class="config-note" style="display:none;font-size:11px;color:var(--muted);margin:-2px 0 6px">ルーターにつながらなくても、タイマーはアクセスポイントを出しません。設定を間違えて開けなくなったときは、タイマーの <b>BOOT ボタンを 1 秒押す</b>と、その起動のあいだだけアクセスポイント（http://20.0.0.1）で開けます。</div>
       <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
         <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="0">自動（DHCP）</option>
