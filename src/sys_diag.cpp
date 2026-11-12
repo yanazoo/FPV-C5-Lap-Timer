@@ -4,6 +4,7 @@
 #include <WiFi.h>
 #include <esp_sleep.h>
 #include <esp_system.h>
+#include <esp_mac.h>
 #include <esp_wifi.h>
 #include "data_model.h"
 #include "sd_store.h"
@@ -61,6 +62,26 @@ void sysBootNote() {
                   isCrash(bootReason) ? "  (after a crash)" : "");
 }
 
+const char* sysFirmware() {
+#ifdef FW_VERSION
+    return FW_VERSION;
+#else
+    return "dev";
+#endif
+}
+
+// This chip's own (factory) MAC, last three bytes: tells two timers apart
+// (both may broadcast the same SSID with the same web UI).
+const char* sysDeviceId() {
+    static char id[8] = "";
+    if (!id[0]) {
+        uint8_t mac[6] = {};
+        esp_efuse_mac_get_default(mac);
+        snprintf(id, sizeof id, "%02X%02X%02X", mac[3], mac[4], mac[5]);
+    }
+    return id;
+}
+
 void sysRequestRestart(uint32_t inMs) { restartAt = millis() + (inMs ? inMs : 1); }
 
 void sysLoop(uint32_t now) {
@@ -84,6 +105,8 @@ void sysLoop(uint32_t now) {
 String sysJson() {
     JsonDocument d;
     d["uptime"]   = (uint32_t)(millis() / 1000);
+    d["fw"]       = sysFirmware();
+    d["id"]       = sysDeviceId();
     d["reason"]   = reasonName(bootReason);
     d["boots"]    = boots;
     d["crashes"]  = crashes;

@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <esp_system.h>
+#include <nvs.h>
 #include "wifi_mgr.h"
 #include "data_model.h"
 #include "race.h"
@@ -104,7 +105,26 @@ static bool crashedWhileTrying() {
     return crash && rtcStaTrying == kStaTrying;
 }
 
+// WiFi settings the WiFi driver itself keeps in NVS (namespace
+// "nvs.net80211": the access point's name and password, the mode, the last
+// network). This firmware stopped writing them on 2026-10-29 (persistent
+// false below), but a timer that ran an older one still has them, and a
+// firmware update keeps NVS: the driver loads them when WiFi starts. Our
+// own settings decide the mode and both networks, so these are cleared.
+static void clearDriverWifiStore() {
+    nvs_iterator_t it = nullptr;
+    bool any = nvs_entry_find(NVS_DEFAULT_PART_NAME, "nvs.net80211", NVS_TYPE_ANY, &it) == ESP_OK;
+    nvs_release_iterator(it);
+    if (!any) return;   // nothing stored (the usual case)
+    nvs_handle_t h;
+    if (nvs_open("nvs.net80211", NVS_READWRITE, &h) != ESP_OK) return;
+    if (nvs_erase_all(h) == ESP_OK && nvs_commit(h) == ESP_OK)
+        Serial.println("[WiFi] cleared WiFi settings an older firmware left in NVS");
+    nvs_close(h);
+}
+
 void netBegin() {
+    clearDriverWifiStore();   // before the WiFi driver starts and loads them
     // Settings live in our own NVS keys; don't let the WiFi driver write them too.
     WiFi.persistent(false);
     if (netMode == NET_STA && staSsid.length()) {

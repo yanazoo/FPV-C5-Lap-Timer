@@ -196,7 +196,7 @@ def init_msg():
     for o in active_json():
         o = dict(o, lapCount=counts[o["slot"]], bestLap=0, rssi=0, crossing=False)
         pilots.append(o)
-    return dict(state["settings"], type="init", raceRunning=r["running"], racePaused=r["paused"],
+    return dict(state["settings"], type="init", fw="v2.0.1-14-gmock", dev="A1B2C3", raceRunning=r["running"], racePaused=r["paused"],
                 boot=BOOT_ID, raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
                 now=now_ms(), sdPresent=True, pilots=pilots)
 
@@ -340,7 +340,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
-                               "heapMin": 151000, "heapMax": 110000, "psram": 0})
+                               "heapMin": 151000, "heapMax": 110000, "psram": 0,
+                               "fw": "v2.0.1-14-gmock", "id": "A1B2C3"})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":
