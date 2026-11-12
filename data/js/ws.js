@@ -119,7 +119,10 @@ function onMsg(d){
       pushChart(p.id,p.rssi,p.crossing);
     });
     buildRaceCards();slots.forEach(p=>updateRaceCard(p));
-    syncLaps();
+    gotInit=true;
+    // The lap list is asked for only when the race has laps.
+    if(lapQueue||(d.pilots||[]).some(pd=>pd.lapCount>0))syncLaps();
+    else resetLaps();
     return;
   }
   if(d.type==='settings'){applySettings(d);return;}
@@ -234,14 +237,20 @@ function updateHeaderStatus(){
   if(t)t.textContent=c.cpuTemp!==undefined?'CPU '+c.cpuTemp+'℃':'';
 }
 
-async function loadRoster(){
+// tries: a request lost on the way (a busy WiFi) is asked for again; a page
+// left without its roster showed no pilots to pick.
+async function loadRoster(tries){
   try{
-    var r=await fetch('/api/pilots');if(!r.ok)return;
+    var r=await fetch('/api/pilots');if(!r.ok)throw 0;
     rosterData=await r.json();
     rebuildRosterIndex();
     if(editingRosterId===null)renderRoster();
     applyActiveToSlots();
-  }catch(e){}
+    if(tries){buildRaceCards();buildCalibCards();}   // a late roster: show it
+  }catch(e){
+    tries=tries||0;
+    if(tries<3)setTimeout(()=>loadRoster(tries+1),1500*(tries+1));
+  }
 }
 
 async function loadActive(){
@@ -256,22 +265,33 @@ async function loadActive(){
   }catch(e){}
 }
 
+// Opening the page. The timer's init message (sent as the WebSocket opens)
+// already carries the SD card state, the pilots on each channel and the
+// settings, so only the roster is asked for. Every request less matters:
+// the timer answers them one at a time. Without init after 1.5 s (a slow
+// WebSocket), those are fetched as well.
+var gotInit=false;
 async function loadAll(){
-  try{
-    var rs=await fetch('/api/sd/status');
-    if(rs.ok){var sd=await rs.json();updateSdSection(sd.present);}
-  }catch(e){}
-
-  await loadActive();
+  for(var i=0;i<30&&!gotInit;i++)await new Promise(r=>setTimeout(r,50));
+  var viaInit=gotInit;
+  if(!viaInit){
+    try{
+      var rs=await fetch('/api/sd/status');
+      if(rs.ok){var sd=await rs.json();updateSdSection(sd.present);}
+    }catch(e){}
+    await loadActive();
+  }
   await loadRoster();
   buildRaceCards();buildCalibCards();
   slots.forEach(p=>syncCalibSliders(p.id,p.enterRssi,p.exitRssi));
 
   // The timer's settings are the same for every browser: take them from it.
-  try{
-    var rg=await fetch('/api/settings');
-    if(rg.ok)applySettings(await rg.json());
-  }catch(e){}
+  if(!viaInit){
+    try{
+      var rg=await fetch('/api/settings');
+      if(rg.ok)applySettings(await rg.json());
+    }catch(e){}
+  }
 
   var am=document.getElementById('announceMode');if(am)am.value=announceMode;
   var sr=document.getElementById('speechRate');if(sr)sr.value=speechRate;

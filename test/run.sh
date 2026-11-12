@@ -37,3 +37,23 @@ if git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
     fi
     echo "ok ($got)"
 fi
+
+echo "== web UI build (tools/webui_build.py): the page carries its scripts"
+python3 - "$here/.." "$out/webui" <<'PY'
+import gzip, os, sys
+root, dst = sys.argv[1], sys.argv[2]
+sys.path.insert(0, os.path.join(root, "tools"))
+import webui_build
+webui_build.build(os.path.join(root, "data"), dst)
+got = sorted(os.path.relpath(os.path.join(r, f), dst) for r, _, fs in os.walk(dst) for f in fs)
+assert got == ["index.html.gz", os.path.join("js", "qrcode.js.gz")], got
+html = gzip.open(os.path.join(dst, "index.html.gz")).read().decode()
+assert "var files=[" not in html and "APP-JS" not in html, "the loader is still in the page"
+for name in sorted(os.listdir(os.path.join(root, "data", "js"))):
+    if name == "qrcode.js":
+        continue
+    js = open(os.path.join(root, "data", "js", name), encoding="utf-8").read()
+    assert "</script" not in js.lower(), name + " would end its inline script"
+    assert js.strip()[:200] in html, name + " is not in the built page (add it to the loader's list in index.html)"
+print("ok (%d bytes gzip)" % os.path.getsize(os.path.join(dst, "index.html.gz")))
+PY

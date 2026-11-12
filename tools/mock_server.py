@@ -21,7 +21,9 @@ import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+# MOCK_DATA: serve another folder, e.g. the built page
+# (python3 tools/webui_build.py /tmp/webui --plain).
+DATA = os.environ.get("MOCK_DATA") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
 # Sample race files on the "SD card": the newest with the #FPVC5 line,
 # race_001 in the old format (no date, no rules).
@@ -275,6 +277,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/mock/seed":
             seed()
+            with ws_lock:
+                sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
         if p == "/mock/loud":
             q = parse_qs(u.query)
