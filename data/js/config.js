@@ -523,7 +523,9 @@ async function loadSysInfo(){
     var s=await r.json(),up=s.uptime,kb=v=>Math.round(v/1024)+' KB';
     var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
     var h=(s.fw?'ファームウェア '+esc(s.fw)+(s.id?'・本体 ID '+esc(s.id):'')+'<br>':'')+'起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
-      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
+      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）'
+      +(s.nvsTotal?'<br>設定の保存領域 '+s.nvsUsed+' / '+s.nvsTotal+'（'+Math.round(s.nvsUsed*100/s.nvsTotal)+'%）':'')
+      +(s.boots?'・起動 '+s.boots+' 回目':'');
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
       +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
     el.innerHTML=h;

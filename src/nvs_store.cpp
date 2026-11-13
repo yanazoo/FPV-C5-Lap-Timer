@@ -1,5 +1,6 @@
 #include <Preferences.h>
 #include "utf8.h"
+#include <nvs.h>
 #include "nvs_store.h"
 #include "data_model.h"
 #include "wifi_mgr.h"
@@ -261,4 +262,23 @@ void loadAll() {
     if (staIp.fixed && (!staIp.ip || !staIp.mask)) staIp.fixed = 0;
     if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
     prefs.end();
+}
+
+void nvsUsage(uint32_t& used, uint32_t& total) {
+    nvs_stats_t st = {};
+    used = total = 0;
+    if (nvs_get_stats(NULL, &st) != ESP_OK) return;
+    used = st.used_entries;
+    total = st.total_entries;
+}
+
+void nvsReport() {
+    int active = 0;
+    for (int s = 0; s < MAX_ACTIVE; s++) active += activePilots[s] >= 0;
+    uint32_t used, total;
+    nvsUsage(used, total);
+    if (netMode == 1) Serial.printf("[NVS] WiFi client \"%s\"", staSsid.c_str());
+    else Serial.print("[NVS] WiFi host");
+    Serial.printf(", pilots %d (%d on channels), ELRS %s; NVS %lu / %lu entries in use\n", rosterCount, active,
+                  elrsCfg.enabled ? "on" : "off", (unsigned long)used, (unsigned long)total);
 }

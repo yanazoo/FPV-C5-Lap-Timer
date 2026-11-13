@@ -8,6 +8,7 @@
 #include <esp_wifi.h>
 #include "data_model.h"
 #include "sd_store.h"
+#include "nvs_store.h"
 #include "wifi_mgr.h"
 
 namespace {
@@ -106,6 +107,10 @@ String sysJson() {
     JsonDocument d;
     d["uptime"]   = (uint32_t)(millis() / 1000);
     d["fw"]       = sysFirmware();
+    uint32_t nu, nt;
+    nvsUsage(nu, nt);
+    d["nvsUsed"]  = nu;    // settings storage: entries in use / in total
+    d["nvsTotal"] = nt;
     d["id"]       = sysDeviceId();
     d["reason"]   = reasonName(bootReason);
     d["boots"]    = boots;

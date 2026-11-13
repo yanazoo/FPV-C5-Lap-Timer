@@ -32,6 +32,7 @@ void setup() {
     gLock = xSemaphoreCreateRecursiveMutex();
 
     loadAll();
+    nvsReport();   // what this start read: mode, pilots, ELRS, how full NVS is
 
     netBegin();   // access point, or join a network (AP fallback after 15 / 30 / 60 s)
     // mDNS: http://fpv-c5-lt.local in client mode, and to find elrs-netpack.
