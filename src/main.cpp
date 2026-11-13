@@ -14,6 +14,7 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
+#include "event_log.h"
 #include "http_routes.h"
 #include "mic.h"
 #include "nvs_store.h"
@@ -28,17 +29,22 @@ SemaphoreHandle_t gLock;
 void setup() {
     Serial.begin(115200);
     Serial.println("\n[Web] FPV C5 Lap Timer");
+    // The settings store first: a start that can't open it must not carry
+    // on as a factory-new timer (host mode, no pilots).
+    bool nvsOk = nvsEnsureReady();
     sysBootNote();
     gLock = xSemaphoreCreateRecursiveMutex();
+    // The web UI's file system, early: the event log lives on it.
+    if (!LittleFS.begin(true)) Serial.println("[Web] LittleFS failed");
+    evLogBegin(sysBootCount());
 
     loadAll();
-    nvsReport();   // what this start read: mode, pilots, ELRS, how full NVS is
+    nvsReport(nvsOk);   // what this start read: mode, pilots, ELRS, how full NVS is
 
     netBegin();   // access point, or join a network (AP fallback after 15 / 30 / 60 s)
     // mDNS: http://fpv-c5-lt.local in client mode, and to find elrs-netpack.
     if (MDNS.begin(MDNS_NAME)) MDNS.addService("http", "tcp", 80);
 
-    if (!LittleFS.begin(true)) Serial.println("[Web] LittleFS failed");
     sdInit();
 
     c5Begin();

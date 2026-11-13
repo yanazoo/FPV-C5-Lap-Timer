@@ -5,6 +5,7 @@
 #include "data_model.h"
 #include "race.h"
 #include "sys_diag.h"
+#include "event_log.h"
 
 // Set while a client-mode attempt hasn't joined yet; survives a crash reset
 // (not a power cycle). If the timer crashes during the attempt or the switch
@@ -96,7 +97,8 @@ static void startAp() {
     staMode = false;
     staJoined = false;
     rtcStaTrying = 0;
-    Serial.printf("[WiFi] AP  SSID=%s  IP=%s\n", apSsid.c_str(), AP_IP.toString().c_str());
+    evLog("WiFi: access point \"%s\" up at %s (%s)", apSsid.c_str(), AP_IP.toString().c_str(),
+          netMode == NET_STA ? (fellBack ? "client mode fell back" : "client mode, no network set") : "host mode");
 }
 
 static bool crashedWhileTrying() {
@@ -119,7 +121,7 @@ static void clearDriverWifiStore() {
     nvs_handle_t h;
     if (nvs_open("nvs.net80211", NVS_READWRITE, &h) != ESP_OK) return;
     if (nvs_erase_all(h) == ESP_OK && nvs_commit(h) == ESP_OK)
-        Serial.println("[WiFi] cleared WiFi settings an older firmware left in NVS");
+        evLog("WiFi: cleared WiFi settings an older firmware left in the store");
     nvs_close(h);
 }
 
@@ -130,7 +132,7 @@ void netBegin() {
     if (netMode == NET_STA && staSsid.length()) {
         if (rtcProbe.magic != kProbeMagic) rtcProbe = {kProbeMagic, 0};   // power on
         if (crashedWhileTrying()) {
-            Serial.println("[WiFi] client: crashed while joining last time, starting the access point");
+            evLog("WiFi: crashed while joining last time: access point instead");
             crashFallback = true;   // don't go back to it by itself (it would crash again)
             fellBack = true;
             startAp();
@@ -163,7 +165,7 @@ void netBegin() {
         staMode = true;
         staSinceMs = millis();
         rtcStaTrying = kStaTrying;
-        Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %us)\n", staSsid.c_str(), netFallbackSec);
+        evLog("WiFi: client, joining \"%s\" (access point after %u s without it)", staSsid.c_str(), netFallbackSec);
     } else {
         startAp();
     }
@@ -192,7 +194,7 @@ static void probeForNetwork(uint32_t now) {
         if (!seen) return;
         if (raceKeepsUs() || WiFi.softAPgetStationNum() > 0) return;   // next look
         rtcProbe.restarts++;
-        Serial.printf("[WiFi] \"%s\" is there again: restarting into client mode\n", staSsid.c_str());
+        evLog("WiFi: \"%s\" is there again: restarting into client mode", staSsid.c_str());
         sysRequestRestart(200);
         return;
     }
@@ -210,7 +212,12 @@ void netLoop() {
     uint8_t r = lastReason;
     if (r != loggedReason) {
         loggedReason = r;
-        Serial.printf("[WiFi] client: not joined, reason %u %s\n", r, reasonText(r));
+        // The first few of a start only: a long outage flips between reasons.
+        static uint8_t noted = 0;
+        if (r && noted < 8) {
+            noted++;
+            evLog("WiFi: not joined, reason %u %s", r, reasonText(r));
+        }
     }
     if (apUp) {
         dnsServer.processNextRequest();
@@ -226,8 +233,8 @@ void netLoop() {
             rtcStaTrying = 0;
             rtcProbe.restarts = 0;
             lastReason = loggedReason = 0;
-            Serial.printf("[WiFi] client: joined \"%s\"  IP=%s  (http://%s.local)\n", staSsid.c_str(),
-                          WiFi.localIP().toString().c_str(), MDNS_NAME);
+            evLog("WiFi: joined \"%s\" as %s, %d dBm, channel %d", staSsid.c_str(),
+                  WiFi.localIP().toString().c_str(), (int)WiFi.RSSI(), (int)WiFi.channel());
         }
         staSinceMs = now;
         return;
@@ -236,7 +243,7 @@ void netLoop() {
         staJoined = false;
         staSinceMs = now;
         rtcStaTrying = kStaTrying;
-        Serial.println("[WiFi] client: link lost, reconnecting");
+        evLog("WiFi: link to the router lost, reconnecting");
     }
     // Link lost during a race: stay a client. Every phone is on the router,
     // so the access point would reach nobody, and the timer could not go
@@ -247,8 +254,8 @@ void netLoop() {
         return;
     }
     if (now - staSinceMs >= netFallbackSec * 1000UL) {
-        Serial.printf("[WiFi] client: no link to \"%s\" for %us, starting the access point\n", staSsid.c_str(),
-                      netFallbackSec);
+        evLog("WiFi: no link to \"%s\" for %u s (reason %u %s): starting the access point", staSsid.c_str(),
+              netFallbackSec, (unsigned)lastReason, reasonText(lastReason));
         fellBack = true;
         fallbackReason = lastReason;
         startAp();

@@ -337,11 +337,23 @@ class Handler(SimpleHTTPRequestHandler):
                 logins = len(live_sessions())
             return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
                                "viewers": viewers, "viewerLimit": CONN["viewHost"]})
+        if p == "/api/eventlog":
+            body = ('#41 +0s  start: poweron, fw v2.0.1-16-gmock, settings read: client "TestRouter" (host after 15 s), '
+                    '5 pilots (5 on channels), ELRS on, store 212/504\n'
+                    '#41 +0s  WiFi: client, joining "TestRouter" (access point after 15 s without it)\n'
+                    '#41 +15s  WiFi: no link to "TestRouter" for 15 s (reason 201 network not found): starting the access point\n'
+                    '#41 +15s  WiFi: access point "FPV-C5-LT" up at 20.0.0.1 (client mode fell back)\n').encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
                                "heapMin": 151000, "heapMax": 110000, "psram": 0,
-                               "fw": "v2.0.1-14-gmock", "id": "A1B2C3"})
+                               "fw": "v2.0.1-14-gmock", "id": "A1B2C3", "nvsUsed": 212, "nvsTotal": 504, "nvsOk": True})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":

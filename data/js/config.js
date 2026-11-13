@@ -528,8 +528,20 @@ async function loadSysInfo(){
       +(s.boots?'・起動 '+s.boots+' 回目':'');
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
       +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
+    if(s.nvsOk===false)h='<span style="color:var(--err)">⚠ この起動では、保存した設定を読み込めませんでした（初期設定で動いています）。再起動してください。</span><br>'+h;
     el.innerHTML=h;
   }catch(e){el.textContent='';}
+  var box=document.getElementById('evLogBox');if(box&&box.open)loadEventLog();
+}
+// The timer's record of starts and WiFi events (newest at the bottom).
+async function loadEventLog(){
+  var el=document.getElementById('evLog');if(!el)return;
+  try{
+    var r=await fetch('/api/eventlog',{cache:'no-store'});if(!r.ok)throw 0;
+    var t=await r.text();
+    el.textContent=t||'（まだ記録がありません）';
+    el.scrollTop=el.scrollHeight;
+  }catch(e){el.textContent='読み込めませんでした';}
 }
 
 // ── 接続用 QR コード ────────────────────────────────────────────────────

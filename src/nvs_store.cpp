@@ -1,6 +1,9 @@
 #include <Preferences.h>
 #include "utf8.h"
 #include <nvs.h>
+#include <nvs_flash.h>
+#include "event_log.h"
+#include "sys_diag.h"
 #include "nvs_store.h"
 #include "data_model.h"
 #include "wifi_mgr.h"
@@ -272,13 +275,40 @@ void nvsUsage(uint32_t& used, uint32_t& total) {
     total = st.total_entries;
 }
 
-void nvsReport() {
+static bool nvsReady = true;
+bool nvsWasReady() { return nvsReady; }
+
+// Can a namespace be opened for writing? (Read-only fails on a new timer,
+// where nothing is stored yet.)
+static esp_err_t nvsProbe() {
+    nvs_handle_t h;
+    esp_err_t e = nvs_open("diag", NVS_READWRITE, &h);
+    if (e == ESP_OK) nvs_close(h);
+    return e;
+}
+
+bool nvsEnsureReady() {
+    esp_err_t e = nvsProbe();
+    for (int i = 0; e != ESP_OK && i < 5; i++) {
+        Serial.printf("[NVS] can't open the settings store (0x%x), trying again\n", e);
+        delay(200);
+        nvs_flash_init();   // no-op when it is initialised; never erases
+        e = nvsProbe();
+    }
+    nvsReady = e == ESP_OK;
+    if (!nvsReady) Serial.printf("[NVS] settings store not usable (0x%x): running on default settings\n", e);
+    return nvsReady;
+}
+
+void nvsReport(bool nvsOk) {
     int active = 0;
     for (int s = 0; s < MAX_ACTIVE; s++) active += activePilots[s] >= 0;
     uint32_t used, total;
     nvsUsage(used, total);
-    if (netMode == 1) Serial.printf("[NVS] WiFi client \"%s\"", staSsid.c_str());
-    else Serial.print("[NVS] WiFi host");
-    Serial.printf(", pilots %d (%d on channels), ELRS %s; NVS %lu / %lu entries in use\n", rosterCount, active,
-                  elrsCfg.enabled ? "on" : "off", (unsigned long)used, (unsigned long)total);
+    char net[64];
+    if (netMode == 1) snprintf(net, sizeof net, "client \"%s\" (host after %u s)", staSsid.c_str(), netFallbackSec);
+    else snprintf(net, sizeof net, "host");
+    evLog("start: %s, fw %s, settings %s: %s, %d pilots (%d on channels), ELRS %s, store %lu/%lu", sysBootReason(),
+          sysFirmware(), nvsOk ? "read" : "NOT READABLE (defaults)", net, rosterCount, active,
+          elrsCfg.enabled ? "on" : "off", (unsigned long)used, (unsigned long)total);
 }

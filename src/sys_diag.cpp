@@ -63,6 +63,9 @@ void sysBootNote() {
                   isCrash(bootReason) ? "  (after a crash)" : "");
 }
 
+uint32_t sysBootCount() { return boots; }
+const char* sysBootReason() { return reasonName(bootReason); }
+
 const char* sysFirmware() {
 #ifdef FW_VERSION
     return FW_VERSION;
@@ -111,6 +114,7 @@ String sysJson() {
     nvsUsage(nu, nt);
     d["nvsUsed"]  = nu;    // settings storage: entries in use / in total
     d["nvsTotal"] = nt;
+    d["nvsOk"]    = nvsWasReady();   // false: this start could not read the settings
     d["id"]       = sysDeviceId();
     d["reason"]   = reasonName(bootReason);
     d["boots"]    = boots;

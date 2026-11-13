@@ -8,6 +8,7 @@
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
+#include "event_log.h"
 #include "mic.h"
 #include "nvs_store.h"
 #include "race.h"
@@ -952,6 +953,12 @@ void registerHttpRoutes() {
         ok(req);
         Serial.println("[Web] every page asked to reload");
         wsText(R"({"type":"reload"})");
+    });
+    // The record of starts and WiFi events (event_log.h), newest part.
+    server.on(AsyncURIMatcher::exact("/api/eventlog"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        AsyncWebServerResponse* res = req->beginResponse(200, "text/plain; charset=utf-8", evLogText());
+        res->addHeader("Cache-Control", "no-store");
+        req->send(res);
     });
     // Why the timer last started, crashes since, and free memory.
     server.on(AsyncURIMatcher::exact("/api/sys"), HTTP_GET, [](AsyncWebServerRequest* req) {
