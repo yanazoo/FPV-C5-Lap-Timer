@@ -21,7 +21,9 @@ import time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+# MOCK_DATA: serve another folder, e.g. the built page
+# (python3 tools/webui_build.py /tmp/webui --plain).
+DATA = os.environ.get("MOCK_DATA") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
 # Sample race files on the "SD card": the newest with the #FPVC5 line,
 # race_001 in the old format (no date, no rules).
@@ -94,9 +96,10 @@ state = {
                 "lapResults": "8,-1", "bestLap": "12,0", "totalTime": "3,-1", "results": "10,-1",
                 "raceClock": "2,-1"},
     },
-    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30,
+    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30, "raceHoldSec": 60,
             "ipFixed": False, "ip": "", "mask": "", "gw": "", "dns": "",
-            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
+            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0,
+                       "reason": 0, "retrying": False}},
     "password": "admin",
     "posts": [],   # every POST, for tests
     "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": [], "epoch": 0},
@@ -273,8 +276,15 @@ class Handler(SimpleHTTPRequestHandler):
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
             return self.reply({"ok": True})
+        if p == "/mock/fallback":   # client mode failed: ?reason=201&retrying=1
+            q = parse_qs(u.query)
+            state["net"]["status"].update(fallback=True, reason=int(q.get("reason", ["201"])[0]),
+                                          retrying=q.get("retrying", ["1"])[0] == "1")
+            return self.reply({"ok": True})
         if p == "/mock/seed":
             seed()
+            with ws_lock:
+                sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
         if p == "/mock/loud":
             q = parse_qs(u.query)
@@ -479,6 +489,9 @@ class Handler(SimpleHTTPRequestHandler):
             broadcast({"type": "active_update", "pilots": active_json()})
             return self.reply({"ok": True, "id": pid})
         if p == "/api/pilots/delete":
+            rc = state["race"]
+            if rc["running"] or rc["paused"] or rc["laps"]:   # as the firmware: not until cleared
+                return self.reply({"ok": False, "reason": "race"}, 409)
             pid = d["id"]
             del state["pilots"][pid]
             state["active"] = [-1 if a == pid else (a - 1 if a > pid else a) for a in state["active"]]
@@ -539,7 +552,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/net":
             state["net"].update({k: d[k] for k in ("ipFixed", "ip", "mask", "gw", "dns") if k in d})
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
-                                staSsid=d.get("staSsid", ""), fallbackSec=d.get("fallbackSec", 30))
+                                staSsid=d.get("staSsid", ""), fallbackSec=d.get("fallbackSec", 30),
+                                raceHoldSec=d.get("raceHoldSec", 60))
             if d.get("staPass"):
                 state["net"]["staPassSet"] = True
             return self.reply({"ok": True})

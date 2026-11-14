@@ -143,7 +143,13 @@ public:
     // countdownSec > 0: a timed race; the race clock shows the time left,
     // from countdownSec down to 00:00, then the time over as -mm:ss (whole
     // seconds of what the web UI shows: 01:29.70 there is 01:29 here).
-    void onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec = 0);
+    // resumed: a paused race goes on (its lap rows stay); otherwise a new
+    // race, and the screen starts empty. Not taken from elapsedMs: a start
+    // handled a few ms late has run a few ms already.
+    void onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec, bool resumed);
+    void onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec = 0) {
+        onRaceStart(now, elapsedMs, countdownSec, elapsedMs != 0);
+    }
     void onLap(uint32_t now, int slot, const LapInfo& lap);
     // Another pilot's position/lap count changed (vrxc_elrs update_pos).
     void onPosition(uint32_t now, int slot, int laps, int position);

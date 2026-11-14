@@ -279,9 +279,16 @@ To cover lost packets:
   Network Access blocks a plain-http page on a .local name from loading its
   scripts). If it cannot connect for the chosen time (15, 30
   or 60 s, default 30 s; "ホストに切替" in the WiFi card), at boot or after
-  losing the link, it falls back to host mode until the next reboot. The
-  router password is stored on the device only and never sent back to the
-  browser.
+  losing the link, it falls back to host mode, and the WiFi card says why
+  (not found, wrong password, security not supported...). While nobody is
+  on its access point, it keeps looking for the router and restarts into
+  client mode once the router is back (a router that started later than the
+  timer); not during a race or with laps not cleared, and not after a wrong
+  password. Losing the link during a race (or with laps not cleared), it
+  waits for the router for the time set in "レース中に切れたら" (15 s,
+  30 s, 1, 3 or 5 min, or as long as it takes; default 1 min) before it
+  starts the access point; timing goes on meanwhile. The router password is stored on the device only and never
+  sent back to the browser.
 
 ## Restart and a fixed IP address
 

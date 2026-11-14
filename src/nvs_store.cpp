@@ -1,4 +1,5 @@
 #include <Preferences.h>
+#include "utf8.h"
 #include "nvs_store.h"
 #include "data_model.h"
 #include "wifi_mgr.h"
@@ -22,6 +23,7 @@ String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
 String       staSsid, staPass;
 uint8_t      netFallbackSec = NET_FALLBACK_DEFAULT_S;
+uint16_t     netRaceHoldSec = NET_RACE_HOLD_DEFAULT_S;
 
 static Preferences prefs;
 
@@ -46,6 +48,13 @@ static void sanitizeElrs(ElrsSettings& e) {
     terminate(o.startMsg);
     terminate(o.pilotDoneMsg);
     terminate(o.raceStopMsg);
+    // Text stored cut in the middle of a character: drop the half character.
+    utf8::copy(e.rdBind, e.rdBind, sizeof e.rdBind);
+    utf8::copy(e.eventName, e.eventName, sizeof e.eventName);
+    utf8::copy(o.stageMsg, o.stageMsg, sizeof o.stageMsg);
+    utf8::copy(o.startMsg, o.startMsg, sizeof o.startMsg);
+    utf8::copy(o.pilotDoneMsg, o.pilotDoneMsg, sizeof o.pilotDoneMsg);
+    utf8::copy(o.raceStopMsg, o.raceStopMsg, sizeof o.raceStopMsg);
     for (uint16_t* u : {&o.startUptimeDs, &o.finishUptimeDs, &o.resultsUptimeDs, &o.announceUptimeDs})
         *u = constrain(*u, (uint16_t)1, (uint16_t)600);
     sanitizePos(o.eventName, d.opt.eventName);
@@ -134,9 +143,10 @@ void saveStaIp() {
 }
 
 void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP,
-             uint8_t fallbackSec) {
+             uint8_t fallbackSec, uint16_t raceHoldSec) {
     netMode = mode;
     netFallbackSec = fallbackSec;
+    netRaceHoldSec = raceHoldSec;
     apSsid = apS, apPass = apP;
     staSsid = staS, staPass = staP;
     prefs.begin("net", false);
@@ -146,6 +156,7 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
     prefs.putString("stassid", staS);
     prefs.putString("stapass", staP);
     prefs.putUChar("fbsec", fallbackSec);
+    prefs.putUShort("rhold", raceHoldSec);
     prefs.end();
 }
 
@@ -167,6 +178,11 @@ void loadAll() {
         roster[i].name[sizeof roster[i].name - 1] = '\0';
         roster[i].yomi[sizeof roster[i].yomi - 1] = '\0';
         roster[i].bind[sizeof roster[i].bind - 1] = '\0';
+        // A name stored cut in the middle of a character (older firmware):
+        // drop the half character, or no browser can keep its WebSocket.
+        utf8::copy(roster[i].name, roster[i].name, sizeof roster[i].name);
+        utf8::copy(roster[i].yomi, roster[i].yomi, sizeof roster[i].yomi);
+        utf8::copy(roster[i].bind, roster[i].bind, sizeof roster[i].bind);
         snprintf(key, sizeof key, "c%d", i);
         if (prefs.getBytes(key, &rosterCal[i], sizeof rosterCal[i]) != sizeof rosterCal[i])
             rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
@@ -243,9 +259,11 @@ void loadAll() {
     staSsid = prefs.getString("stassid", "");
     staPass = prefs.getString("stapass", "");
     netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
+    netRaceHoldSec = prefs.getUShort("rhold", NET_RACE_HOLD_DEFAULT_S);
     StaIpConfig ipc;
     if (prefs.getBytes("ipcfg", &ipc, sizeof ipc) == sizeof ipc) staIp = ipc;
     if (staIp.fixed && (!staIp.ip || !staIp.mask)) staIp.fixed = 0;
     if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
+    if (!netRaceHoldValid(netRaceHoldSec)) netRaceHoldSec = NET_RACE_HOLD_DEFAULT_S;
     prefs.end();
 }

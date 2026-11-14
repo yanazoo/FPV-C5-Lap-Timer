@@ -7,6 +7,8 @@
 void raceBegin();
 // Called from loop(): passes -> laps, 10 Hz RSSI telemetry, 1 Hz C5 status.
 void raceLoop();
+// A race is running or a start is under way (wait, レディ, 3-2-1). Any task.
+bool raceActive();
 
 // Push frequencies and thresholds of the active slots to the C5 link and
 // the pilot list to the OSD. Call after any roster/slot/calibration change.

@@ -368,7 +368,7 @@ void handle(const Event& e, uint32_t now) {
     // Stage: 3-2-1 on the race clock row, with the browsers' countdown.
     case Ev::Stage:     engine.onRaceStage(now, e.text, 3); break;
     // The race has been running since e.at: start the clock that far in.
-    case Ev::Start:     engine.onRaceStart(now, e.value + (now - e.at), (uint16_t)e.laps); break;
+    case Ev::Start:     engine.onRaceStart(now, e.value + (now - e.at), (uint16_t)e.laps, e.position != 0); break;
     case Ev::Lap:       engine.onLap(now, e.slot, e.lap); break;
     case Ev::Position:  engine.onPosition(now, e.slot, e.laps, e.position); break;
     case Ev::Done:      engine.onPilotDone(now, e.slot, e.position, e.value); break;
@@ -419,10 +419,12 @@ void elrsRaceStage() {
     post(e);
 }
 
-void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec) {
+void elrsRaceStart(uint32_t elapsedMs, uint32_t countdownSec, bool resumed, uint32_t at) {
     Event e = ev(Ev::Start);
     e.value = elapsedMs;
+    e.at = at;   // the race clock had run elapsedMs at this time
     e.laps = (int16_t)countdownSec;   // timed race length (<= 1800 s)
+    e.position = resumed ? 1 : 0;
     post(e);
 }
 

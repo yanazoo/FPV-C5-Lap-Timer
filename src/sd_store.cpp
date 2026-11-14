@@ -5,6 +5,7 @@
 #include <time.h>
 #include "sd_store.h"
 #include "race_files.h"
+#include "utf8.h"
 #include "data_model.h"
 #include "nvs_store.h"
 #include "race.h"
@@ -34,6 +35,8 @@ static void sendStatus() {
     wsText(buf);
 }
 
+static void sdHotplugTask(void*);
+
 void sdInit() {
     sdMutex = xSemaphoreCreateRecursiveMutex();
     sdSpi.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
@@ -41,6 +44,7 @@ void sdInit() {
     sdPresent = mount();
     if (sdPresent) Serial.printf("[SD] card OK  %lluMB\n", SD.cardSize() / (1024ULL * 1024ULL));
     else Serial.println("[SD] no card");
+    xTaskCreatePinnedToCore(sdHotplugTask, "sdplug", 6144, nullptr, 1, nullptr, 1);
 }
 
 void sdShutdown() {
@@ -49,16 +53,30 @@ void sdShutdown() {
     sdPresent = false;
 }
 
-void sdCheckHotplug(uint32_t now) {
+// Is the card still there / has one been put in? The only way to tell is
+// to mount it again, which takes a while (longer with no card). So this
+// runs in a task of its own, not in loop(): there it held up the race loop
+// (start requests, telemetry, the microphone) every time it ran. Only while
+// an admin has the settings or SD tab open, and never during a race or a
+// start (the card is left alone then).
+static void sdCheckHotplug(uint32_t now) {
     static uint32_t last = 0;
-    if (now - last < (sdPresent ? 3000UL : 500UL)) return;
+    if (now - last < (sdPresent ? 3000UL : 1000UL)) return;
     last = now;
     SdGuard g;
+    if (raceActive()) return;   // a start came while waiting for the card
     bool present = mount();
     if (present != sdPresent) {
         sdPresent = present;
         Serial.printf("[SD] %s\n", present ? "inserted" : "removed");
         sendStatus();
+    }
+}
+
+static void sdHotplugTask(void*) {
+    for (;;) {
+        if (sdPollEnabled && !raceActive()) sdCheckHotplug(millis());
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -279,14 +297,14 @@ int sdRestoreRoster(const String& path) {
         int id = rosterCount++;
         PilotRoster& p = roster[id];
         memset(&p, 0, sizeof p);
-        strlcpy(p.name, field(line, 0).c_str(), sizeof p.name);
-        strlcpy(p.yomi, field(line, 1).c_str(), sizeof p.yomi);
+        utf8::copy(p.name, field(line, 0).c_str(), sizeof p.name);
+        utf8::copy(p.yomi, field(line, 1).c_str(), sizeof p.yomi);
         p.freqMhz = (uint16_t)field(line, 2).toInt();
         rosterCal[id].enterRssi = field(line, 3).length() ? field(line, 3).toInt() : DEFAULT_ENTER;
         rosterCal[id].exitRssi  = field(line, 4).length() ? field(line, 4).toInt() : DEFAULT_EXIT;
         int slot = field(line, 5).length() ? field(line, 5).toInt() : -1;
         if (slot >= 0 && slot < MAX_ACTIVE) activePilots[slot] = id;
-        strlcpy(p.bind, field(line, 6).c_str(), sizeof p.bind);
+        utf8::copy(p.bind, field(line, 6).c_str(), sizeof p.bind);
         p.osd = field(line, 7).toInt() != 0;
     }
     saveRosterAll();

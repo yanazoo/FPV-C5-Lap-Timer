@@ -4,7 +4,9 @@ var actx=null,audioUnlocked=false;
 function ensureAudio(){
   try{
     if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
-    if(actx.state==='suspended')actx.resume();
+    // Not running: "suspended", or iOS's "interrupted" (after a phone call,
+    // the lock screen, another app's sound).
+    if(actx.state!=='running')actx.resume();
     // Android Chrome only fully unlocks WebAudio when an actual node has
     // produced output inside a user gesture; resume() alone is not enough.
     if(!audioUnlocked){
@@ -26,7 +28,8 @@ function ensureAudio(){
     document.addEventListener(ev,unlock,{capture:true,passive:true});
   });
   document.addEventListener('visibilitychange',function(){
-    if(!document.hidden&&actx&&actx.state==='suspended')actx.resume();
+    if(!document.hidden&&actx&&actx.state!=='running'){try{actx.resume();}catch(e){}}
+    if(!document.hidden)speechBackFromSleep();
   });
 })();
 // RotorHazard's synthetic tones (its play_beep): a raw oscillator at full
@@ -37,7 +40,7 @@ function ensureAudio(){
 var TONE_VOL=0.6, BEEP_VOL=0.3;
 function rhBeep(ms,freq,vol,wave,fade){
   if(!actx)return;
-  if(actx.state==='suspended'){try{actx.resume();}catch(e){}}
+  if(actx.state!=='running'){try{actx.resume();}catch(e){}}
   if(fade==null)fade=1;
   var t=actx.currentTime,end=t+ms/1000;
   var o=actx.createOscillator(),g=actx.createGain();
@@ -92,22 +95,30 @@ var sfx={
 };
 
 var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0;
+// The utterance the queue is saying now: {u, at, softMs, hardMs}. Kept here
+// until it ends: an utterance nothing refers to can be dropped by the
+// browser before it has been said (and its onend never comes).
+var speechCur=null;
 // The speech-engine workarounds below (resume a "paused" engine, the
 // keep-alive, the silent first utterance) are for iOS only: Chrome on a
 // PC can report paused just as an utterance starts and restarts it on
 // resume(), so レディ was said twice there.
 var IS_IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 
-// iOS Safari often fails to fire onend / reports speaking inconsistently
-// and rapid speak() calls can drop the second utterance. Poll frequently
-// and advance the queue whenever the engine is no longer speaking.
+// The queue's one watchdog. iOS Safari often never fires onend, so the end
+// of the current utterance is also taken from the engine going quiet, and
+// an utterance that hangs is cancelled after hardMs. It only ever acts on
+// the current utterance: timers kept per utterance outlived theirs on iOS
+// (no onend) and cancelled whichever call was being said 5 s later, so
+// lap calls went missing.
 setInterval(()=>{
   if(typeof speechSynthesis==='undefined')return;
   if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
-  if(speechBusy&&!speechSynthesis.speaking&&Date.now()-lastSpeechStart>800){
-    speechBusy=false;nextSpeech();
-  }
-},250);
+  var c=speechCur;if(!c)return;
+  var el=Date.now()-c.at;
+  if(el>c.hardMs)speechDone(c,true);
+  else if(el>c.softMs&&!speechSynthesis.speaking&&!speechSynthesis.pending)speechDone(c,false);
+},200);
 // iOS keep-alive: nudge a long-running utterance so the engine doesn't
 // silently stall (well-known iOS Safari TTS bug). iOS only: Chrome on a PC
 // restarts the utterance on resume(), and "レディ" (which the queue's
@@ -118,6 +129,20 @@ setInterval(()=>{
     try{speechSynthesis.pause();speechSynthesis.resume();}catch(e){}
   }
 },5000);
+// Back on screen (the phone was locked, another app or tab was in front).
+// iOS's engine is often stuck by then: speak() is accepted and nothing is
+// heard. Clear it, drop the calls that piled up meanwhile (they are old
+// news), and let the next tap unlock speech again.
+var hiddenAt=0;
+document.addEventListener('visibilitychange',function(){if(document.hidden)hiddenAt=Date.now();});
+function speechBackFromSleep(){
+  if(typeof speechSynthesis==='undefined')return;
+  var away=hiddenAt?Date.now()-hiddenAt:0;hiddenAt=0;
+  if(!IS_IOS&&away<3000)return;   // a quick look elsewhere on a PC: leave it
+  speechQ=[];speechCur=null;speechBusy=false;
+  try{speechSynthesis.cancel();}catch(e){}
+  if(IS_IOS)speechWarmedUp=false;
+}
 var cachedJaVoice=null;
 
 // The Japanese voice to speak with. A voice that is not on the device (an
@@ -206,6 +231,7 @@ function inCaptiveSheet(){
 // tap does that (silently), so "レディ" from race_ready is heard.
 function warmSpeech(){
   if(!IS_IOS||speechWarmedUp||typeof speechSynthesis==='undefined')return;
+  if(speechCur||speechSynthesis.speaking)return;   // speaking already: unlocked
   try{
     // A real (silent) word: iOS doesn't count an empty utterance.
     var u=new SpeechSynthesisUtterance('あ');u.lang='ja-JP';u.volume=0;u.rate=2;
@@ -240,18 +266,30 @@ function sayNow(text){
   if(!voiceEnabled||announceMode==='none'||announceMode==='beep'||typeof speechSynthesis==='undefined'){
     ensureAudio();sfx.tick();return;
   }
-  speechQ=[];
+  speechQ=[text];
+  var busy=speechCur||speechSynthesis.speaking||speechSynthesis.pending;
+  speechCur=null;speechBusy=false;
+  if(!busy){nextSpeech();return;}
   try{speechSynthesis.cancel();}catch(e){}
-  speechBusy=false;
-  speechQ.push(text);
-  nextSpeech();
+  // Safari drops a speak() made in the same moment as cancel().
+  speechBusy=true;
+  setTimeout(()=>{if(!speechCur){speechBusy=false;nextSpeech();}},IS_IOS?80:0);
 }
 function speak(text){
   if(!voiceEnabled||announceMode==='none'||announceMode==='beep')return;
+  if(typeof speechSynthesis==='undefined')return;
   if(speechQ.length<8)speechQ.push(text);
   if(!speechBusy)nextSpeech();
 }
+// The current utterance c is over (ended, failed, went quiet or hung).
+function speechDone(c,cancel){
+  if(speechCur!==c)return;   // an older utterance: not the queue's business
+  speechCur=null;
+  if(cancel){try{speechSynthesis.cancel();}catch(e){}}
+  setTimeout(()=>{if(!speechCur){speechBusy=false;nextSpeech();}},cancel&&IS_IOS?80:60);
+}
 function nextSpeech(){
+  if(speechCur)return;
   if(!speechQ.length){speechBusy=false;return;}
   speechBusy=true;
   var text=speechQ.shift();
@@ -259,29 +297,20 @@ function nextSpeech(){
   u.lang='ja-JP';u.rate=speechRate;
   var jaVoice=getJaVoice();
   if(jaVoice)u.voice=jaVoice;
-  // Soft timeout = expected duration + grace. On iOS, onend often never
-  // fires, so we advance the queue once the engine reports it's no longer
-  // speaking. Hard timeout = forced cancel + advance as a last resort.
+  // softMs: from then on the engine going quiet counts as the end (iOS
+  // often never fires onend). hardMs: still "speaking" then, it hangs:
+  // cancel and go on.
   var rate=Math.max(0.5,speechRate);
   var estMs=Math.max(900,text.length*200/rate);
-  var hardMs=Math.max(5000,estMs*2);
-  var done=false;
-  function advance(cancel){
-    if(done)return;done=true;
-    clearTimeout(softT);clearTimeout(hardT);
-    if(cancel){try{speechSynthesis.cancel();}catch(e){}}
-    speechBusy=false;
-    setTimeout(nextSpeech,60);
-  }
-  var softT=setTimeout(()=>{if(!speechSynthesis.speaking)advance(false);},estMs+400);
-  var hardT=setTimeout(()=>advance(true),hardMs);
-  u.onend=()=>advance(false);
-  u.onerror=()=>advance(false);
-  lastSpeechStart=Date.now();
+  var c={u:u,at:Date.now(),softMs:800,hardMs:Math.max(6000,estMs*2.5)};
+  speechCur=c;
+  u.onend=()=>speechDone(c,false);
+  u.onerror=()=>speechDone(c,false);
+  lastSpeechStart=c.at;
   try{
     if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
-    lastSpeechStart=Date.now();speechSynthesis.speak(u);
-  }catch(e){advance(false);}
+    speechSynthesis.speak(u);
+  }catch(e){speechDone(c,false);}
 }
 function getSpokenName(p){return (p.yomi&&p.yomi!=='')?p.yomi:p.name;}
 function buildSpeech(p,lapCount,lapMs){
@@ -325,7 +354,7 @@ function toggleVoice(){
     }catch(e){}
   }else{
     try{speechSynthesis.cancel();}catch(e){}
-    speechQ=[];speechBusy=false;
+    speechQ=[];speechCur=null;speechBusy=false;
   }
 }
 function refreshVoiceBtns(){
@@ -339,8 +368,9 @@ function refreshVoiceBtns(){
 // on the first one, so a start or stop from the race director or another
 // browser is heard even when this one never pressed a race button.
 // Speech too (iOS speaks only after the page has spoken inside a tap).
-['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,function un(){
-  ensureAudio();warmSpeech();document.removeEventListener(ev,un,true);
+// Kept for every tap: speech is unlocked again after the phone slept.
+['pointerdown','keydown'].forEach(ev=>document.addEventListener(ev,function(){
+  ensureAudio();warmSpeech();
 },true));
 // Opened in the iPhone's captive-portal sheet: say how to get speech.
 if(inCaptiveSheet())setTimeout(()=>{if(typeof toast==='function')toast('⚠ 簡易ブラウザでは読み上げできません。Safari で http://'+location.host+' を開いてください',8000);},1500);
