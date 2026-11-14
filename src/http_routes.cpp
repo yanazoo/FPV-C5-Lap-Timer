@@ -273,6 +273,8 @@ const char* netFromJson(JsonVariantConst d) {
     if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) return "client SSID 1..32";
     int fbSec = d["fallbackSec"] | (int)netFallbackSec;
     if (!netFallbackValid(fbSec)) return "fallbackSec 15/30/60";
+    int rhSec = d["raceHoldSec"] | (int)netRaceHoldSec;
+    if (!netRaceHoldValid(rhSec)) return "raceHoldSec 0/15/30/60/180/300";
     // Empty client password keeps the stored one (the UI never shows it);
     // "staPassClear" switches to an open network.
     if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
@@ -293,7 +295,7 @@ const char* netFromJson(JsonVariantConst d) {
             ipc.dns = *dnsS ? (uint32_t)dns : 0;
         }
     }
-    saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec);
+    saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec, (uint16_t)rhSec);
     staIp = ipc;
     saveStaIp();
     return nullptr;
@@ -335,6 +337,7 @@ String settingsBackupJson() {
     n["staPass"]     = staPass;
     n["staPassClear"] = staPass.length() == 0;
     n["fallbackSec"] = netFallbackSec;
+    n["raceHoldSec"] = netRaceHoldSec;
     ipToJson(n);
     doc["auth"]["password"] = adminPassword;
     String s;
@@ -889,6 +892,7 @@ void registerHttpRoutes() {
         d["staSsid"]   = staSsid;
         d["staPassSet"] = staPass.length() > 0;
         d["fallbackSec"] = netFallbackSec;
+        d["raceHoldSec"] = netRaceHoldSec;
         ipToJson(d.as<JsonObject>());
         NetStatus st = netStatus();
         JsonObject o = d["status"].to<JsonObject>();

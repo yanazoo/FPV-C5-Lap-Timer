@@ -68,6 +68,7 @@ static bool     apUp = false;
 static bool     staMode = false;     // trying / running as a client
 static bool     staJoined = false;
 static bool     everJoined = false;  // joined the network since this boot
+static bool     waitRacing = false;  // the current wait for the link is a race's (netRaceHoldSec)
 static bool     fellBack = false;
 static uint32_t staSinceMs = 0;      // start of the current wait for a link
 
@@ -218,17 +219,25 @@ void netLoop() {
         rtcStaTrying = kStaTrying;
         Serial.println("[WiFi] client: link lost, reconnecting");
     }
-    // Link lost during a race: stay a client. Every phone is on the router,
-    // so the access point would reach nobody, and the timer could not go
-    // back to the router until the race is cleared; the router coming back
-    // brings everyone back at once.
-    if (everJoined && raceKeepsUs()) {
+    // Link lost during a race (or with laps not yet cleared): wait longer
+    // for the router, netRaceHoldSec (0: as long as it takes). Every phone
+    // is on the router, so the access point would reach nobody at first,
+    // and the timer can't go back to the router until the race is cleared;
+    // the router coming back brings everyone back at once. The wait starts
+    // afresh when a race starts or is cleared during the outage.
+    bool racing = everJoined && raceKeepsUs();
+    if (racing != waitRacing) {
+        waitRacing = racing;
+        staSinceMs = now;
+    }
+    uint32_t waitS = racing ? netRaceHoldSec : netFallbackSec;
+    if (racing && !waitS) {
         staSinceMs = now;
         return;
     }
-    if (now - staSinceMs >= netFallbackSec * 1000UL) {
-        Serial.printf("[WiFi] client: no link to \"%s\" for %us, starting the access point\n", staSsid.c_str(),
-                      netFallbackSec);
+    if (now - staSinceMs >= waitS * 1000UL) {
+        Serial.printf("[WiFi] client: no link to \"%s\" for %lus%s, starting the access point\n", staSsid.c_str(),
+                      (unsigned long)waitS, racing ? " (race on)" : "");
         fellBack = true;
         fallbackReason = lastReason;
         startAp();

@@ -339,6 +339,7 @@ async function loadNetSettings(){
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
     document.getElementById('netStaSsid').value=d.staSsid||'';
     document.getElementById('netFallback').value=String(d.fallbackSec||30);
+    document.getElementById('netRaceHold').value=String(d.raceHoldSec!==undefined?d.raceHoldSec:60);
     document.getElementById('netIpMode').value=d.ipFixed?'1':'0';
     document.getElementById('netIp').value=d.ip||'';
     document.getElementById('netMask').value=d.mask||'255.255.255.0';
@@ -367,6 +368,7 @@ async function saveNetSettings(){
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
     staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
     fallbackSec:parseInt(document.getElementById('netFallback').value)||30,
+    raceHoldSec:(v=>isNaN(v)?60:v)(parseInt(document.getElementById('netRaceHold').value)),
     ipFixed:document.getElementById('netIpMode').value==='1',
     ip:document.getElementById('netIp').value.trim(),mask:document.getElementById('netMask').value.trim(),
     gw:document.getElementById('netGw').value.trim(),dns:document.getElementById('netDns').value.trim()};

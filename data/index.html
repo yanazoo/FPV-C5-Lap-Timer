@@ -651,6 +651,16 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="30">30 秒接続できなければ</option>
           <option value="60">60 秒接続できなければ</option>
         </select></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">レース中に切れたら</label>
+        <select id="netRaceHold" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="15">15 秒待ってホストに切替</option>
+          <option value="30">30 秒待ってホストに切替</option>
+          <option value="60">1 分待ってホストに切替</option>
+          <option value="180">3 分待ってホストに切替</option>
+          <option value="300">5 分待ってホストに切替</option>
+          <option value="0">ルーターが戻るまで待ち続ける</option>
+        </select></div>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">レース中（ストップ後、クリアするまでを含む）にルーターとの接続が切れたときの待ち時間です。待っている間も計測は続き、ルーターが戻れば全員の画面が自動でつながり直します。ホストに切り替えたあとは、レースをクリアするまでルーターには戻りません。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
         <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="0">自動（DHCP）</option>

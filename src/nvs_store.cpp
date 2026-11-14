@@ -23,6 +23,7 @@ String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
 String       staSsid, staPass;
 uint8_t      netFallbackSec = NET_FALLBACK_DEFAULT_S;
+uint16_t     netRaceHoldSec = NET_RACE_HOLD_DEFAULT_S;
 
 static Preferences prefs;
 
@@ -142,9 +143,10 @@ void saveStaIp() {
 }
 
 void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP,
-             uint8_t fallbackSec) {
+             uint8_t fallbackSec, uint16_t raceHoldSec) {
     netMode = mode;
     netFallbackSec = fallbackSec;
+    netRaceHoldSec = raceHoldSec;
     apSsid = apS, apPass = apP;
     staSsid = staS, staPass = staP;
     prefs.begin("net", false);
@@ -154,6 +156,7 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
     prefs.putString("stassid", staS);
     prefs.putString("stapass", staP);
     prefs.putUChar("fbsec", fallbackSec);
+    prefs.putUShort("rhold", raceHoldSec);
     prefs.end();
 }
 
@@ -256,9 +259,11 @@ void loadAll() {
     staSsid = prefs.getString("stassid", "");
     staPass = prefs.getString("stapass", "");
     netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
+    netRaceHoldSec = prefs.getUShort("rhold", NET_RACE_HOLD_DEFAULT_S);
     StaIpConfig ipc;
     if (prefs.getBytes("ipcfg", &ipc, sizeof ipc) == sizeof ipc) staIp = ipc;
     if (staIp.fixed && (!staIp.ip || !staIp.mask)) staIp.fixed = 0;
     if (!netFallbackValid(netFallbackSec)) netFallbackSec = NET_FALLBACK_DEFAULT_S;
+    if (!netRaceHoldValid(netRaceHoldSec)) netRaceHoldSec = NET_RACE_HOLD_DEFAULT_S;
     prefs.end();
 }

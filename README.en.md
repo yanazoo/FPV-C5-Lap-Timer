@@ -284,8 +284,10 @@ To cover lost packets:
   on its access point, it keeps looking for the router and restarts into
   client mode once the router is back (a router that started later than the
   timer); not during a race or with laps not cleared, and not after a wrong
-  password. Losing the link during a race, it stays a client and waits for
-  the router. The router password is stored on the device only and never
+  password. Losing the link during a race (or with laps not cleared), it
+  waits for the router for the time set in "レース中に切れたら" (15 s,
+  30 s, 1, 3 or 5 min, or as long as it takes; default 1 min) before it
+  starts the access point; timing goes on meanwhile. The router password is stored on the device only and never
   sent back to the browser.
 
 ## Restart and a fixed IP address

@@ -15,6 +15,13 @@ enum NetMode : uint8_t { NET_AP = 0, NET_STA = 1 };
 // Client-mode wait before falling back to the access point.
 constexpr uint8_t NET_FALLBACK_DEFAULT_S = 30;
 inline bool netFallbackValid(int s) { return s == 15 || s == 30 || s == 60; }
+// Client mode, the link lost during a race (or with laps not yet cleared):
+// seconds to wait for the router before starting the access point. 0: wait
+// as long as it takes (every phone is on the router).
+constexpr uint16_t NET_RACE_HOLD_DEFAULT_S = 60;
+inline bool netRaceHoldValid(int s) {
+    return s == 0 || s == 15 || s == 30 || s == 60 || s == 180 || s == 300;
+}
 
 struct NetStatus {
     bool      ap;          // our access point is up
