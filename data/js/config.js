@@ -321,16 +321,6 @@ function onNetIpMode(){
   document.querySelectorAll('.net-ip-fixed').forEach(e=>e.style.display=fixed?'':'none');
 }
 var IPV4=/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
-// Why the timer could not join the client network (WiFi disconnect reason).
-function netReasonText(r){
-  if(!r)return '';
-  if(r===201)return '接続先の WiFi が見つかりません（SSID の綴り、ルーターの電源、2.4GHz が有効か、距離を確認）';
-  if(r===210||r===211)return '接続先は見つかりましたが、暗号化の方式に対応していません（WPA2 / WPA3 にしてください）';
-  if(r===202||r===15||r===204||r===14)return 'パスワードが違う可能性があります';
-  if(r===200)return '電波が弱く、接続が切れました';
-  if(r===5)return 'ルーターの接続台数がいっぱいです';
-  return 'エラー '+r;
-}
 async function loadNetSettings(){
   try{
     var r=await fetch('/api/net');if(!r.ok)return;
@@ -348,14 +338,7 @@ async function loadNetSettings(){
     sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
     if(st.connected)txt='クライアント接続中 '+esc(st.ip)+'（'+st.rssi+' dBm）';
-    else if(st.fallback){
-      txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
-      var why=netReasonText(st.reason);
-      if(why)txt+='<br><span style="font-weight:normal">理由：'+why+'</span>';
-      txt+='<br><span style="font-weight:normal;color:var(--muted)">'+(st.retrying
-        ?'接続先が見つかり次第、自動で再起動して接続します（このアクセスポイントに誰もつないでいない間・レース中以外）'
-        :'自動では戻りません。設定を確認してから再起動してください')+'</span>';
-    }
+    else if(st.fallback)txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
     else txt='ホスト（アクセスポイント） '+esc(st.ip);
     document.getElementById('netStatus').innerHTML='<span>現在</span><b>'+txt+'</b>';
     onNetMode();
@@ -522,26 +505,12 @@ async function loadSysInfo(){
     var r=await fetch('/api/sys');if(!r.ok)throw 0;
     var s=await r.json(),up=s.uptime,kb=v=>Math.round(v/1024)+' KB';
     var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
-    var h=(s.fw?'ファームウェア '+esc(s.fw)+(s.id?'・本体 ID '+esc(s.id):'')+'<br>':'')+'起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
-      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）'
-      +(s.nvsTotal?'<br>設定の保存領域 '+s.nvsUsed+' / '+s.nvsTotal+'（'+Math.round(s.nvsUsed*100/s.nvsTotal)+'%）':'')
-      +(s.boots?'・起動 '+s.boots+' 回目':'');
+    var h='起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
+      +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
       +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
-    if(s.nvsOk===false)h='<span style="color:var(--err)">⚠ この起動では、保存した設定を読み込めませんでした（初期設定で動いています）。再起動してください。</span><br>'+h;
     el.innerHTML=h;
   }catch(e){el.textContent='';}
-  var box=document.getElementById('evLogBox');if(box&&box.open)loadEventLog();
-}
-// The timer's record of starts and WiFi events (newest at the bottom).
-async function loadEventLog(){
-  var el=document.getElementById('evLog');if(!el)return;
-  try{
-    var r=await fetch('/api/eventlog',{cache:'no-store'});if(!r.ok)throw 0;
-    var t=await r.text();
-    el.textContent=t||'（まだ記録がありません）';
-    el.scrollTop=el.scrollHeight;
-  }catch(e){el.textContent='読み込めませんでした';}
 }
 
 // ── 接続用 QR コード ────────────────────────────────────────────────────

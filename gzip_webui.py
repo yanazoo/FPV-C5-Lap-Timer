@@ -17,14 +17,3 @@ if os.path.isdir(src):
     import webui_build
     webui_build.build(src, dst)
     env.Replace(PROJECT_DATA_DIR=dst)  # noqa: F821
-
-# The firmware's version for the page footer and the settings: the release
-# tag, plus commits since and the commit (git describe), e.g. v2.0.1-12-gce8ecdf.
-# Shows which firmware a timer really runs (and tells two timers apart).
-import subprocess
-try:
-    ver = subprocess.check_output(["git", "describe", "--tags", "--always", "--dirty"], cwd=project,
-                                  stderr=subprocess.DEVNULL).decode().strip()
-except Exception:
-    ver = "dev"
-env.Append(CPPDEFINES=[("FW_VERSION", env.StringifyMacro(ver))])  # noqa: F821

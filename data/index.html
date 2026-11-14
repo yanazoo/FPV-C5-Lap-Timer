@@ -714,12 +714,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <button onclick="reloadAllPages()" class="btn-secondary">🔁 全員の画面を再読み込み</button>
       <button onclick="restartAll()" class="btn-secondary">🔄 タイマーを再起動</button></div>
     <p id="sysInfo" class="section-desc" style="margin:8px 0 0"></p>
-    <details id="evLogBox" style="margin-top:8px" ontoggle="if(this.open)loadEventLog()">
-      <summary style="cursor:pointer;font-size:12px;color:var(--muted)">📋 起動と WiFi の記録（不具合の調査用）</summary>
-      <p class="section-desc" style="margin:6px 0 4px">起動のたびに、読み込んだ設定と WiFi の動き（接続・切断・アクセスポイントへの切替とその理由）を記録します。おかしな動きがあったら、この欄のスクリーンショットを送ってください。<code>#</code> は起動の回数、<code>+</code> は起動からの秒数です。</p>
-      <pre id="evLog" style="max-height:260px;overflow:auto;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:10.5px;line-height:1.45;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
-      <button class="btn-secondary" style="margin-top:6px;font-size:12px;padding:5px 10px" onclick="loadEventLog()">更新</button>
-    </details>
   </div>
 
   <!-- ── 管理者パスワード ── -->
@@ -825,7 +819,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 </section>
 
 </main>
-<footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots<span id="fwInfo"></span></p></footer>
+<footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots</p></footer>
 
 <!-- ═══════════════════════════ LOGIN MODAL ═══════════════════════ -->
 <div id="loginModal" class="modal-overlay" onclick="if(event.target===this)cancelLogin()">

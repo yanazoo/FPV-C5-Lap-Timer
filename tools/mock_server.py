@@ -98,8 +98,7 @@ state = {
     },
     "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30,
             "ipFixed": False, "ip": "", "mask": "", "gw": "", "dns": "",
-            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0,
-                       "reason": 0, "retrying": False}},
+            "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0}},
     "password": "admin",
     "posts": [],   # every POST, for tests
     "race": {"running": False, "paused": False, "t0": 0.0, "elapsed": 0.0, "laps": [], "epoch": 0},
@@ -196,7 +195,7 @@ def init_msg():
     for o in active_json():
         o = dict(o, lapCount=counts[o["slot"]], bestLap=0, rssi=0, crossing=False)
         pilots.append(o)
-    return dict(state["settings"], type="init", fw="v2.0.1-14-gmock", dev="A1B2C3", raceRunning=r["running"], racePaused=r["paused"],
+    return dict(state["settings"], type="init", raceRunning=r["running"], racePaused=r["paused"],
                 boot=BOOT_ID, raceElapsedMs=int(race_elapsed() * 1000), raceStartMs=int((time.monotonic() - race_elapsed()) * 1000),
                 now=now_ms(), sdPresent=True, pilots=pilots)
 
@@ -276,11 +275,6 @@ class Handler(SimpleHTTPRequestHandler):
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
             return self.reply({"ok": True})
-        if p == "/mock/fallback":   # client mode failed: ?reason=201&retrying=1
-            q = parse_qs(u.query)
-            state["net"]["status"].update(fallback=True, reason=int(q.get("reason", ["201"])[0]),
-                                          retrying=q.get("retrying", ["1"])[0] == "1")
-            return self.reply({"ok": True})
         if p == "/mock/seed":
             seed()
             with ws_lock:
@@ -337,23 +331,10 @@ class Handler(SimpleHTTPRequestHandler):
                 logins = len(live_sessions())
             return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
                                "viewers": viewers, "viewerLimit": CONN["viewHost"]})
-        if p == "/api/eventlog":
-            body = ('#41 +0s  start: poweron, fw v2.0.1-16-gmock, settings read: client "TestRouter" (host after 15 s), '
-                    '5 pilots (5 on channels), ELRS on, store 212/504\n'
-                    '#41 +0s  WiFi: client, joining "TestRouter" (access point after 15 s without it)\n'
-                    '#41 +15s  WiFi: no link to "TestRouter" for 15 s (reason 201 network not found): starting the access point\n'
-                    '#41 +15s  WiFi: access point "FPV-C5-LT" up at 20.0.0.1 (client mode fell back)\n').encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
-                               "heapMin": 151000, "heapMax": 110000, "psram": 0,
-                               "fw": "v2.0.1-14-gmock", "id": "A1B2C3", "nvsUsed": 212, "nvsTotal": 504, "nvsOk": True})
+                               "heapMin": 151000, "heapMax": 110000, "psram": 0})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":

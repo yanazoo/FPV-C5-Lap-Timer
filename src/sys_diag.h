@@ -20,9 +20,3 @@ void   sysBootNote();                    // first thing in setup()
 void   sysRequestRestart(uint32_t inMs);   // done from loop() (sysLoop)
 void   sysLoop(uint32_t now);
 String sysJson();
-
-// Firmware version (git describe at build time) and this chip's id (MAC tail).
-const char* sysFirmware();
-const char* sysDeviceId();
-uint32_t    sysBootCount();   // this start's number (from sysBootNote)
-const char* sysBootReason();  // why this start: poweron, restart, panic, ...

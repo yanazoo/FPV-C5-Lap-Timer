@@ -1,11 +1,7 @@
 #include <WiFi.h>
 #include <esp_system.h>
-#include <nvs.h>
 #include "wifi_mgr.h"
 #include "data_model.h"
-#include "race.h"
-#include "sys_diag.h"
-#include "event_log.h"
 
 // Set while a client-mode attempt hasn't joined yet; survives a crash reset
 // (not a power cycle). If the timer crashes during the attempt or the switch
@@ -14,62 +10,9 @@
 static const uint32_t kStaTrying = 0x57A7C11E;
 static RTC_NOINIT_ATTR uint32_t rtcStaTrying;
 
-// Back to the client network after a fallback. The access point stays up
-// until the timer restarts, so a fallback used to last until someone power
-// cycled it: a router that took longer to start than the timer (both
-// switched on together at the field), or that was off for a while, left the
-// timer on its own access point for good. Now, while nobody is on the
-// access point, it looks for the network now and then, and restarts into
-// client mode once it is there. Not after a crash while joining, not when
-// the network refused the password (seeing it again changes nothing), not
-// during a race or with laps not yet cleared, and at most kProbeRestarts
-// times in a row (a network that is there but can't be joined).
-struct ProbeState {
-    uint32_t magic;
-    uint8_t  restarts;   // restarts for a network that was seen, since the last join
-};
-static const uint32_t kProbeMagic = 0x50524F42;
-static const uint8_t  kProbeRestarts = 3;
-static RTC_NOINIT_ATTR ProbeState rtcProbe;   // survives the restart (deep sleep), not a power cycle
-static bool     probing = false;
-static uint32_t probeAt = 0;
-static uint8_t  fallbackReason = 0;   // the disconnect reason that made it fall back
-static bool     crashFallback = false;   // fell back because joining crashed the timer
-
-// Why the last attempt to join failed (WiFi disconnect reason, 0: none yet).
-static volatile uint8_t lastReason = 0;
-static uint8_t loggedReason = 0;
-
-static void onStaDisconnected(arduino_event_id_t, arduino_event_info_t info) {
-    uint8_t r = info.wifi_sta_disconnected.reason;
-    lastReason = r ? r : WIFI_REASON_UNSPECIFIED;
-}
-
-static const char* reasonText(uint8_t r) {
-    switch (r) {
-        case WIFI_REASON_NO_AP_FOUND:                   return "network not found";
-        case WIFI_REASON_NO_AP_FOUND_W_COMPATIBLE_SECURITY:
-        case WIFI_REASON_NO_AP_FOUND_IN_AUTHMODE_THRESHOLD: return "network found, security not supported";
-        case WIFI_REASON_AUTH_FAIL:
-        case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
-        case WIFI_REASON_HANDSHAKE_TIMEOUT:
-        case WIFI_REASON_MIC_FAILURE:                   return "wrong password?";
-        case WIFI_REASON_BEACON_TIMEOUT:                return "signal lost";
-        case WIFI_REASON_ASSOC_TOOMANY:                 return "the router has too many devices";
-        default:                                        return "";
-    }
-}
-
-// The network turned the password down: finding it again won't help.
-static bool passwordRefused(uint8_t r) {
-    return r == WIFI_REASON_AUTH_FAIL || r == WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT ||
-           r == WIFI_REASON_HANDSHAKE_TIMEOUT || r == WIFI_REASON_MIC_FAILURE;
-}
-
 static bool     apUp = false;
 static bool     staMode = false;     // trying / running as a client
 static bool     staJoined = false;
-static bool     everJoined = false;  // joined the network since this boot
 static bool     fellBack = false;
 static uint32_t staSinceMs = 0;      // start of the current wait for a link
 
@@ -97,8 +40,7 @@ static void startAp() {
     staMode = false;
     staJoined = false;
     rtcStaTrying = 0;
-    evLog("WiFi: access point \"%s\" up at %s (%s)", apSsid.c_str(), AP_IP.toString().c_str(),
-          netMode == NET_STA ? (fellBack ? "client mode fell back" : "client mode, no network set") : "host mode");
+    Serial.printf("[WiFi] AP  SSID=%s  IP=%s\n", apSsid.c_str(), AP_IP.toString().c_str());
 }
 
 static bool crashedWhileTrying() {
@@ -107,50 +49,19 @@ static bool crashedWhileTrying() {
     return crash && rtcStaTrying == kStaTrying;
 }
 
-// WiFi settings the WiFi driver itself keeps in NVS (namespace
-// "nvs.net80211": the access point's name and password, the mode, the last
-// network). This firmware stopped writing them on 2026-10-29 (persistent
-// false below), but a timer that ran an older one still has them, and a
-// firmware update keeps NVS: the driver loads them when WiFi starts. Our
-// own settings decide the mode and both networks, so these are cleared.
-static void clearDriverWifiStore() {
-    nvs_iterator_t it = nullptr;
-    bool any = nvs_entry_find(NVS_DEFAULT_PART_NAME, "nvs.net80211", NVS_TYPE_ANY, &it) == ESP_OK;
-    nvs_release_iterator(it);
-    if (!any) return;   // nothing stored (the usual case)
-    nvs_handle_t h;
-    if (nvs_open("nvs.net80211", NVS_READWRITE, &h) != ESP_OK) return;
-    if (nvs_erase_all(h) == ESP_OK && nvs_commit(h) == ESP_OK)
-        evLog("WiFi: cleared WiFi settings an older firmware left in the store");
-    nvs_close(h);
-}
-
 void netBegin() {
-    clearDriverWifiStore();   // before the WiFi driver starts and loads them
     // Settings live in our own NVS keys; don't let the WiFi driver write them too.
     WiFi.persistent(false);
     if (netMode == NET_STA && staSsid.length()) {
-        if (rtcProbe.magic != kProbeMagic) rtcProbe = {kProbeMagic, 0};   // power on
         if (crashedWhileTrying()) {
-            evLog("WiFi: crashed while joining last time: access point instead");
-            crashFallback = true;   // don't go back to it by itself (it would crash again)
+            Serial.println("[WiFi] client: crashed while joining last time, starting the access point");
             fellBack = true;
             startAp();
             return;
         }
-        WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
         WiFi.setAutoReconnect(true);
-        // Look on every channel and take the strongest access point of the
-        // network: the library's default joins the first one it hears, the
-        // far one of a mesh or a repeater as often as the near one.
-        WiFi.setScanMethod(WIFI_ALL_CHANNEL_SCAN);
-        WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-        // Older routers (WPA only, or WPA/WPA2 set to WPA): the library
-        // refuses anything below WPA2 by default, and the network then
-        // looks missing.
-        WiFi.setMinSecurity(WIFI_AUTH_WPA_PSK);
         if (staIp.fixed) {
             IPAddress ip(staIp.ip), gw(staIp.gw), mask(staIp.mask), dns(staIp.dns ? staIp.dns : staIp.gw);
             if (!WiFi.config(ip, gw, mask, dns)) Serial.println("[WiFi] fixed address rejected, using DHCP");
@@ -165,63 +76,15 @@ void netBegin() {
         staMode = true;
         staSinceMs = millis();
         rtcStaTrying = kStaTrying;
-        evLog("WiFi: client, joining \"%s\" (access point after %u s without it)", staSsid.c_str(), netFallbackSec);
+        Serial.printf("[WiFi] client: joining \"%s\" (AP fallback after %us)\n", staSsid.c_str(), netFallbackSec);
     } else {
         startAp();
     }
 }
 
-// A race is on or not yet cleared: a restart would lose it.
-static bool raceKeepsUs() {
-    if (raceActive()) return true;
-    Guard g;
-    return raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
-}
-
-// Fallen back to the access point: look for the client network now and
-// then (see ProbeState), and restart into client mode once it is there.
-static void probeForNetwork(uint32_t now) {
-    if (!fellBack || netMode != NET_STA || !staSsid.length()) return;
-    if (crashFallback || passwordRefused(fallbackReason) || rtcProbe.restarts >= kProbeRestarts) return;
-    if (probing) {
-        int16_t n = WiFi.scanComplete();
-        if (n == WIFI_SCAN_RUNNING) return;
-        probing = false;
-        bool seen = false;
-        for (int i = 0; i < n; i++)
-            if (WiFi.SSID(i) == staSsid) seen = true;
-        WiFi.scanDelete();
-        if (!seen) return;
-        if (raceKeepsUs() || WiFi.softAPgetStationNum() > 0) return;   // next look
-        rtcProbe.restarts++;
-        evLog("WiFi: \"%s\" is there again: restarting into client mode", staSsid.c_str());
-        sysRequestRestart(200);
-        return;
-    }
-    // Every 30 s, a little longer after each restart that didn't join.
-    uint32_t every = 30000u << rtcProbe.restarts;
-    if (now - probeAt < every) return;
-    probeAt = now;
-    // Somebody is on the access point: a scan would take its channel away
-    // for a moment, and the restart would cut them off.
-    if (WiFi.softAPgetStationNum() > 0 || raceKeepsUs()) return;
-    if (WiFi.scanNetworks(true) == WIFI_SCAN_RUNNING) probing = true;
-}
-
 void netLoop() {
-    uint8_t r = lastReason;
-    if (r != loggedReason) {
-        loggedReason = r;
-        // The first few of a start only: a long outage flips between reasons.
-        static uint8_t noted = 0;
-        if (r && noted < 8) {
-            noted++;
-            evLog("WiFi: not joined, reason %u %s", r, reasonText(r));
-        }
-    }
     if (apUp) {
         dnsServer.processNextRequest();
-        probeForNetwork(millis());
         return;
     }
     if (!staMode) return;
@@ -229,12 +92,9 @@ void netLoop() {
     if (WiFi.status() == WL_CONNECTED) {
         if (!staJoined) {
             staJoined = true;
-            everJoined = true;
             rtcStaTrying = 0;
-            rtcProbe.restarts = 0;
-            lastReason = loggedReason = 0;
-            evLog("WiFi: joined \"%s\" as %s, %d dBm, channel %d", staSsid.c_str(),
-                  WiFi.localIP().toString().c_str(), (int)WiFi.RSSI(), (int)WiFi.channel());
+            Serial.printf("[WiFi] client: joined \"%s\"  IP=%s  (http://%s.local)\n", staSsid.c_str(),
+                          WiFi.localIP().toString().c_str(), MDNS_NAME);
         }
         staSinceMs = now;
         return;
@@ -243,23 +103,13 @@ void netLoop() {
         staJoined = false;
         staSinceMs = now;
         rtcStaTrying = kStaTrying;
-        evLog("WiFi: link to the router lost, reconnecting");
-    }
-    // Link lost during a race: stay a client. Every phone is on the router,
-    // so the access point would reach nobody, and the timer could not go
-    // back to the router until the race is cleared; the router coming back
-    // brings everyone back at once.
-    if (everJoined && raceKeepsUs()) {
-        staSinceMs = now;
-        return;
+        Serial.println("[WiFi] client: link lost, reconnecting");
     }
     if (now - staSinceMs >= netFallbackSec * 1000UL) {
-        evLog("WiFi: no link to \"%s\" for %u s (reason %u %s): starting the access point", staSsid.c_str(),
-              netFallbackSec, (unsigned)lastReason, reasonText(lastReason));
+        Serial.printf("[WiFi] client: no link to \"%s\" for %us, starting the access point\n", staSsid.c_str(),
+                      netFallbackSec);
         fellBack = true;
-        fallbackReason = lastReason;
         startAp();
-        probeAt = now;
     }
 }
 
@@ -274,8 +124,5 @@ NetStatus netStatus() {
     s.fallback = fellBack;
     s.ip = netIp();
     s.rssi = s.connected ? WiFi.RSSI() : 0;
-    s.reason = s.connected ? 0 : (fellBack ? fallbackReason : lastReason);
-    s.retrying = fellBack && !crashFallback && netMode == NET_STA && staSsid.length() && !passwordRefused(fallbackReason) &&
-                 rtcProbe.restarts < kProbeRestarts;
     return s;
 }

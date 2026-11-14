@@ -3,9 +3,8 @@
 //   * Nothing configured, or mode = host: start the access point.
 //   * Mode = client: join the configured network. If it isn't joined within
 //     netFallbackSec (15 / 30 / 60 s) of boot, or the link is lost that long
-//     later on, fall back to the access point so the timer is always
-//     reachable. While nobody is on it, the timer looks for the network and
-//     restarts into client mode once it is back (not during a race).
+//     later on, fall back to the access point (until the next reboot) so the
+//     timer is always reachable.
 #pragma once
 #include <Arduino.h>
 #include <IPAddress.h>
@@ -22,8 +21,6 @@ struct NetStatus {
     bool      fallback;    // client mode failed, running the access point instead
     IPAddress ip;          // address to open the UI on
     int       rssi;        // client mode signal, dBm
-    uint8_t   reason;      // why joining failed (WiFi disconnect reason), 0: none
-    bool      retrying;    // fallen back, looking for the network to go back to it
 };
 
 void      netBegin();

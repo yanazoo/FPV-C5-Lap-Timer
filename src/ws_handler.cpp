@@ -2,7 +2,6 @@
 #include <memory>
 #include <vector>
 #include "ws_handler.h"
-#include "sys_diag.h"
 #include "c5_link.h"
 #include "data_model.h"
 #include "race.h"
@@ -424,8 +423,6 @@ static void onWsEvent(AsyncWebSocket*, AsyncWebSocketClient* client, AwsEventTyp
         doc["raceElapsedMs"] = raceCore.elapsed(now);
         doc["now"]           = now;   // the browser's race clock follows this clock
         doc["boot"]          = bootId();   // changes when the timer restarts: pages reload
-        doc["fw"]            = sysFirmware();   // the page footer: which firmware, which timer
-        doc["dev"]           = sysDeviceId();
         doc["sdPresent"]     = sdPresent;
         addSettings(doc);
         addSlots(doc["pilots"].to<JsonArray>(), true);

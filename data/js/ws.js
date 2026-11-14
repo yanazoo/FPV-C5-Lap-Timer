@@ -94,10 +94,6 @@ function onMsg(d){
       if(seenBoot&&d.boot!==seenBoot){location.reload();return;}
       seenBoot=d.boot;
     }
-    // Which firmware and which timer (chip id) answered: two timers with the
-    // same SSID and page are told apart here.
-    var fi=document.getElementById('fwInfo');
-    if(fi&&d.fw)fi.textContent=' — '+d.fw+(d.dev?' · ID '+d.dev:'');
     raceRunning=d.raceRunning||false;
     raceStarted=!!(d.raceRunning||d.racePaused||(d.pilots||[]).some(pd=>pd.lapCount>0));
     setBtns(raceRunning);
