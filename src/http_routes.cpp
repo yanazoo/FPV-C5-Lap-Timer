@@ -897,6 +897,8 @@ void registerHttpRoutes() {
         o["fallback"]  = st.fallback;
         o["ip"]        = st.ip.toString();
         o["rssi"]      = st.rssi;
+        o["reason"]    = st.reason;
+        o["retrying"]  = st.retrying;
         sendJson(req, d);
     });
     onJson("/api/net", [](AsyncWebServerRequest* req, JsonDocument& d) {
