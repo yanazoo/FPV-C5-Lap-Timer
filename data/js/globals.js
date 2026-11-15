@@ -94,6 +94,7 @@ function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 // RSSI bar: floor (~100) to a strong close pass (~900).
 function rssiPct(v){return Math.max(0,Math.min(100,((v-100)/(900-100))*100));}
 
+var sdPollSent=null;   // what the timer was last told (null: not told, or it failed)
 function switchTab(tab){
   // Soft auth gate — non-race tabs require admin login.
   if(tab!=='race'&&!isAuthed){pendingTab=tab;openLoginModal();return;}
@@ -105,9 +106,16 @@ function switchTab(tab){
   // Returning to a tab: repaint its live widgets immediately (the hot RSSI
   // path only touches the DOM of the currently-active tab).
   if(tab==='race')slots.forEach(p=>updateRaceCard(p));
+  // SD card polling on the timer: on for the settings and SD tabs. "Off"
+  // is not sent again when it was off already (race <-> calibration): each
+  // request takes the timer's time. "On" is always sent: another admin's
+  // browser may have turned it off meanwhile.
   var sdActive=tab==='config'||tab==='sd';
-  fetch('/api/sd/poll',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({enable:sdActive})}).catch(()=>{});
+  if(sdActive||sdPollSent!==false){
+    sdPollSent=sdActive;
+    fetch('/api/sd/poll',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enable:sdActive})}).then(r=>{if(!r.ok)sdPollSent=null;}).catch(()=>{sdPollSent=null;});
+  }
   if(tab==='calib'){
     loadMic();
     setTimeout(()=>{

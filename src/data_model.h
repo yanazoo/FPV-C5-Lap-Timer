@@ -132,6 +132,7 @@ extern String       apSsid, apPass;     // host mode: our access point
 extern uint8_t      netMode;            // NetMode (wifi_mgr.h)
 extern String       staSsid, staPass;   // client mode: network to join
 extern uint8_t      netFallbackSec;     // client mode: seconds without a link before the AP starts (15/30/60)
+extern uint16_t     netRaceHoldSec;     // client mode, link lost during a race: seconds before the AP starts (0: never)
 
 extern race::Core   raceCore;
 extern bool         sdPresent;

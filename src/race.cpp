@@ -89,7 +89,7 @@ void raceStartAt(uint32_t now) {
     raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
-    elrsRaceStart(0, raceCore.timeLimitMs / 1000);
+    elrsRaceStart(0, raceCore.timeLimitMs / 1000, false, now);   // from `now`, also for a start on a sound
     JsonDocument d;
     d["type"] = "race_start";
     d["ts"] = now;
@@ -97,13 +97,13 @@ void raceStartAt(uint32_t now) {
 }
 
 bool raceResume() {
-    uint32_t elapsed;
+    uint32_t elapsed, at = millis();
     {
         Guard g;
-        if (!raceCore.resume(millis())) return false;
-        elapsed = raceCore.elapsed(millis());
+        if (!raceCore.resume(at)) return false;
+        elapsed = raceCore.elapsed(at);
     }
-    elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000);
+    elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000, true, at);
     JsonDocument d;
     d["type"] = "race_resume";
     d["ts"] = raceCore.startMs();
@@ -380,6 +380,8 @@ void raceDirectorSwitch(uint8_t state) {
 }
 
 static bool raceBusy() { return rdPhase != RD_IDLE || raceCore.running(); }
+// A race is running or a start is under way (wait, レディ, 3-2-1).
+bool raceActive() { return raceBusy(); }
 
 // The start delay still to wait, ms (0: not waiting).
 static uint32_t startWaitLeft(uint32_t now) {

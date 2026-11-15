@@ -62,6 +62,5 @@ void loop() {
     wsLoop(millis());
     sysLoop(millis());
     raceLoop();
-    if (sdPollEnabled && !raceCore.running()) sdCheckHotplug(millis());
     delay(2);
 }

@@ -13,6 +13,7 @@
 #include <string>
 #include <vector>
 
+#include "utf8.h"
 #include "msp_v2.h"
 #include "osd_engine.h"
 #include "race_core.h"
@@ -831,6 +832,48 @@ void testOsdStageCountAndStopTime() {
 
 // A deleted lap: the goggles show the new lap count, position and best,
 // and the (maybe deleted) last lap time goes; FINISHED! goes if unfinished.
+// A start the OSD task got to a few ms late is still a fresh start: the
+// staging screen (the event name) goes. Only a resumed race keeps its rows.
+void testOsdStartClearsStage() {
+    Capture cap;
+    osd::Engine e(cap);
+    Goggles g("p");
+    e.setRecipient(0, true, g.uid);
+    auto at = [&](uint32_t t) { e.tick(t); g.feed(cap.bytes); cap.bytes.clear(); };
+    e.onRaceStage(0, "Cup", 3);
+    at(3000);
+    CHECK(g.shows(0, "CUP"));
+    e.onRaceStart(3304, 4, 0, false);   // 4 ms into the race
+    at(3320);
+    CHECK(!g.shows(0, "CUP") && g.shows(5, "GO!"));
+    // Stopped and resumed: the lap rows stay.
+    e.onLap(10000, 0, {1, false, 6700, 6700, 6700, 1});
+    at(10020);
+    e.onRaceStop(11000);
+    e.onRaceStart(15000, 7700, 0, true);
+    at(15020);
+    CHECK(g.shows(1, "POSN: 1 | LAP: 1") && g.shows(5, "GO!"));
+}
+
+void testUtf8() {
+    char b[32];
+    // 11 three-byte characters are 33 bytes: 10 fit, none is cut in half.
+    const char* eleven = "\xE3\x81\x82\xE3\x81\x84\xE3\x81\x86\xE3\x81\x88\xE3\x81\x8A"
+                         "\xE3\x81\x8B\xE3\x81\x8D\xE3\x81\x8F\xE3\x81\x91\xE3\x81\x93\xE3\x81\x95";
+    CHECK(utf8::copy(b, eleven, sizeof b) == 30 && strlen(b) == 30 && memcmp(b, eleven, 30) == 0);
+    CHECK(utf8::copy(b, "Yana", sizeof b) == 4 && strcmp(b, "Yana") == 0);
+    // ASCII then a character that no longer fits whole.
+    char c[6];
+    CHECK(utf8::copy(c, "abcd\xE3\x81\x82", sizeof c) == 4 && strcmp(c, "abcd") == 0);
+    // Bytes that are not UTF-8 (Shift-JIS, a lone continuation, an overlong form) are left out.
+    CHECK(utf8::copy(b, "A\x83\x70" "B\x80\xC0\xAF" "C", sizeof b) == 4 && strcmp(b, "ApBC") == 0);
+    // A string already cut in half is repaired in place.
+    char d[8] = "ab\xE3\x81";
+    CHECK(utf8::copy(d, d, sizeof d) == 2 && strcmp(d, "ab") == 0);
+    // Four-byte characters (emoji) stay whole.
+    CHECK(utf8::copy(b, "\xF0\x9F\x8F\x81", sizeof b) == 4);
+}
+
 void testOsdLapEdit() {
     Goggles g("p");
     Capture cap;
@@ -954,6 +997,8 @@ int runTests() {
     testOsdCountdownClock();
     testOsdStageCountAndStopTime();
     testOsdLapEdit();
+    testOsdStartClearsStage();
+    testUtf8();
     testFormat();
     testRaceFiles();
     testSoundCount();

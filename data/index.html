@@ -651,6 +651,16 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="30">30 秒接続できなければ</option>
           <option value="60">60 秒接続できなければ</option>
         </select></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">レース中に切れたら</label>
+        <select id="netRaceHold" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="15">15 秒待ってホストに切替</option>
+          <option value="30">30 秒待ってホストに切替</option>
+          <option value="60">1 分待ってホストに切替</option>
+          <option value="180">3 分待ってホストに切替</option>
+          <option value="300">5 分待ってホストに切替</option>
+          <option value="0">ルーターが戻るまで待ち続ける</option>
+        </select></div>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">レース中（ストップ後、クリアするまでを含む）にルーターとの接続が切れたときの待ち時間です。待っている間も計測は続き、ルーターが戻れば全員の画面が自動でつながり直します。ホストに切り替えたあとは、レースをクリアするまでルーターには戻りません。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
         <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="0">自動（DHCP）</option>
@@ -913,11 +923,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <div id="loadErr" style="display:none;position:fixed;left:12px;right:12px;bottom:12px;z-index:900;background:var(--sf);border:1px solid var(--err);color:var(--err);border-radius:8px;padding:10px 12px;font-size:13px;text-align:center">
   画面の読み込みに失敗しました。<a href="javascript:location.reload()" style="color:var(--accent)">再読み込み</a>してください。
 </div>
-<script>
+<!--APP-JS--><script>
 // Load the scripts one after another and retry a file that fails. Over a
 // router (client mode) a request can be dropped; one missing script left
 // the page dead (no tabs, no pilots). One at a time also keeps the timer's
 // web server from getting all the requests at once.
+// The timer's own page is built with these scripts inline instead
+// (tools/webui_build.py): one request for the whole page.
 (function(){
   var files=['globals','audio','auth','race','config','calib','sd','results','ws'];
   function load(i,tries){
@@ -934,6 +946,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   }
   load(0,0);
 })();
-</script>
+</script><!--/APP-JS-->
 </body>
 </html>

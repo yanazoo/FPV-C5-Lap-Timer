@@ -134,7 +134,7 @@ async function saveCalibConfig(slotId){
   var exit_=parseInt(document.getElementById('calExitN'+slotId).value);
   if(enter<=exit_){toast('⚠️ Enter > Exit にしてください');return;}
   var ri=activeSlotsLocal[slotId];
-  if(ri<0){return;}
+  if(ri<0){toast('⚠️ このチャンネルにはパイロットがいないため、保存されません');return;}
   slots[slotId].enterRssi=enter;slots[slotId].exitRssi=exit_;
   try{
     var r=await fetch('/api/calib',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:ri,enter,exit:exit_})});

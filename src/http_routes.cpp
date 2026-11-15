@@ -4,6 +4,7 @@
 #include <functional>
 #include <time.h>
 #include "http_routes.h"
+#include "utf8.h"
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
@@ -95,7 +96,7 @@ void posFromJson(JsonObjectConst o, const char* key, osd::Pos& p) {
 }
 
 void copyStr(JsonVariantConst d, const char* key, char* dst, size_t cap) {
-    if (d[key].is<const char*>()) strlcpy(dst, d[key].as<const char*>(), cap);
+    if (d[key].is<const char*>()) utf8::copy(dst, d[key].as<const char*>(), cap);   // whole characters only
 }
 
 // ── Settings <-> JSON: the API and the settings backup on the SD card ─────
@@ -272,6 +273,8 @@ const char* netFromJson(JsonVariantConst d) {
     if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) return "client SSID 1..32";
     int fbSec = d["fallbackSec"] | (int)netFallbackSec;
     if (!netFallbackValid(fbSec)) return "fallbackSec 15/30/60";
+    int rhSec = d["raceHoldSec"] | (int)netRaceHoldSec;
+    if (!netRaceHoldValid(rhSec)) return "raceHoldSec 0/15/30/60/180/300";
     // Empty client password keeps the stored one (the UI never shows it);
     // "staPassClear" switches to an open network.
     if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
@@ -292,7 +295,7 @@ const char* netFromJson(JsonVariantConst d) {
             ipc.dns = *dnsS ? (uint32_t)dns : 0;
         }
     }
-    saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec);
+    saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec, (uint16_t)rhSec);
     staIp = ipc;
     saveStaIp();
     return nullptr;
@@ -334,6 +337,7 @@ String settingsBackupJson() {
     n["staPass"]     = staPass;
     n["staPassClear"] = staPass.length() == 0;
     n["fallbackSec"] = netFallbackSec;
+    n["raceHoldSec"] = netRaceHoldSec;
     ipToJson(n);
     doc["auth"]["password"] = adminPassword;
     String s;
@@ -432,6 +436,13 @@ void registerHttpRoutes() {
         {
             Guard g;
             if (!rosterValid(id)) { bad(req, "bad id"); return; }
+            // The race's laps point at roster entries by number, and deleting
+            // one moves the entries after it: the saved race file then named
+            // the wrong pilots. Not until the race is cleared.
+            if (raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0) {
+                req->send(409, "application/json", R"({"ok":false,"reason":"race"})");
+                return;
+            }
             for (int s = 0; s < MAX_ACTIVE; s++) {
                 if (activePilots[s] == id) activePilots[s] = -1;
                 else if (activePilots[s] > id) activePilots[s]--;
@@ -461,13 +472,17 @@ void registerHttpRoutes() {
                 roster[id].osd = true;
             }
             PilotRoster& p = roster[id];
-            strlcpy(p.name, doc["name"] | "", sizeof p.name);
-            strlcpy(p.yomi, doc["yomi"] | "", sizeof p.yomi);
+            // Whole characters only: a name cut in the middle of one is not
+            // UTF-8, and browsers close a WebSocket that carries it.
+            utf8::copy(p.name, doc["name"] | "", sizeof p.name);
+            utf8::copy(p.yomi, doc["yomi"] | "", sizeof p.yomi);
             p.freqMhz = (uint16_t)freq;
-            if (doc["bind"].is<const char*>()) strlcpy(p.bind, doc["bind"].as<const char*>(), sizeof p.bind);
+            if (doc["bind"].is<const char*>()) utf8::copy(p.bind, doc["bind"].as<const char*>(), sizeof p.bind);
             if (!doc["osd"].isNull()) p.osd = doc["osd"] | true;
-            if (!doc["enter"].isNull()) rosterCal[id].enterRssi = constrain((int)doc["enter"], 0, 1023);
-            if (!doc["exit"].isNull())  rosterCal[id].exitRssi  = constrain((int)doc["exit"], 0, 1023);
+            // Thresholds only as a valid pair (enter above exit).
+            int en = doc["enter"].isNull() ? rosterCal[id].enterRssi : constrain((int)doc["enter"], 0, 1023);
+            int ex = doc["exit"].isNull() ? rosterCal[id].exitRssi : constrain((int)doc["exit"], 0, 1023);
+            if (en > ex) rosterCal[id].enterRssi = en, rosterCal[id].exitRssi = ex;
             saveRosterPilot(id);
         }
         applyGateConfig();
@@ -518,9 +533,12 @@ void registerHttpRoutes() {
         {
             Guard g;
             if (!rosterValid(id)) { bad(req, "bad id"); return; }
-            rosterCal[id].enterRssi = constrain((int)(doc["enter"] | rosterCal[id].enterRssi), 0, 1023);
-            rosterCal[id].exitRssi  = constrain((int)(doc["exit"] | rosterCal[id].exitRssi), 0, 1023);
-            en = rosterCal[id].enterRssi, ex = rosterCal[id].exitRssi;
+            en = constrain((int)(doc["enter"] | rosterCal[id].enterRssi), 0, 1023);
+            ex = constrain((int)(doc["exit"] | rosterCal[id].exitRssi), 0, 1023);
+            // Enter must be above exit, or the gate never sees a pass end.
+            if (en <= ex) { bad(req, "enter must be above exit"); return; }
+            rosterCal[id].enterRssi = en;
+            rosterCal[id].exitRssi  = ex;
             saveRosterPilot(id);
         }
         applyGateConfig();
@@ -633,6 +651,13 @@ void registerHttpRoutes() {
         sendJson(req, o);
     });
     onJson("/api/sd/pilots/restore", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        // Like deleting a pilot: not while the race's laps point at the roster.
+        bool busy;
+        {
+            Guard g;
+            busy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
+        }
+        if (busy) { req->send(409, "application/json", R"({"ok":false,"reason":"race"})"); return; }
         int n = sdRestoreRoster(String(d["path"] | "/pilots.csv"));
         if (n < 0) { req->send(503, "application/json", R"({"error":"no such backup"})"); return; }
         applyGateConfig();
@@ -867,6 +892,7 @@ void registerHttpRoutes() {
         d["staSsid"]   = staSsid;
         d["staPassSet"] = staPass.length() > 0;
         d["fallbackSec"] = netFallbackSec;
+        d["raceHoldSec"] = netRaceHoldSec;
         ipToJson(d.as<JsonObject>());
         NetStatus st = netStatus();
         JsonObject o = d["status"].to<JsonObject>();
@@ -875,6 +901,8 @@ void registerHttpRoutes() {
         o["fallback"]  = st.fallback;
         o["ip"]        = st.ip.toString();
         o["rssi"]      = st.rssi;
+        o["reason"]    = st.reason;
+        o["retrying"]  = st.retrying;
         sendJson(req, d);
     });
     onJson("/api/net", [](AsyncWebServerRequest* req, JsonDocument& d) {

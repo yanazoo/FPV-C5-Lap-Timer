@@ -340,7 +340,7 @@ void Engine::onRaceStage(uint32_t now, const char* eventName, uint32_t countdown
         schedule(now + i * 1000u, Act::Count, -1, -1, -1, -1, stageToken_, (uint8_t)(countdownSec - i));
 }
 
-void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec) {
+void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec, bool resumed) {
     now_ = now;
     ++stageToken_;
     clockDownSec_ = countdownSec;
@@ -358,7 +358,7 @@ void Engine::onRaceStart(uint32_t now, uint32_t elapsedMs, uint32_t countdownSec
     }
     for (int r = 0; r < kRecipients; ++r) {
         if (!isBroadcast(r)) continue;
-        if (elapsedMs == 0) clearFrame(r);   // a resumed race keeps its lap rows
+        if (!resumed) clearFrame(r);   // a resumed race keeps its lap rows
         clearRow(r, opt_.status.row);
         setText(r, opt_.status, opt_.startMsg);
         clearRow(r, opt_.raceClock.row);   // the 3-2-1 countdown, if any
