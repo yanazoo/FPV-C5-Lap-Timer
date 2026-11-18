@@ -85,7 +85,8 @@ state = {
     "pilots": [],
     "active": [-1] * 8,
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30,
-                 "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10},
+                 "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10,
+                 "assignMode": 0},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
@@ -231,6 +232,83 @@ def seed():
     broadcast({"type": "active_update", "pilots": active_json()})
 
 
+# Pilots' radio links (the ESP-NOW bridge's link reports), faked with
+# GET /mock/link?id=N&lq=90 (lq=0: radio on, aircraft off; off=1: radio off).
+# The same rules as lib/timer_core/auto_assign.h, in seconds.
+LINKS = {}   # pilot id -> {"lq", "seen", "up", "lastUp", "reporting"}
+LINK_SEEN, LINK_JOIN, LINK_LEAVE = 3.0, 2.0, 10.0
+
+
+def link_report(pid, lq):
+    t = time.monotonic()
+    l = LINKS.setdefault(pid, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0})
+    if l["seen"] and t - l["seen"] > LINK_SEEN:
+        l["up"] = 0
+    l["seen"], l["lq"] = t, lq
+    if lq:
+        l["up"] = l["up"] or t
+        l["lastUp"] = t
+    else:
+        l["up"] = 0
+
+
+def link_on(l, t):
+    return l["seen"] and l["lq"] and t - l["seen"] <= LINK_SEEN
+
+
+def links_json():
+    t = time.monotonic()
+    out = []
+    for pid, l in sorted(LINKS.items()):
+        if pid >= len(state["pilots"]):
+            continue
+        o = {"id": pid, "lq": l["lq"] if link_on(l, t) else 0, "on": bool(link_on(l, t))}
+        if l.get("wait"):
+            o["wait"] = l["wait"]
+        out.append(o)
+    return out
+
+
+def auto_assign():
+    t = time.monotonic()
+    for pid, l in LINKS.items():
+        if l.get("reporting") is not None:
+            link_report(pid, l["reporting"])
+        l["wait"] = 0
+    r = state["race"]
+    if state["settings"].get("assignMode") != 1 or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
+        return
+    act, pilots = state["active"], state["pilots"]
+    joined, left = [], []
+    for s, pid in enumerate(act):
+        l = LINKS.get(pid)
+        if pid >= 0 and l and l["lastUp"] and not link_on(l, t) and t - l["lastUp"] >= LINK_LEAVE:
+            act[s] = -1
+            left.append(pid)
+    ready = sorted((l["up"], pid) for pid, l in LINKS.items()
+                   if pid < len(pilots) and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN and pid not in act)
+    def uid(p):
+        return p.get("bind") or p["name"]
+    for _, pid in ready:
+        p = pilots[pid]
+        same = [q for q in pilots if q is not p and uid(q) == uid(p)] or uid(p) == state["elrs"]["rdBind"]
+        free = [s for s, a in enumerate(act) if a < 0]
+        if same:
+            LINKS[pid]["wait"] = 4
+        elif not p.get("freq"):
+            LINKS[pid]["wait"] = 1
+        elif any(a >= 0 and pilots[a].get("freq") == p["freq"] for a in act):
+            LINKS[pid]["wait"] = 2
+        elif not free:
+            LINKS[pid]["wait"] = 3
+        else:
+            act[free[0]] = pid
+            joined.append(pid)
+    if joined or left:
+        broadcast({"type": "active_update", "pilots": active_json()})
+        broadcast({"type": "auto_assign", "joined": joined, "left": left})
+
+
 def slot_of(pid):
     return state["active"].index(pid) if pid in state["active"] else -1
 
@@ -281,8 +359,17 @@ class Handler(SimpleHTTPRequestHandler):
             state["net"]["status"].update(fallback=True, reason=int(q.get("reason", ["201"])[0]),
                                           retrying=q.get("retrying", ["1"])[0] == "1")
             return self.reply({"ok": True})
+        if p == "/mock/link":
+            q = parse_qs(u.query)
+            pid = int(q.get("id", ["0"])[0])
+            lq = None if q.get("off", ["0"])[0] == "1" else int(q.get("lq", ["90"])[0])
+            if lq is not None:
+                link_report(pid, lq)
+            LINKS.setdefault(pid, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0})["reporting"] = lq
+            return self.reply({"ok": True})
         if p == "/mock/seed":
             seed()
+            LINKS.clear()
             with ws_lock:
                 sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
@@ -682,11 +769,14 @@ if __name__ == "__main__":
             if n % 5 == 0:
                 enforce_viewers()
             if n % 10 == 0:
+                auto_assign()
                 r = state["race"]
                 act = sum(1 for a in state["active"] if a >= 0)
                 broadcast({"type": "c5", "cpuTemp": 47 + (n // 10) % 3, "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
-                           "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART"},
+                           "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART",
+                           "watch": state["elrs"]["enabled"], "linkAge": 0 if any(l.get("reporting") is not None for l in LINKS.values()) else -1},
+                           "links": links_json(),
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],
                                     "wait": max(0, int((r.get("waitEnd", 0) - time.monotonic()) * 1000)) if r.get("waitEnd") else 0}})

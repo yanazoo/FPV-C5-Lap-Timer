@@ -161,9 +161,10 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
-    if(activeTab==='config')renderC5Status();
+    if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function')updateLinkBadges();}
     return;
   }
+  if(d.type==='auto_assign'){if(isAuthed&&typeof onAutoAssign==='function')onAutoAssign(d);return;}
   if(d.type==='rssi_all'){
     noteServerTime(d.ts);
     if(d.mic!==undefined&&typeof pushMic==='function')pushMic(d.mic);
@@ -374,6 +375,7 @@ function applySettings(st){
     showRaceRules();renderRanking();}
   if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
   if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
+  if(st.assignMode!==undefined&&typeof showAssignMode==='function'){assignMode=st.assignMode===1?1:0;showAssignMode();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

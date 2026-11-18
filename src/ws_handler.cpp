@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include "ws_handler.h"
+#include "pilot_link.h"
 #include "c5_link.h"
 #include "data_model.h"
 #include "race.h"
@@ -361,6 +362,7 @@ static void addSettings(JsonDocument& d) {
     d["countLastLap"] = raceRules.countLastLap;
     d["startDelayOn"]  = startDelayOn;
     d["startDelaySec"] = startDelaySec;
+    d["assignMode"]    = assignMode;
 }
 
 void wsSettings() {

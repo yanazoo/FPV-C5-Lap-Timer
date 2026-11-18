@@ -1,5 +1,6 @@
 #include <ArduinoJson.h>
 #include "race.h"
+#include "pilot_link.h"
 #include "c5_link.h"
 #include "data_model.h"
 #include "elrs.h"
@@ -276,6 +277,8 @@ void sendC5Status() {
     el["peer"]      = e.peer;
     el["version"]   = e.version;
     el["bytes"]     = e.bytesSent;
+    el["watch"]     = elrsLinkWatch();
+    pilotLinkToJson(el, d["links"].to<JsonArray>());
     // The race as the timer sees it, once a second: a browser that missed a
     // stop, clear or lap puts itself right from this.
     JsonObject rs = d["race"].to<JsonObject>();
@@ -588,6 +591,7 @@ void raceLoop() {
     }
     uint32_t now = millis();
     serviceTimedRace(now);
+    pilotLinkLoop(now);
     if (now - lastRssiSend >= RSSI_INTERVAL_MS) {
         lastRssiSend = now;
         sendTelemetry();

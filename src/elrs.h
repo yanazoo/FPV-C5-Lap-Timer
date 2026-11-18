@@ -40,6 +40,8 @@ void elrsTest(int slot);
 void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finished);   // -1 = every OSD recipient
 
 ElrsStatus elrsStatus();
+// The bridge watches for pilots' radio links (elrs-netpack v2.11+).
+bool elrsLinkWatch();
 // WiFi transport chosen but the netpack XIAO not connected (it may need a
 // free place on this timer's access point), and its last address (0: none).
 bool     elrsWantsNetpack();

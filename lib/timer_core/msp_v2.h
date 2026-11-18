@@ -22,6 +22,14 @@ constexpr uint16_t kElrsBackpackSetRecordingState = 0x0305;
 // UID (payload: 6-byte UID; empty clears). The bridge answers with the same
 // function, payload 1 = filter on.
 constexpr uint16_t kBridgeSetListen = 0x0F01;
+// elrs-netpack's ESP-NOW bridge (v2.11+): watch for pilots' TX backpacks
+// sending link statistics (Backpack > Telemetry = ESPNOW) for the next 20 s
+// (payload [1]; [0] stops). Answered with the same function, payload [1].
+// While on, the bridge sends kBridgeLinkReport per radio heard: about once a
+// second, and at once when one links or unlinks.
+constexpr uint16_t kBridgeLinkWatch  = 0x0F03;
+// payload: UID(6) uplink LQ(1, 0 = no link) age in 0.1 s(1)
+constexpr uint16_t kBridgeLinkReport = 0x0F04;
 
 constexpr uint8_t kCommand  = '<';
 constexpr uint8_t kResponse = '>';

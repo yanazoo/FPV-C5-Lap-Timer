@@ -15,6 +15,7 @@
 #include "sys_diag.h"
 #include "wifi_mgr.h"
 #include "ws_handler.h"
+#include "pilot_link.h"
 
 namespace {
 
@@ -114,6 +115,7 @@ void settingsToJson(JsonObject doc) {
     doc["countLastLap"] = raceRules.countLastLap;
     doc["startDelayOn"]  = startDelayOn;
     doc["startDelaySec"] = startDelaySec;
+    doc["assignMode"]    = assignMode;
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).
@@ -137,6 +139,7 @@ void settingsFromJson(JsonVariantConst doc) {
         if (sd > 0) startDelaySec = (uint16_t)min(sd, (int)START_DELAY_MAX);
         else if (doc["startDelayOn"].isNull()) startDelayOn = false;   // an old backup's "none"
     }
+    if (!doc["assignMode"].isNull()) assignMode = (int)doc["assignMode"] == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
     saveSettings();
 }
 

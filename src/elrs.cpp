@@ -8,6 +8,7 @@
 #include "msp_v2.h"
 #include "wifi_mgr.h"
 #include "race.h"
+#include "pilot_link.h"
 
 namespace {
 
@@ -56,6 +57,8 @@ uint32_t rdListenAt = 0;       // when the bridge was last pointed at the RD
 // arrives: over netpack it can take tens of ms to come back, by which time
 // the next OSD burst has already moved the bridge to a pilot's UID.
 bool    bridgeFilter = false;
+// The bridge answered kBridgeLinkWatch: it reports pilots' radio links.
+volatile bool bridgeLinkWatch = false;
 bool     listenCfgDue = false;
 uint32_t listenCfgAt = 0;
 const uint32_t RD_RELISTEN_MS = 2000;   // idle: point the bridge at the RD again
@@ -188,6 +191,12 @@ void listenForRd(uint32_t now) {
         size_t n = msp::encode(msp::kBridgeSetListen, rdUid, rdValid ? 6 : 0, f, sizeof f);
         out.write(f, n);
         out.flush();
+        // And keep the bridge watching for pilots' radio links (it stops by
+        // itself 20 s after the last request).
+        uint8_t on = 1;
+        n = msp::encode(msp::kBridgeLinkWatch, &on, 1, f, sizeof f);
+        out.write(f, n);
+        out.flush();
         listenCfgDue = false;
         listenCfgAt = now;
         rdListenDue = rdValid;   // write() cleared listening; point it back
@@ -239,6 +248,12 @@ void onFrame() {
     } else if (parser.function() == msp::kBridgeSetListen) {
         bridgeFilter = parser.size() >= 1 && parser.payload()[0] == 1;
         Serial.printf("[ELRS] bridge listen filter %s\n", bridgeFilter ? "on" : "off");
+    } else if (parser.function() == msp::kBridgeLinkWatch) {
+        bool on = parser.size() >= 1 && parser.payload()[0] == 1;
+        if (on != bridgeLinkWatch) Serial.printf("[ELRS] bridge link watch %s\n", on ? "on" : "off");
+        bridgeLinkWatch = on;
+    } else if (parser.function() == msp::kBridgeLinkReport && parser.size() >= 8) {
+        pilotLinkReport(parser.payload(), parser.payload()[6]);
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
         // A filtering bridge passes on only the RD's frames. An older one
         // passes on everything it hears: then only while it is on the RD's
@@ -252,6 +267,7 @@ void disconnect() {
     if (uartOpen) Serial2.end(), uartOpen = false;
     uartMode = false;
     bridgeFilter = false;
+    bridgeLinkWatch = false;
     setStatus(false, "");
 }
 
@@ -274,6 +290,7 @@ bool tryConnect(IPAddress ip) {
     rdListenDue = rdValid;
     listenCfgDue = true;
     bridgeFilter = false;
+    bridgeLinkWatch = false;
     Serial.printf("[ELRS] connected to elrs-netpack %s\n", peer);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsGetBackpackVersion, nullptr, 0, f, sizeof f);
@@ -333,6 +350,7 @@ void serviceTransport(uint32_t now) {
             rdListenDue = rdValid;
             listenCfgDue = true;
             bridgeFilter = false;
+            bridgeLinkWatch = false;
             out.len = 0;
         }
         while (Serial2.available())
@@ -471,6 +489,8 @@ void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finishe
     e.lap.holeshot = finished;   // "still finished"
     post(e);
 }
+
+bool elrsLinkWatch() { return bridgeLinkWatch; }
 
 ElrsStatus elrsStatus() {
     portENTER_CRITICAL(&stMux);

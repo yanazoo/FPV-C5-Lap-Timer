@@ -3,6 +3,7 @@
 #include "nvs_store.h"
 #include "data_model.h"
 #include "wifi_mgr.h"
+#include "pilot_link.h"
 
 PilotRoster  roster[MAX_REGISTERED];
 CalibConfig  rosterCal[MAX_REGISTERED];
@@ -105,6 +106,7 @@ void saveSettings() {
     prefs.putBytes("r", &raceRules, sizeof raceRules);
     prefs.putUShort("sdly", startDelaySec);
     prefs.putBool("sdlyon", startDelayOn);
+    prefs.putUChar("amode", assignMode);
     prefs.end();
 }
 
@@ -205,6 +207,7 @@ void loadAll() {
     uint16_t sd = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
     startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
     startDelaySec = sd ? sd : 10;
+    assignMode = prefs.getUChar("amode", ASSIGN_MANUAL) == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

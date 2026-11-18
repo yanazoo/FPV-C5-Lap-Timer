@@ -67,7 +67,7 @@ function renderRoster(){
         '<div style="flex:1;min-width:80px"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +osd+activeBadge+warn
+        +osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+activeBadge+warn
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
           +'<button onclick="startEdit('+r.id+')" class="btn-gray-soft" style="font-size:11px;padding:3px 8px">編集</button>'
@@ -76,6 +76,52 @@ function renderRoster(){
     }
     list.appendChild(item);
   });
+  updateLinkBadges();
+}
+
+// ── Channel assignment: manual or from the pilots' ELRS links ─────────────
+var assignMode=0;
+var LINK_WAIT={1:'VTX 未設定',2:'周波数が重なる',3:'空きチャンネルなし',4:'バインドフレーズが重複'};
+function showAssignMode(){
+  var sel=document.getElementById('assignModeSelect');if(sel&&document.activeElement!==sel)sel.value=String(assignMode);
+  var n=document.getElementById('assignNote');if(n)n.style.display=assignMode===1?'':'none';
+  updateLinkBadges();
+}
+function saveAssignMode(){
+  var v=parseInt(document.getElementById('assignModeSelect').value,10)===1?1:0;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assignMode:v})})
+    .then(r=>{if(!r.ok)throw 0;assignMode=v;showAssignMode();
+      toast(v?'✓ チャンネルの割り当てを「自動（ELRS のリンク）」にしました':'✓ チャンネルの割り当てを「手動」にしました');})
+    .catch(()=>{toast('⚠️ 保存エラー');showAssignMode();});
+}
+// Per-pilot link badges and the status next to the mode (from the 1 Hz c5 status).
+function updateLinkBadges(){
+  var c=c5Status||{},el=c.elrs||{},links={};
+  (c.links||[]).forEach(l=>{links[l.id]=l;});
+  rosterData.forEach(function(r){
+    var b=document.getElementById('lk-'+r.id);if(!b)return;
+    var l=links[r.id];
+    if(!l){b.textContent='';b.className='link-badge';b.title='';return;}
+    var w=l.wait&&assignMode===1?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
+    b.textContent=(l.on?'📶 LQ '+l.lq:'📴 リンクなし')+w;
+    b.className='link-badge'+(l.on?' on':'');
+    b.title=l.on?'送信機と機体がリンクしています':'送信機は見えていますが、機体とリンクしていません';
+  });
+  var st=document.getElementById('assignStatus');if(!st)return;
+  if(assignMode!==1){st.textContent='';return;}
+  var msg,col='var(--muted)';
+  if(!el.enabled)msg='⚠ ELRS OSD が OFF です',col='var(--warn)';
+  else if(!el.connected)msg='⚠ ブリッジにつながっていません',col='var(--warn)';
+  else if(!el.watch)msg='⚠ ブリッジが対応していません（v2.11 以降）',col='var(--warn)';
+  else if(c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0))msg='⏸ レースをクリアしたら反映します';
+  else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
+  else msg='送信機の電波を待っています';
+  st.textContent=msg;st.style.color=col;
+}
+function onAutoAssign(d){
+  var nm=id=>(rosterById[id]&&rosterById[id].name)||('#'+id);
+  (d.joined||[]).forEach(id=>toast('📶 '+nm(id)+' がリンクしたのでチャンネルに入れました'));
+  (d.left||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたのでチャンネルから外しました'));
 }
 
 // Shared by the add form and inline edit. prefix: 'add' | 'edit'.

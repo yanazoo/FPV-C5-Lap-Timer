@@ -248,6 +248,34 @@ the TX, assign the switch to Lua → Backpack → **DVR Rec**.
 After `git pull`, run `git submodule update --init --recursive` and flash the
 S3 (`upload` and `uploadfs`) and, for the UART link, the ESP-NOW bridge again.
 
+### 📶 Automatic channels from the pilots' ELRS links (optional)
+
+Settings → 👥 パイロット情報 → "チャンネルの割り当て": with **自動（ELRS のリンクで）**,
+a pilot whose radio links to their quad (quad powered up) **joins a free
+channel by itself**, and leaves it when the link is gone (quad off). The
+default is manual.
+
+- Pilots are told apart by their radio's bind phrase (the pilot's bind phrase,
+  or the name when it is empty, as for the goggle OSD).
+- Linked for **2 s**: the lowest free channel. Not linked for **10 s**: off
+  its channel (a crash's short dropout doesn't count).
+- **Nothing changes during a race or while laps are not cleared**; it all
+  happens after Clear.
+- A pilot who can't join says why in the list: no VTX frequency, the same
+  frequency as a pilot already on a channel, no free channel, or a bind phrase
+  shared with another pilot or the race director.
+- Each pilot shows "📶 LQ 95" (linked) or "📴 リンクなし" (radio heard, no link
+  to the quad), in manual mode too.
+- Pilots without a backpack are never moved: they keep the channel picked by
+  hand, so manual and automatic pilots can mix.
+
+Needs: the pilot's ELRS 3.4+ TX with a backpack, Lua **Backpack → Telemetry =
+ESPNOW** (3.4.x: **On**; telemetry to the handset is unchanged); the ESP-NOW
+bridge from elrs-netpack **v2.11+** (UART or through the netpack); ELRS OSD on
+in the timer's settings. With Telemetry on, the TX backpack sends the TX's
+link statistics (LQ) by ESP-NOW to its own bind-phrase address; the bridge
+listens for them and tells the timer which pilots are linked.
+
 ### Goggle OSD
 
 Rows are written at their full width. The OSD "clear" command is only sent
