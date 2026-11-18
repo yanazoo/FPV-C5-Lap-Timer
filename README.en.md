@@ -269,6 +269,19 @@ default is manual.
 - Pilots without a backpack are never moved: they keep the channel picked by
   hand, so manual and automatic pilots can mix.
 
+**Unregistered radios**: radios heard that are not on the roster (nor the race
+director's) are listed under "📡 未登録の送信機" for a minute after they were
+last heard. "＋ 登録" opens the add form with the radio's VTX filled in; the
+bind phrase (or the name) typed is checked against the radio as you type (a
+bind phrase cannot be worked out from the radio's UID, so it has to be typed).
+
+**VTX settings**: a TX whose Lua **VTX Administrator** has a band and channel
+sends them when it links. The timer shows them for unregistered radios, and
+for a pilot whose registered VTX differs shows "⚠ 機体の VTX は R5 5806 ▶ 合わせる"
+(tap to take it; never changed by itself). Started after the radios linked,
+the timer asks linked radios for their VTX settings (between races only).
+Radios without the VTX Administrator say nothing about their VTX.
+
 Needs: the pilot's ELRS 3.4+ TX with a backpack, Lua **Backpack → Telemetry =
 ESPNOW** (3.4.x: **On**; telemetry to the handset is unchanged); the ESP-NOW
 bridge from elrs-netpack **v2.11+** (UART or through the netpack); ELRS OSD on

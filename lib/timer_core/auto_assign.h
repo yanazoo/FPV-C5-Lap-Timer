@@ -121,4 +121,23 @@ inline bool plan(uint32_t now, const Pilot* pilots, const Link* links, int n, in
     return r.nJoined || r.nLeft;
 }
 
+// The first two bytes of MSP_SET_VTX_CONFIG, as ELRS's VTX Administrator
+// sends them: (band - 1) * 8 + channel (0-7), bands A B E F R L (the
+// Betaflight default table), or a frequency in MHz (> 63, little-endian).
+// MHz, or 0 if neither.
+inline uint16_t vtxConfigMhz(uint8_t b0, uint8_t b1) {
+    static const uint16_t kTable[6][8] = {
+        {5865, 5845, 5825, 5805, 5785, 5765, 5745, 5725},   // A
+        {5733, 5752, 5771, 5790, 5809, 5828, 5847, 5866},   // B
+        {5705, 5685, 5665, 5645, 5885, 5905, 5925, 5945},   // E
+        {5740, 5760, 5780, 5800, 5820, 5840, 5860, 5880},   // F
+        {5658, 5695, 5732, 5769, 5806, 5843, 5880, 5917},   // R
+        {5362, 5399, 5436, 5473, 5510, 5547, 5584, 5621},   // L
+    };
+    uint16_t v = (uint16_t)(b0 | (b1 << 8));
+    if (v < 48) return kTable[v / 8][v % 8];
+    if (v >= 5000 && v <= 6000) return v;
+    return 0;
+}
+
 }  // namespace autoassign

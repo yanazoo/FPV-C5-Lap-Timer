@@ -30,6 +30,13 @@ constexpr uint16_t kBridgeSetListen = 0x0F01;
 constexpr uint16_t kBridgeLinkWatch  = 0x0F03;
 // payload: UID(6) uplink LQ(1, 0 = no link) age in 0.1 s(1)
 constexpr uint16_t kBridgeLinkReport = 0x0F04;
+// While watching: a pilot's TX sent its VTX settings (Lua VTX Administrator;
+// sent when it links). payload: UID(6), then MSP_SET_VTX_CONFIG's first two
+// bytes (autoassign::vtxConfigMhz).
+constexpr uint16_t kBridgeVtxReport  = 0x0F05;
+// To a TX backpack, from its own UID: send the VTX settings again (the
+// goggles' backpack asks this at power-up). The answer goes to the UID.
+constexpr uint16_t kElrsReqVtxPkt    = 0x000B;
 
 constexpr uint8_t kCommand  = '<';
 constexpr uint8_t kResponse = '>';

@@ -9,6 +9,7 @@
 #include "wifi_mgr.h"
 #include "race.h"
 #include "pilot_link.h"
+#include "auto_assign.h"
 
 namespace {
 
@@ -214,6 +215,31 @@ void listenForRd(uint32_t now) {
     rdListenAt = now;
 }
 
+// A linked radio whose VTX setting is not known yet (the timer started after
+// the pilot's radio linked): ask its backpack to send it again, as the
+// goggles' backpack does at power-up. From the pilot's UID (the backpack
+// takes requests only from there); the answer goes to that UID, where the
+// bridge's link watch hears it. Between races only, once a second at most.
+uint32_t vtxAskAt = 0;
+void askVtx(uint32_t now) {
+    if (!st.connected || !bridgeLinkWatch || now - vtxAskAt < 1000 || raceActive()) return;
+    vtxAskAt = now;
+    {
+        Guard g;
+        if (raceCore.running() || raceCore.paused()) return;
+    }
+    uint8_t uid[6];
+    if (!pilotVtxWanted(uid, now)) return;
+    uint8_t p[7] = {0x01};
+    memcpy(p + 1, uid, 6);
+    uint8_t f[msp::kMaxFrame];
+    size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
+    out.write(f, n);
+    n = msp::encode(msp::kElrsReqVtxPkt, nullptr, 0, f, sizeof f);
+    out.write(f, n);
+    out.burstDone();   // write() set rdListenDue: the bridge goes back to the RD next
+}
+
 // A bridge wired to the UART while the netpack (WiFi) is selected: park it,
 // so it doesn't sit on the RD's or a pilot's UID next to the netpack's own
 // bridge, and passes nothing on (it would hear every broadcast OSD). Every
@@ -254,6 +280,9 @@ void onFrame() {
         bridgeLinkWatch = on;
     } else if (parser.function() == msp::kBridgeLinkReport && parser.size() >= 8) {
         pilotLinkReport(parser.payload(), parser.payload()[6]);
+    } else if (parser.function() == msp::kBridgeVtxReport && parser.size() >= 8) {
+        const uint8_t* p = parser.payload();
+        pilotVtxReport(p, autoassign::vtxConfigMhz(p[6], p[7]));
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
         // A filtering bridge passes on only the RD's frames. An older one
         // passes on everything it hears: then only while it is on the RD's
@@ -410,6 +439,7 @@ void elrsTask(void*) {
             while (xQueueReceive(evQ, &e, 0) == pdTRUE);
         }
         engine.tick(millis());
+        askVtx(millis());
         listenForRd(millis());
         out.flush();
     }

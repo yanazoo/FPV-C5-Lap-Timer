@@ -161,7 +161,7 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
-    if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function')updateLinkBadges();}
+    if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function'){updateLinkBadges();renderCandidates();}}
     return;
   }
   if(d.type==='auto_assign'){if(isAuthed&&typeof onAutoAssign==='function')onAutoAssign(d);return;}

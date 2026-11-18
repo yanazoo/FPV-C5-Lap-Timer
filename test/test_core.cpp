@@ -1005,6 +1005,10 @@ void testAutoAssign() {
     report(l, 100 + kSeenMs + 1, 50);
     CHECK(l.upSince == 100 + kSeenMs + 1);
     CHECK(linked(l, 100 + 2 * kSeenMs + 1) && !linked(l, 100 + 2 * kSeenMs + 2));
+    // VTX Administrator: R3 = (5-1)*8+2, A1 = 0, L8 = 47, a frequency, junk.
+    CHECK(vtxConfigMhz(34, 0) == 5732 && vtxConfigMhz(0, 0) == 5865 && vtxConfigMhz(47, 0) == 5621);
+    CHECK(vtxConfigMhz(5800 & 0xFF, 5800 >> 8) == 5800);
+    CHECK(vtxConfigMhz(50, 0) == 0 && vtxConfigMhz(0x10, 0x27) == 0);
 }
 
 void testSoundCount() {

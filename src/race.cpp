@@ -278,7 +278,7 @@ void sendC5Status() {
     el["version"]   = e.version;
     el["bytes"]     = e.bytesSent;
     el["watch"]     = elrsLinkWatch();
-    pilotLinkToJson(el, d["links"].to<JsonArray>());
+    pilotLinkToJson(el, d["links"].to<JsonArray>(), d["cand"].to<JsonArray>());
     // The race as the timer sees it, once a second: a browser that missed a
     // stop, clear or lap puts itself right from this.
     JsonObject rs = d["race"].to<JsonObject>();

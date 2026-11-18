@@ -232,19 +232,36 @@ def seed():
     broadcast({"type": "active_update", "pilots": active_json()})
 
 
-# Pilots' radio links (the ESP-NOW bridge's link reports), faked with
-# GET /mock/link?id=N&lq=90 (lq=0: radio on, aircraft off; off=1: radio off).
+# Pilots' radios (the ESP-NOW bridge's link and VTX reports), by bind phrase
+# (as the timer, by UID). Faked with
+#   GET /mock/link?id=N&lq=90        pilot N's radio (lq=0: radio on, aircraft
+#                                    off; off=1: radio off; vtx=MHz: its VTX)
+#   GET /mock/radio?phrase=X&lq=90   any radio, e.g. one not on the roster
 # The same rules as lib/timer_core/auto_assign.h, in seconds.
-LINKS = {}   # pilot id -> {"lq", "seen", "up", "lastUp", "reporting"}
-LINK_SEEN, LINK_JOIN, LINK_LEAVE = 3.0, 2.0, 10.0
+RADIOS = {}   # phrase -> {"lq", "seen", "up", "lastUp", "reporting", "vtx", "heard"}
+WAITS = {}    # pilot id -> wait reason (last auto_assign)
+LINK_SEEN, LINK_JOIN, LINK_LEAVE, CAND_KEEP = 3.0, 2.0, 10.0, 60.0
 
 
-def link_report(pid, lq):
+def phrase_of(p):
+    return p.get("bind") or p["name"]
+
+
+def uid_tag(phrase):
+    h = hashlib.md5(('-DMY_BINDING_PHRASE="%s"' % phrase).encode()).digest()
+    return "%02x%02x%02x" % (h[0] & 0xFE, h[1], h[2])
+
+
+def radio(phrase):
+    return RADIOS.setdefault(phrase, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0, "reporting": None, "vtx": 0, "heard": 0})
+
+
+def link_report(phrase, lq):
     t = time.monotonic()
-    l = LINKS.setdefault(pid, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0})
+    l = radio(phrase)
     if l["seen"] and t - l["seen"] > LINK_SEEN:
         l["up"] = 0
-    l["seen"], l["lq"] = t, lq
+    l["seen"], l["lq"], l["heard"] = t, lq, t
     if lq:
         l["up"] = l["up"] or t
         l["lastUp"] = t
@@ -253,54 +270,78 @@ def link_report(pid, lq):
 
 
 def link_on(l, t):
-    return l["seen"] and l["lq"] and t - l["seen"] <= LINK_SEEN
+    return bool(l["seen"] and l["lq"] and t - l["seen"] <= LINK_SEEN)
+
+
+def pilot_radio(pid):
+    return RADIOS.get(phrase_of(state["pilots"][pid])) if 0 <= pid < len(state["pilots"]) else None
 
 
 def links_json():
     t = time.monotonic()
     out = []
-    for pid, l in sorted(LINKS.items()):
-        if pid >= len(state["pilots"]):
+    for pid in range(len(state["pilots"])):
+        l = pilot_radio(pid)
+        if not l or not l["heard"]:
             continue
-        o = {"id": pid, "lq": l["lq"] if link_on(l, t) else 0, "on": bool(link_on(l, t))}
-        if l.get("wait"):
-            o["wait"] = l["wait"]
+        o = {"id": pid, "lq": l["lq"] if link_on(l, t) else 0, "on": link_on(l, t)}
+        if WAITS.get(pid):
+            o["wait"] = WAITS[pid]
+        if l["vtx"]:
+            o["vtx"] = l["vtx"]
         out.append(o)
     return out
 
 
+def cand_json():
+    t = time.monotonic()
+    known = {phrase_of(p) for p in state["pilots"]} | {state["elrs"]["rdBind"]}
+    rows = []
+    for ph, l in RADIOS.items():
+        if ph in known or not l["heard"] or t - l["heard"] > CAND_KEEP:
+            continue
+        on = link_on(l, t)
+        o = {"tag": uid_tag(ph), "on": on, "lq": l["lq"] if on else 0, "age": int(t - l["heard"])}
+        if l["vtx"]:
+            o["vtx"] = l["vtx"]
+        rows.append(o)
+    rows.sort(key=lambda o: not o["on"])
+    return rows[:8]
+
+
 def auto_assign():
     t = time.monotonic()
-    for pid, l in LINKS.items():
+    for ph, l in RADIOS.items():
         if l.get("reporting") is not None:
-            link_report(pid, l["reporting"])
-        l["wait"] = 0
+            link_report(ph, l["reporting"])
+    WAITS.clear()
     r = state["race"]
     if state["settings"].get("assignMode") != 1 or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
         return
     act, pilots = state["active"], state["pilots"]
     joined, left = [], []
     for s, pid in enumerate(act):
-        l = LINKS.get(pid)
+        l = pilot_radio(pid)
         if pid >= 0 and l and l["lastUp"] and not link_on(l, t) and t - l["lastUp"] >= LINK_LEAVE:
             act[s] = -1
             left.append(pid)
-    ready = sorted((l["up"], pid) for pid, l in LINKS.items()
-                   if pid < len(pilots) and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN and pid not in act)
-    def uid(p):
-        return p.get("bind") or p["name"]
-    for _, pid in ready:
+    ready = []
+    for pid in range(len(pilots)):
+        l = pilot_radio(pid)
+        if l and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN and pid not in act:
+            ready.append((l["up"], pid))
+    for _, pid in sorted(ready):
         p = pilots[pid]
-        same = [q for q in pilots if q is not p and uid(q) == uid(p)] or uid(p) == state["elrs"]["rdBind"]
+        same = [q for q in pilots if q is not p and phrase_of(q) == phrase_of(p)] or phrase_of(p) == state["elrs"]["rdBind"]
         free = [s for s, a in enumerate(act) if a < 0]
         if same:
-            LINKS[pid]["wait"] = 4
+            WAITS[pid] = 4
         elif not p.get("freq"):
-            LINKS[pid]["wait"] = 1
+            WAITS[pid] = 1
         elif any(a >= 0 and pilots[a].get("freq") == p["freq"] for a in act):
-            LINKS[pid]["wait"] = 2
+            WAITS[pid] = 2
         elif not free:
-            LINKS[pid]["wait"] = 3
+            WAITS[pid] = 3
         else:
             act[free[0]] = pid
             joined.append(pid)
@@ -359,17 +400,26 @@ class Handler(SimpleHTTPRequestHandler):
             state["net"]["status"].update(fallback=True, reason=int(q.get("reason", ["201"])[0]),
                                           retrying=q.get("retrying", ["1"])[0] == "1")
             return self.reply({"ok": True})
-        if p == "/mock/link":
+        if p in ("/mock/link", "/mock/radio"):
             q = parse_qs(u.query)
-            pid = int(q.get("id", ["0"])[0])
-            lq = None if q.get("off", ["0"])[0] == "1" else int(q.get("lq", ["90"])[0])
-            if lq is not None:
-                link_report(pid, lq)
-            LINKS.setdefault(pid, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0})["reporting"] = lq
+            if p == "/mock/link":
+                ph = phrase_of(state["pilots"][int(q.get("id", ["0"])[0])])
+            else:
+                ph = q.get("phrase", ["?"])[0]
+            l = radio(ph)
+            if "vtx" in q:
+                l["vtx"], l["heard"] = int(q["vtx"][0]), time.monotonic()
+            if "lq" in q or "off" in q:
+                lq = None if q.get("off", ["0"])[0] == "1" else int(q.get("lq", ["90"])[0])
+                if lq is not None:
+                    link_report(ph, lq)
+                l["reporting"] = lq
             return self.reply({"ok": True})
+        if p == "/api/bind_uid":
+            return self.reply({"tag": uid_tag(parse_qs(u.query).get("p", [""])[0])})
         if p == "/mock/seed":
             seed()
-            LINKS.clear()
+            RADIOS.clear()
             with ws_lock:
                 sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
@@ -775,8 +825,8 @@ if __name__ == "__main__":
                 broadcast({"type": "c5", "cpuTemp": 47 + (n // 10) % 3, "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
                            "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART",
-                           "watch": state["elrs"]["enabled"], "linkAge": 0 if any(l.get("reporting") is not None for l in LINKS.values()) else -1},
-                           "links": links_json(),
+                           "watch": state["elrs"]["enabled"], "linkAge": 0 if any(l.get("reporting") is not None for l in RADIOS.values()) else -1},
+                           "links": links_json(), "cand": cand_json(),
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],
                                     "wait": max(0, int((r.get("waitEnd", 0) - time.monotonic()) * 1000)) if r.get("waitEnd") else 0}})

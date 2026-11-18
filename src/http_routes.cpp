@@ -430,6 +430,12 @@ void registerHttpRoutes() {
         server.on(p, HTTP_ANY, [](AsyncWebServerRequest* r) { r->send(204); });
 
     // ── Roster ─────────────────────────────────────────────────────────────
+    // A bind phrase's UID tag (?p=), to check it against a radio heard.
+    server.on(AsyncURIMatcher::exact("/api/bind_uid"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        String p = req->hasParam("p") ? req->getParam("p")->value() : String();
+        req->send(200, "application/json", "{\"tag\":\"" + bindUidTag(p.c_str()) + "\"}");
+    });
+
     server.on(AsyncURIMatcher::exact("/api/pilots"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", rosterJson());
     });

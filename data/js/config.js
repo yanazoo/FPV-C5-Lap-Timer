@@ -67,7 +67,8 @@ function renderRoster(){
         '<div class="rv-name"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +'<div class="rv-badges">'+activeBadge+osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn+'</div>'
+        +'<div class="rv-badges">'+activeBadge+osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
+          +'<span class="warn-badge vtx-fix" id="vx-'+r.id+'" style="display:none"></span></div>'
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
           +'<button onclick="startEdit('+r.id+')" class="btn-gray-soft" style="font-size:11px;padding:3px 8px">編集</button>'
@@ -101,6 +102,13 @@ function updateLinkBadges(){
   rosterData.forEach(function(r){
     var b=document.getElementById('lk-'+r.id);if(!b)return;
     var l=links[r.id];
+    // The radio's VTX Administrator says another frequency than registered.
+    var vx=document.getElementById('vx-'+r.id);
+    if(vx){
+      var diff=l&&l.vtx&&l.vtx!==r.freq;
+      vx.style.display=diff?'':'none';
+      if(diff){vx.textContent='⚠ 機体の VTX は '+freqLabel(l.vtx)+' ▶ 合わせる';vx.title='送信機の VTX Administrator の設定です。タップすると登録の VTX をこれに変えます';vx.onclick=function(){fixVtx(r.id,l.vtx);};}
+    }
     if(!l){b.textContent='';b.className='link-badge';b.title='';return;}
     var w=l.wait&&assignMode===1?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
     b.textContent=(l.on?'📶 LQ '+l.lq:'📴 リンクなし')+w;
@@ -117,6 +125,34 @@ function updateLinkBadges(){
   else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
   else msg='送信機の電波を待っています';
   st.textContent=msg;st.style.color=col;
+}
+// Unregistered radios (c5 "cand"), redrawn only when something changed.
+var candHtml='';
+function renderCandidates(){
+  var box=document.getElementById('candBox');if(!box)return;
+  var c=(c5Status&&c5Status.cand)||[];
+  var h=c.map(function(x){
+    return '<div class="cand-row"><div class="cand-info"><span>送信機 <span class="cand-id">'+esc(x.tag)+'</span></span>'
+      +'<span class="link-badge'+(x.on?' on':'')+'">'+(x.on?'📶 LQ '+x.lq:'📴 リンクなし')+'</span>'
+      +(x.vtx?'<span class="osd-badge">VTX '+esc(freqLabel(x.vtx))+'</span>':'<span class="res-muted" style="font-size:10px">VTX 不明</span>')
+      +'</div><button class="btn-success" style="font-size:11px;padding:3px 10px" onclick="registerCand(\''+esc(x.tag)+'\')">＋ 登録</button></div>';
+  }).join('');
+  box.style.display=c.length?'':'none';
+  if(h!==candHtml){candHtml=h;document.getElementById('candList').innerHTML=h;}
+}
+function registerCand(tag){
+  var x=((c5Status&&c5Status.cand)||[]).find(function(c){return c.tag===tag;});
+  if(x)showAddForm({tag:x.tag,vtx:x.vtx||0});
+}
+async function fixVtx(id,mhz){
+  var r=rosterById[id];if(!r)return;
+  if(!confirm(r.name+' の VTX を '+freqLabel(r.freq)+' から '+freqLabel(mhz)+' に変えますか？'))return;
+  try{
+    var res=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:id,name:r.name,yomi:r.yomi||'',freq:mhz,bind:r.bind||'',osd:r.osd!==false})});
+    if(!res.ok)throw 0;
+    toast('✓ '+r.name+' の VTX を '+freqLabel(mhz)+' にしました');loadRoster();
+  }catch(e){toast('⚠️ 保存エラー');}
 }
 function onAutoAssign(d){
   var nm=id=>(rosterById[id]&&rosterById[id].name)||('#'+id);
@@ -179,15 +215,41 @@ async function postSlots(newSlots,msg){
   }catch(e){toast('⚠️ 接続エラー');}
 }
 
-function showAddForm(){
+// cand: a radio from the unregistered list (its VTX goes in, and the bind
+// phrase typed is checked against it).
+var addCand=null, uidCheckT=null, uidCheckSeq=0;
+function showAddForm(cand){
+  addCand=cand||null;
   var f=document.getElementById('addForm');
-  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add');
+  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
+  document.getElementById('addUidCheck').textContent='';
   f.style.display='block';document.getElementById('addName').focus();
+  if(addCand){f.scrollIntoView({block:'nearest'});checkAddUid();}
 }
-function hideAddForm(){document.getElementById('addForm').style.display='none';}
+function hideAddForm(){document.getElementById('addForm').style.display='none';addCand=null;}
+// The phrase (or the name, with the phrase empty) against the radio picked.
+function checkAddUid(){
+  clearTimeout(uidCheckT);
+  var out=document.getElementById('addUidCheck');
+  if(!addCand){out.textContent='';return;}
+  var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';
+  var phrase=bind.trim()||name.trim();
+  if(!phrase){out.textContent='送信機 '+addCand.tag+' のバインドフレーズ（空欄なら名前）を入れてください';out.style.color='var(--muted)';addCand.match=false;return;}
+  var seq=++uidCheckSeq;
+  uidCheckT=setTimeout(function(){
+    fetch('/api/bind_uid?p='+encodeURIComponent(phrase)).then(r=>r.json()).then(function(d){
+      if(seq!==uidCheckSeq||!addCand)return;
+      addCand.match=d.tag===addCand.tag;
+      out.textContent=addCand.match?'✓ 送信機 '+addCand.tag+' と一致しました':'✗ 送信機 '+addCand.tag+' と一致しません（'+(bind.trim()?'バインドフレーズ':'名前（フレーズ空欄）')+'を確かめてください）';
+      out.style.color=addCand.match?'var(--ok)':'var(--err)';
+    }).catch(function(){});
+  },250);
+}
+document.addEventListener('input',function(e){if(addCand&&e.target&&(e.target.id==='addName'||e.target.id==='addBind'))checkAddUid();});
 
 async function submitAdd(){
   var p=readPilotForm('add');if(!validPilot(p))return;
+  if(addCand&&!addCand.match&&!confirm('バインドフレーズが送信機 '+addCand.tag+' と一致しません。このまま登録しますか？'))return;
   try{
     var r=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
     if(!r.ok){toast('⚠️ 登録エラー');return;}
