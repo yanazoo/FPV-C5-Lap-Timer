@@ -7,6 +7,7 @@
 
 PilotRoster  roster[MAX_REGISTERED];
 CalibConfig  rosterCal[MAX_REGISTERED];
+PilotUid     rosterUid[MAX_REGISTERED];
 int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
@@ -76,6 +77,9 @@ static void putPilot(int i) {
     prefs.putBytes(key, &roster[i], sizeof roster[i]);
     snprintf(key, sizeof key, "c%d", i);
     prefs.putBytes(key, &rosterCal[i], sizeof rosterCal[i]);
+    snprintf(key, sizeof key, "u%d", i);
+    if (rosterUid[i].set) prefs.putBytes(key, rosterUid[i].uid, 6);
+    else if (prefs.isKey(key)) prefs.remove(key);
 }
 
 void saveRosterPilot(int i) {
@@ -189,6 +193,8 @@ void loadAll() {
         snprintf(key, sizeof key, "c%d", i);
         if (prefs.getBytes(key, &rosterCal[i], sizeof rosterCal[i]) != sizeof rosterCal[i])
             rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
+        snprintf(key, sizeof key, "u%d", i);
+        rosterUid[i].set = prefs.getBytes(key, rosterUid[i].uid, 6) == 6;
     }
     prefs.end();
 

@@ -244,7 +244,15 @@ LINK_SEEN, LINK_JOIN, LINK_LEAVE, CAND_KEEP = 3.0, 2.0, 10.0, 60.0
 
 
 def phrase_of(p):
-    return p.get("bind") or p["name"]
+    return p.get("uidPhrase") or p.get("bind") or p["name"]
+
+
+# The bridge: GET /mock/bridge?watch=0 as if it were unplugged (no ESP-NOW).
+BRIDGE = {"watch": True}
+
+
+def link_watch():
+    return bool(state["elrs"]["enabled"] and BRIDGE["watch"])
 
 
 def uid_tag(phrase):
@@ -312,7 +320,7 @@ def cand_json():
 def apply_radio_vtx():
     """vtxAuto: a registered pilot's radio sent its VTX: take it (between races)."""
     r = state["race"]
-    if not state["settings"].get("vtxAuto", True) or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
+    if not state["settings"].get("vtxAuto", True) or not link_watch() or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
         return
     pilots = state["pilots"]
     changed = []
@@ -339,7 +347,7 @@ def auto_assign():
             link_report(ph, l["reporting"])
     WAITS.clear()
     r = state["race"]
-    if state["settings"].get("assignMode") != 1 or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
+    if state["settings"].get("assignMode") != 1 or not link_watch() or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
         return
     act, pilots = state["active"], state["pilots"]
     joined, left = [], []
@@ -438,12 +446,16 @@ class Handler(SimpleHTTPRequestHandler):
                     link_report(ph, lq)
                 l["reporting"] = lq
             return self.reply({"ok": True})
+        if p == "/mock/bridge":
+            BRIDGE["watch"] = parse_qs(u.query).get("watch", ["1"])[0] == "1"
+            return self.reply({"ok": True})
         if p == "/api/bind_uid":
             return self.reply({"tag": uid_tag(parse_qs(u.query).get("p", [""])[0])})
         if p == "/mock/seed":
             seed()
             RADIOS.clear()
             state["settings"].update(assignMode=0, vtxAuto=True)
+            BRIDGE["watch"] = True
             with ws_lock:
                 sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
@@ -481,8 +493,9 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(state["race"]["laps"])
         if not p.startswith("/api/"):
             return super().do_GET()
-        if p == "/api/pilots":
-            return self.reply([dict(x, id=i, activeSlot=slot_of(i)) for i, x in enumerate(state["pilots"])])
+        if p == "/api/pilots":   # the radio's phrase behind a UID registration stays here
+            return self.reply([{**{k: v for k, v in x.items() if k != "uidPhrase"}, "id": i, "activeSlot": slot_of(i)}
+                               for i, x in enumerate(state["pilots"])])
         if p == "/api/active":
             return self.reply(active_json())
         if p == "/api/settings":
@@ -642,6 +655,13 @@ class Handler(SimpleHTTPRequestHandler):
             rec = {k: d.get(k) for k in ("name", "yomi", "freq", "bind", "osd")}
             rec["enter"] = d.get("enter", 350)
             rec["exit"] = d.get("exit", 280)
+            if d.get("uidTag"):   # by a radio's UID (the mock keeps radios by phrase)
+                ph = next((ph for ph in RADIOS if uid_tag(ph) == d["uidTag"]), None)
+                if ph is None:
+                    return self.reply({"ok": False, "reason": "radio"}, 409)
+                rec.update(bind="", uidPhrase=ph, uidTag=d["uidTag"])
+            elif d.get("bind"):
+                rec.update(uidPhrase=None, uidTag=None)
             if pid == -1:
                 state["pilots"].append(rec)
                 pid = len(state["pilots"]) - 1
@@ -849,7 +869,7 @@ if __name__ == "__main__":
                 broadcast({"type": "c5", "cpuTemp": 47 + (n // 10) % 3, "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
                            "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART",
-                           "watch": state["elrs"]["enabled"], "linkAge": 0 if any(l.get("reporting") is not None for l in RADIOS.values()) else -1},
+                           "watch": link_watch(), "linkAge": 0 if any(l.get("reporting") is not None for l in RADIOS.values()) else -1},
                            "links": links_json(), "cand": cand_json(),
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],

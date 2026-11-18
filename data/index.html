@@ -326,6 +326,7 @@ body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
 .link-badge.on{color:var(--ok);border-color:var(--ok)}
 .link-badge:empty{display:none}
 .assign-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;flex-wrap:wrap}
+#assignModeSelect:disabled,#vtxModeSelect:disabled{opacity:.45;cursor:not-allowed}
 .assign-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px}
 .cand-box{border:1px dashed var(--accent);border-radius:8px;padding:8px 10px;margin-bottom:8px}
 .cand-title{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px}
@@ -502,10 +503,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       </select>
       <span id="assignStatus" style="font-size:11px;flex-basis:100%"></span>
     </div>
-    <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:12px;cursor:pointer">
-      <input type="checkbox" id="vtxAutoToggle" onchange="saveVtxAuto()" style="flex-shrink:0;margin-top:2px">
-      <span style="flex:1">送信機の VTX 設定（Lua の Send VTx・リンク時）でパイロットの VTX を自動で変える</span>
-    </label>
+    <div class="assign-row">
+      <span>VTX が送信機と違うとき</span>
+      <select id="vtxModeSelect" onchange="saveVtxAuto()" style="flex:1;min-width:180px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;font-size:12px">
+        <option value="1">自動で反映（Send VTx・リンク時）</option>
+        <option value="0">タップで反映</option>
+      </select>
+    </div>
     <div id="assignNote" class="assign-note" style="display:none">
       機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
       必要なもの：ELRS 3.4 以降の送信機の Backpack ＞ <b>Telemetry を ESPNOW</b>（3.4.x は On）、ELRS OSD を ON、ESP-NOW ブリッジ v2.11 以降。パイロットのバインドフレーズ（空欄ならパイロット名）と VTX の周波数を登録してください。バックパックの無いパイロットは、手動で選んだチャンネルのままです。
@@ -524,6 +528,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div id="addForm" style="display:none;background:var(--sf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px">新規パイロット追加</div>
       <div id="addFormBody"></div>
+      <label id="addByUidRow" class="uid-check" style="display:none;cursor:pointer"><input type="checkbox" id="addByUid" onchange="onAddByUid()"> バインドフレーズが無い（送信機の UID で登録）</label>
       <div id="addUidCheck" class="uid-check"></div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button onclick="submitAdd()" class="btn-success" style="flex:1;font-size:12px">登録</button>

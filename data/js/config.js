@@ -53,6 +53,7 @@ function renderRoster(){
     var item=document.createElement('div');item.className='roster-item'+(editingRosterId===r.id?'':' rv');item.id='ri-'+r.id;
     if(editingRosterId===r.id){
       item.innerHTML=pilotFormHtml('edit',r)
+        +(r.uidTag?'<div class="uid-check" style="color:var(--accent)">🔑 送信機 '+esc(r.uidTag)+' の UID で登録しています。バインドフレーズを入れると、そちらに変わります。</div>':'')
         +'<div class="roster-actions">'
           +'<button onclick="submitEdit('+r.id+')" class="btn-success" style="font-size:11px;padding:3px 9px">保存</button>'
           +'<button onclick="cancelEdit()" class="btn-secondary" style="font-size:11px;padding:3px 9px">×</button>'
@@ -67,7 +68,9 @@ function renderRoster(){
         '<div class="rv-name"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +'<div class="rv-badges">'+activeBadge+osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
+        +'<div class="rv-badges">'+activeBadge+osd
+          +(r.uidTag?'<span class="osd-badge" title="バインドフレーズではなく、送信機の UID で登録しています">🔑 UID '+esc(r.uidTag)+'</span>':'')
+          +'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
           +'<span class="warn-badge vtx-fix" id="vx-'+r.id+'" style="display:none"></span></div>'
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
@@ -89,11 +92,11 @@ function showAssignMode(){
   updateLinkBadges();
 }
 var vtxAuto=true;
-function showVtxAuto(){var t=document.getElementById('vtxAutoToggle');if(t)t.checked=vtxAuto;}
+function showVtxAuto(){var t=document.getElementById('vtxModeSelect');if(t&&document.activeElement!==t)t.value=vtxAuto?'1':'0';}
 function saveVtxAuto(){
-  var v=document.getElementById('vtxAutoToggle').checked;
+  var v=document.getElementById('vtxModeSelect').value==='1';
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vtxAuto:v})})
-    .then(r=>{if(!r.ok)throw 0;vtxAuto=v;toast(v?'✓ 送信機の VTX 設定でパイロットの VTX を自動で変えます':'✓ パイロットの VTX は自動で変えません');})
+    .then(r=>{if(!r.ok)throw 0;vtxAuto=v;toast(v?'✓ VTX の違いを自動で反映します':'✓ VTX の違いはタップで反映します');})
     .catch(()=>{toast('⚠️ 保存エラー');showVtxAuto();});
 }
 function onVtxAuto(d){
@@ -127,13 +130,18 @@ function updateLinkBadges(){
     b.className='link-badge'+(l.on?' on':'');
     b.title=l.on?'送信機と機体がリンクしています':'送信機は見えていますが、機体とリンクしていません';
   });
+  // ESP-NOW reception: without it these functions are off (manual).
+  var avail=!!(c5Status&&el.watch);
+  ['assignModeSelect','vtxModeSelect'].forEach(function(id){var s=document.getElementById(id);if(s)s.disabled=!avail;});
   var st=document.getElementById('assignStatus');if(!st)return;
+  var why=!el.enabled?'ELRS OSD が OFF です':!el.connected?'ブリッジにつながっていません':'ブリッジから応答がありません（電源・配線、またはブリッジのファームが v2.11 より古い）';
+  if(!avail){
+    st.textContent=c5Status?'⚠ ESP-NOW を受信できません：'+why+'。自動割り当てと VTX の反映は無効で、手動で動きます。':'';
+    st.style.color='var(--warn)';return;
+  }
   if(assignMode!==1){st.textContent='';return;}
   var msg,col='var(--muted)';
-  if(!el.enabled)msg='⚠ ELRS OSD が OFF です',col='var(--warn)';
-  else if(!el.connected)msg='⚠ ブリッジにつながっていません',col='var(--warn)';
-  else if(!el.watch)msg='⚠ ブリッジが対応していません（v2.11 以降）',col='var(--warn)';
-  else if(c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0))msg='⏸ レースをクリアしたら反映します';
+  if(c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0))msg='⏸ レースをクリアしたら反映します';
   else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
   else msg='送信機の電波を待っています';
   st.textContent=msg;st.style.color=col;
@@ -235,15 +243,26 @@ function showAddForm(cand){
   var f=document.getElementById('addForm');
   document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
   document.getElementById('addUidCheck').textContent='';
+  var opt=document.getElementById('addByUidRow');
+  if(opt)opt.style.display=addCand?'':'none';
+  var cb=document.getElementById('addByUid');if(cb)cb.checked=false;
   f.style.display='block';document.getElementById('addName').focus();
   if(addCand){f.scrollIntoView({block:'nearest'});checkAddUid();}
 }
 function hideAddForm(){document.getElementById('addForm').style.display='none';addCand=null;}
 // The phrase (or the name, with the phrase empty) against the radio picked.
+function onAddByUid(){
+  var on=document.getElementById('addByUid').checked,b=document.getElementById('addBind');
+  if(b){b.disabled=on;if(on)b.value='';}
+  checkAddUid();
+}
 function checkAddUid(){
   clearTimeout(uidCheckT);
   var out=document.getElementById('addUidCheck');
   if(!addCand){out.textContent='';return;}
+  if((document.getElementById('addByUid')||{}).checked){
+    addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;
+  }
   var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';
   var phrase=bind.trim()||name.trim();
   if(!phrase){out.textContent='送信機 '+addCand.tag+' のバインドフレーズ（空欄なら名前）を入れてください';out.style.color='var(--muted)';addCand.match=false;return;}
@@ -261,9 +280,12 @@ document.addEventListener('input',function(e){if(addCand&&e.target&&(e.target.id
 
 async function submitAdd(){
   var p=readPilotForm('add');if(!validPilot(p))return;
-  if(addCand&&!addCand.match&&!confirm('バインドフレーズが送信機 '+addCand.tag+' と一致しません。このまま登録しますか？'))return;
+  var byUid=addCand&&(document.getElementById('addByUid')||{}).checked;
+  if(byUid){p.uidTag=addCand.tag;p.bind='';}
+  else if(addCand&&!addCand.match&&!confirm('バインドフレーズが送信機 '+addCand.tag+' と一致しません。このまま登録しますか？'))return;
   try{
     var r=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    if(r.status===409&&byUid){toast('⚠️ 送信機 '+addCand.tag+' の電波が消えました。送信機の電源を入れて、もう一度試してください',5000);return;}
     if(!r.ok){toast('⚠️ 登録エラー');return;}
     var body=await r.json();
     // Put a new pilot straight into the first free channel.

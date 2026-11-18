@@ -73,6 +73,11 @@ String rosterJson() {
         o["yomi"]       = roster[i].yomi;
         o["freq"]       = roster[i].freqMhz;
         o["bind"]       = roster[i].bind;
+        if (rosterUid[i].set) {
+            char tag[7];
+            snprintf(tag, sizeof tag, "%02x%02x%02x", rosterUid[i].uid[0], rosterUid[i].uid[1], rosterUid[i].uid[2]);
+            o["uidTag"] = tag;   // registered by the radio's UID (first 3 bytes only)
+        }
         o["osd"]        = roster[i].osd;
         o["activeSlot"] = activeSlotOf(i);
         o["enter"]      = rosterCal[i].enterRssi;
@@ -458,7 +463,7 @@ void registerHttpRoutes() {
                 if (activePilots[s] == id) activePilots[s] = -1;
                 else if (activePilots[s] > id) activePilots[s]--;
             }
-            for (int i = id; i < rosterCount - 1; i++) roster[i] = roster[i + 1], rosterCal[i] = rosterCal[i + 1];
+            for (int i = id; i < rosterCount - 1; i++) roster[i] = roster[i + 1], rosterCal[i] = rosterCal[i + 1], rosterUid[i] = rosterUid[i + 1];
             rosterCount--;
             saveRosterAll();
             saveActive();
@@ -472,6 +477,14 @@ void registerHttpRoutes() {
         int id = doc["id"] | -1;
         int freq = doc["freq"] | 0;
         if (freq && (freq < 5180 || freq > 5917)) { bad(req, "freq 5180-5917"); return; }
+        // "uidTag": register by the UID of a radio heard (one bound without a
+        // bind phrase). The browser has only the tag; the UID stays here.
+        uint8_t radioUid[6];
+        bool byUid = doc["uidTag"].is<const char*>();
+        if (byUid && !pilotRadioByTag(doc["uidTag"].as<const char*>(), radioUid)) {
+            req->send(409, "application/json", R"({"ok":false,"reason":"radio"})");
+            return;
+        }
         {
             Guard g;
             if (id < -1 || id >= rosterCount) { bad(req, "bad id"); return; }
@@ -480,6 +493,7 @@ void registerHttpRoutes() {
                 id = rosterCount++;
                 memset(&roster[id], 0, sizeof roster[id]);
                 rosterCal[id] = {DEFAULT_ENTER, DEFAULT_EXIT};
+                rosterUid[id] = {};
                 roster[id].osd = true;
             }
             PilotRoster& p = roster[id];
@@ -489,6 +503,13 @@ void registerHttpRoutes() {
             utf8::copy(p.yomi, doc["yomi"] | "", sizeof p.yomi);
             p.freqMhz = (uint16_t)freq;
             if (doc["bind"].is<const char*>()) utf8::copy(p.bind, doc["bind"].as<const char*>(), sizeof p.bind);
+            if (byUid) {
+                rosterUid[id].set = true;
+                memcpy(rosterUid[id].uid, radioUid, 6);
+                p.bind[0] = '\0';
+            } else if (p.bind[0] || doc["uidClear"] == true) {
+                rosterUid[id].set = false;   // a bind phrase typed: it is the UID now
+            }
             if (!doc["osd"].isNull()) p.osd = doc["osd"] | true;
             // Thresholds only as a valid pair (enter above exit).
             int en = doc["enter"].isNull() ? rosterCal[id].enterRssi : constrain((int)doc["enter"], 0, 1023);

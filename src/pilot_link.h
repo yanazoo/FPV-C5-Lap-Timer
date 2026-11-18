@@ -28,5 +28,7 @@ void pilotLinkLoop(uint32_t now);
 // last minute that are not on the roster (tag: the UID's first 3 bytes in
 // hex, on, lq, vtx, age).
 void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand);
+// The full UID of a radio heard lately whose tag (as in cand) is this.
+bool pilotRadioByTag(const char* tag, uint8_t uid[6]);
 // A bind phrase's UID tag (as in cand), for the add form's check.
 String bindUidTag(const char* phrase);

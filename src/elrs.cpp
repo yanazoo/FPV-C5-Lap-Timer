@@ -58,8 +58,13 @@ uint32_t rdListenAt = 0;       // when the bridge was last pointed at the RD
 // arrives: over netpack it can take tens of ms to come back, by which time
 // the next OSD burst has already moved the bridge to a pilot's UID.
 bool    bridgeFilter = false;
-// The bridge answered kBridgeLinkWatch: it reports pilots' radio links.
-volatile bool bridgeLinkWatch = false;
+// The bridge answered kBridgeLinkWatch: it reports pilots' radio links. It
+// answers every request (one each LISTEN_CFG_MS), so an answer older than
+// WATCH_ACK_MS means the bridge is gone (a UART bridge unplugged or
+// rebooting says nothing else).
+volatile bool     bridgeLinkWatch = false;
+volatile uint32_t watchAckAt = 0;
+const uint32_t    WATCH_ACK_MS = 12000;
 bool     listenCfgDue = false;
 uint32_t listenCfgAt = 0;
 const uint32_t RD_RELISTEN_MS = 2000;   // idle: point the bridge at the RD again
@@ -169,7 +174,7 @@ void refreshConfig() {
     for (int s = 0; s < MAX_ACTIVE; s++) {
         int ri = activePilots[s];
         bool on = enabled && rosterValid(ri) && roster[ri].osd;
-        if (on) msp::bindPhraseUid(roster[ri].bind[0] ? roster[ri].bind : roster[ri].name, uid);
+        if (on) rosterUidOf(ri, uid);
         engine.setRecipient(s, on, uid);
     }
     bool rd = enabled && elrsCfg.rdBind[0];
@@ -222,7 +227,7 @@ void listenForRd(uint32_t now) {
 // bridge's link watch hears it. Between races only, once a second at most.
 uint32_t vtxAskAt = 0;
 void askVtx(uint32_t now) {
-    if (!st.connected || !bridgeLinkWatch || now - vtxAskAt < 1000 || raceActive()) return;
+    if (!st.connected || !elrsLinkWatch() || now - vtxAskAt < 1000 || raceActive()) return;
     vtxAskAt = now;
     {
         Guard g;
@@ -278,6 +283,7 @@ void onFrame() {
         bool on = parser.size() >= 1 && parser.payload()[0] == 1;
         if (on != bridgeLinkWatch) Serial.printf("[ELRS] bridge link watch %s\n", on ? "on" : "off");
         bridgeLinkWatch = on;
+        watchAckAt = millis();
     } else if (parser.function() == msp::kBridgeLinkReport && parser.size() >= 8) {
         pilotLinkReport(parser.payload(), parser.payload()[6]);
     } else if (parser.function() == msp::kBridgeVtxReport && parser.size() >= 8) {
@@ -520,7 +526,7 @@ void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finishe
     post(e);
 }
 
-bool elrsLinkWatch() { return bridgeLinkWatch; }
+bool elrsLinkWatch() { return enabled && bridgeLinkWatch && millis() - watchAckAt < WATCH_ACK_MS; }
 
 ElrsStatus elrsStatus() {
     portENTER_CRITICAL(&stMux);

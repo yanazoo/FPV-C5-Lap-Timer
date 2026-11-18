@@ -1,6 +1,7 @@
 #include "pilot_link.h"
 #include "auto_assign.h"
 #include "data_model.h"
+#include "elrs.h"
 #include "msp_v2.h"
 #include "nvs_store.h"
 #include "race.h"
@@ -42,6 +43,11 @@ struct PilotState {
 };
 PilotState pstate[MAX_REGISTERED];
 uint32_t   lastLoop = 0;
+// When ESP-NOW reception (elrsLinkWatch) last began, 0 = off. Assignment
+// waits kSettleMs after it comes back, until the radios have reported again
+// (else pilots not heard during the outage would leave their channels).
+uint32_t   watchSince = 0;
+constexpr uint32_t kSettleMs = autoassign::kSeenMs + 1000;
 
 int findRadio(const uint8_t uid[6]) {
     for (int i = 0; i < kRadios; i++)
@@ -71,7 +77,7 @@ int rosterUids(uint8_t uids[][6], uint8_t rd[6], bool& rdOn) {
     rdOn = elrsCfg.rdBind[0];
     if (rdOn) msp::bindPhraseUid(elrsCfg.rdBind, rd);
     for (int i = 0; i < rosterCount; i++)
-        msp::bindPhraseUid(roster[i].bind[0] ? roster[i].bind : roster[i].name, uids[i]);
+        rosterUidOf(i, uids[i]);
     return rosterCount;
 }
 
@@ -131,7 +137,7 @@ static bool raceBusy() {
 // channel measured would change under the race): kept until after Clear.
 // Not for a UID two pilots share, nor outside the C5's 5180-5917 MHz.
 static void applyRadioVtx() {
-    if (!vtxAuto || raceBusy()) return;
+    if (!vtxAuto || !elrsLinkWatch() || raceBusy()) return;
     struct New { uint8_t uid[6]; uint16_t mhz; } got[kRadios];
     int nGot = 0;
     portENTER_CRITICAL(&mux);
@@ -182,6 +188,10 @@ static void applyRadioVtx() {
 void pilotLinkLoop(uint32_t now) {
     if (now - lastLoop < 500) return;
     lastLoop = now;
+    bool watching = elrsLinkWatch();
+    if (!watching) watchSince = 0;
+    else if (!watchSince) watchSince = now ? now : 1;
+    bool settled = watching && now - watchSince >= kSettleMs;
     applyRadioVtx();
 
     autoassign::Pilot pilots[MAX_REGISTERED];
@@ -218,7 +228,9 @@ void pilotLinkLoop(uint32_t now) {
     uint8_t wait[MAX_REGISTERED] = {};
     autoassign::Result res;
     bool changed = false;
-    if (mode == ASSIGN_AUTO && !raceBusy()) {
+    // No ESP-NOW (ELRS off, no bridge, or one too old to watch): manual.
+    // Otherwise every pilot would leave their channel, their links unheard.
+    if (mode == ASSIGN_AUTO && settled && !raceBusy()) {
         changed = autoassign::plan(now, pilots, links, n, active, wait, res);
     }
     for (int i = 0; i < n; i++) {
@@ -300,6 +312,19 @@ void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand) {
             if (++listed >= 8) break;
         }
     }
+}
+
+bool pilotRadioByTag(const char* tag, uint8_t uid[6]) {
+    bool found = false;
+    portENTER_CRITICAL(&mux);
+    for (const Radio& r : radios) {
+        if (!r.used) continue;
+        char t[7];
+        uidTag(r.uid, t);
+        if (strcmp(t, tag) == 0) { memcpy(uid, r.uid, 6); found = true; break; }
+    }
+    portEXIT_CRITICAL(&mux);
+    return found;
 }
 
 String bindUidTag(const char* phrase) {

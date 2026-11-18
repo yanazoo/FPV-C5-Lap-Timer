@@ -7,6 +7,7 @@
 #include "config.h"
 #include "osd_engine.h"
 #include "race_core.h"
+#include "msp_v2.h"
 
 // A pilot in the roster. Pilots are identified by their VTX frequency
 // (the C5 measures one frequency per slot), not by a beacon MAC.
@@ -16,6 +17,14 @@ struct PilotRoster {
     uint16_t freqMhz;        // VTX frequency, 0 = not set
     char     bind[33];       // ELRS bind phrase; empty = use the name (as vrxc_elrs)
     bool     osd;            // send ELRS OSD to this pilot's goggles
+};
+
+// A pilot registered by their radio's UID (a radio bound without a bind
+// phrase, picked from the unregistered radios): used instead of the phrase.
+// Its own NVS key per pilot ("u<i>"), so PilotRoster's stored layout stays.
+struct PilotUid {
+    bool    set;
+    uint8_t uid[6];
 };
 
 struct CalibConfig {
@@ -92,6 +101,7 @@ struct ElrsSettings {
 
 extern PilotRoster  roster[MAX_REGISTERED];
 extern CalibConfig  rosterCal[MAX_REGISTERED];
+extern PilotUid     rosterUid[MAX_REGISTERED];
 extern int          rosterCount;
 extern int          activePilots[MAX_ACTIVE];
 extern Settings     settings;
@@ -151,3 +161,10 @@ struct Guard {
 };
 
 inline bool rosterValid(int ri) { return ri >= 0 && ri < rosterCount; }
+
+// The ELRS UID of roster entry i: its stored UID, else from its bind phrase,
+// else from its name (as vrxc_elrs). Caller holds gLock.
+inline void rosterUidOf(int i, uint8_t uid[6]) {
+    if (rosterUid[i].set) memcpy(uid, rosterUid[i].uid, 6);
+    else msp::bindPhraseUid(roster[i].bind[0] ? roster[i].bind : roster[i].name, uid);
+}

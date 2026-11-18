@@ -280,8 +280,21 @@ sends them when it links and on **Send VTx**. The timer shows them for
 unregistered radios. With "送信機の VTX 設定でパイロットの VTX を自動で変える" on
 (the default), a registered pilot's VTX becomes the frequency their radio
 sent (not during a race or with laps not cleared: after Clear; not for a
-bind phrase two pilots share, nor outside 5180–5917 MHz). Off, a difference
-shows "⚠ 機体の VTX は R5 5806 ▶ 合わせる" (tap to take it). Started after the radios linked,
+bind phrase two pilots share, nor outside 5180–5917 MHz). "VTX が送信機と違うとき":
+自動で反映 (the above) or タップで反映 (a difference shows "⚠ 機体の VTX は R5 5806 ▶
+合わせる"; tap to take it).
+
+**Radios without a bind phrase** (bound with the Lua Bind button): in the
+add form opened from an unregistered radio, tick "バインドフレーズが無い（送信機の
+UID で登録）" to register the pilot by the radio's UID ("🔑 UID" in the list;
+links and the goggle OSD use it). Typing a bind phrase later replaces it. The
+SD roster backup carries the UID.
+
+**No ESP-NOW** (ELRS OSD off, no bridge, or no answer from it / an older
+bridge): automatic assignment and taking VTX settings are off and the timer
+works as manual (the selects are greyed out with the reason; nobody leaves
+their channel). Once ESP-NOW is back it waits a few seconds for the radios
+to report before assigning again. Started after the radios linked,
 the timer asks linked radios for their VTX settings (between races only).
 Radios without the VTX Administrator say nothing about their VTX.
 
