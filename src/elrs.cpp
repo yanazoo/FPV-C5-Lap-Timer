@@ -242,6 +242,11 @@ void askVtx(uint32_t now) {
     out.write(f, n);
     n = msp::encode(msp::kElrsReqVtxPkt, nullptr, 0, f, sizeof f);
     out.write(f, n);
+    // Back to the bind-phrase UID, as every OSD burst ends: the bridge sends
+    // the request (under the pilot's UID) when its UID changes.
+    p[0] = 0x00;
+    n = msp::encode(msp::kElrsSetSendUid, p, 1, f, sizeof f);
+    out.write(f, n);
     out.burstDone();   // write() set rdListenDue: the bridge goes back to the RD next
 }
 
