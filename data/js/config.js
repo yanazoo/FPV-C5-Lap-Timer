@@ -50,7 +50,7 @@ function renderRoster(){
   var dup=dupFreqSlots();
   list.innerHTML='';
   filtered.forEach(function(r){
-    var item=document.createElement('div');item.className='roster-item';item.id='ri-'+r.id;
+    var item=document.createElement('div');item.className='roster-item'+(editingRosterId===r.id?'':' rv');item.id='ri-'+r.id;
     if(editingRosterId===r.id){
       item.innerHTML=pilotFormHtml('edit',r)
         +'<div class="roster-actions">'
@@ -64,10 +64,10 @@ function renderRoster(){
       var warn=(r.activeSlot>=0&&dup[r.activeSlot])?'<span class="warn-badge" title="同じ周波数のパイロットがいます">⚠ 周波数重複</span>':'';
       var osd=r.osd?'<span class="osd-badge" title="ELRS OSD">🥽 OSD</span>':'';
       item.innerHTML=
-        '<div style="flex:1;min-width:80px"><span class="roster-name">'+esc(r.name)
+        '<div class="rv-name"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+activeBadge+warn
+        +'<div class="rv-badges">'+activeBadge+osd+'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn+'</div>'
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
           +'<button onclick="startEdit('+r.id+')" class="btn-gray-soft" style="font-size:11px;padding:3px 8px">編集</button>'

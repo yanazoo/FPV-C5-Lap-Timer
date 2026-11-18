@@ -158,6 +158,19 @@ body.viewer .lap-btn{display:none}
 .active-badge.p7{background:var(--p7-bg);color:var(--p7);border:1px solid var(--p7)}
 .online-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.15);color:var(--ok);border:1px solid var(--ok);white-space:nowrap}
 .roster-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+/* A pilot row (not being edited): the same columns in every row.
+   Phone: name | VTX, then badges | channel, edit, delete. Wide: one line. */
+.roster-item.rv{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name freq" "badges actions";column-gap:8px;row-gap:6px;align-items:center}
+.rv .rv-name{grid-area:name;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rv .roster-mac{grid-area:freq;min-width:0;text-align:right;white-space:nowrap}
+.rv .rv-badges{grid-area:badges;display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0;min-height:20px}
+.rv .roster-actions{grid-area:actions;justify-self:end}
+.rv .ch-select{width:76px}
+.rv .roster-actions button{min-width:44px}
+@media (min-width:700px){
+  .roster-item.rv{grid-template-columns:minmax(110px,1fr) 96px minmax(0,1.6fr) auto;grid-template-areas:"name freq badges actions"}
+  .rv .roster-mac{text-align:left}
+}
 .roster-item input[type="text"]{background:var(--bg);border:1px solid var(--accent);color:var(--tx);border-radius:5px;padding:3px 7px;font-size:12px}
 .ch-select{background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:3px 5px;font-size:11px;cursor:pointer}
 
