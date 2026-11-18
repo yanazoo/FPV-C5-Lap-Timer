@@ -7,6 +7,7 @@
 #include "ws_handler.h"
 
 uint8_t assignMode = ASSIGN_MANUAL;
+bool    vtxAuto = true;
 
 static_assert(autoassign::kSlots == MAX_ACTIVE, "slot count");
 
@@ -23,6 +24,7 @@ struct Radio {
     uint32_t         heardAt;   // any report
     autoassign::Link link;
     uint16_t         vtx;       // MHz from its VTX Administrator, 0 = not heard
+    bool             vtxNew;    // vtx just arrived, not yet taken for a pilot (vtxAuto)
     uint32_t         vtxAskAt;
     uint8_t          vtxAsks;
 };
@@ -96,7 +98,9 @@ void pilotVtxReport(const uint8_t uid[6], uint16_t mhz) {
     uint32_t now = millis();
     if (!now) now = 1;
     portENTER_CRITICAL(&mux);
-    radioFor(uid, now).vtx = mhz;
+    Radio& r = radioFor(uid, now);
+    r.vtx = mhz;
+    r.vtxNew = true;
     portEXIT_CRITICAL(&mux);
 }
 
@@ -122,9 +126,63 @@ static bool raceBusy() {
     return raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
 }
 
+// vtxAuto: VTX settings just received from a registered pilot's radio become
+// the pilot's VTX frequency. Not during a race or with laps not cleared (the
+// channel measured would change under the race): kept until after Clear.
+// Not for a UID two pilots share, nor outside the C5's 5180-5917 MHz.
+static void applyRadioVtx() {
+    if (!vtxAuto || raceBusy()) return;
+    struct New { uint8_t uid[6]; uint16_t mhz; } got[kRadios];
+    int nGot = 0;
+    portENTER_CRITICAL(&mux);
+    for (Radio& r : radios)
+        if (r.used && r.vtxNew) {
+            r.vtxNew = false;
+            memcpy(got[nGot].uid, r.uid, 6);
+            got[nGot++].mhz = r.vtx;
+        }
+    portEXIT_CRITICAL(&mux);
+    if (!nGot) return;
+    int changed[kRadios], nChanged = 0;
+    {
+        Guard g;
+        uint8_t uids[MAX_REGISTERED][6], rd[6];
+        bool rdOn;
+        int n = rosterUids(uids, rd, rdOn);
+        for (int k = 0; k < nGot; k++) {
+            uint16_t mhz = got[k].mhz;
+            if (mhz < 5180 || mhz > 5917) continue;
+            int who = -1, count = 0;
+            for (int i = 0; i < n; i++)
+                if (memcmp(uids[i], got[k].uid, 6) == 0) who = i, count++;
+            if (count != 1 || roster[who].freqMhz == mhz) continue;
+            Serial.printf("[Link] pilot %d VTX %u -> %u MHz (from the radio)\n", who, roster[who].freqMhz, mhz);
+            roster[who].freqMhz = mhz;
+            saveRosterPilot(who);
+            changed[nChanged++] = who;
+        }
+    }
+    if (!nChanged) return;
+    applyGateConfig();
+    wsActiveUpdate();
+    for (int k = 0; k < nChanged; k++) {
+        JsonDocument d;
+        d["type"] = "vtx_auto";
+        d["id"] = changed[k];
+        {
+            Guard g;
+            d["freq"] = roster[changed[k]].freqMhz;
+        }
+        String msg;
+        serializeJson(d, msg);
+        wsText(msg);
+    }
+}
+
 void pilotLinkLoop(uint32_t now) {
     if (now - lastLoop < 500) return;
     lastLoop = now;
+    applyRadioVtx();
 
     autoassign::Pilot pilots[MAX_REGISTERED];
     autoassign::Link  links[MAX_REGISTERED];

@@ -276,9 +276,12 @@ bind phrase (or the name) typed is checked against the radio as you type (a
 bind phrase cannot be worked out from the radio's UID, so it has to be typed).
 
 **VTX settings**: a TX whose Lua **VTX Administrator** has a band and channel
-sends them when it links. The timer shows them for unregistered radios, and
-for a pilot whose registered VTX differs shows "⚠ 機体の VTX は R5 5806 ▶ 合わせる"
-(tap to take it; never changed by itself). Started after the radios linked,
+sends them when it links and on **Send VTx**. The timer shows them for
+unregistered radios. With "送信機の VTX 設定でパイロットの VTX を自動で変える" on
+(the default), a registered pilot's VTX becomes the frequency their radio
+sent (not during a race or with laps not cleared: after Clear; not for a
+bind phrase two pilots share, nor outside 5180–5917 MHz). Off, a difference
+shows "⚠ 機体の VTX は R5 5806 ▶ 合わせる" (tap to take it). Started after the radios linked,
 the timer asks linked radios for their VTX settings (between races only).
 Radios without the VTX Administrator say nothing about their VTX.
 

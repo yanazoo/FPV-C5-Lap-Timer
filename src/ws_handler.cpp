@@ -363,6 +363,7 @@ static void addSettings(JsonDocument& d) {
     d["startDelayOn"]  = startDelayOn;
     d["startDelaySec"] = startDelaySec;
     d["assignMode"]    = assignMode;
+    d["vtxAuto"]       = vtxAuto;
 }
 
 void wsSettings() {

@@ -86,7 +86,7 @@ state = {
     "active": [-1] * 8,
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30,
                  "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10,
-                 "assignMode": 0},
+                 "assignMode": 0, "vtxAuto": True},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
@@ -309,8 +309,31 @@ def cand_json():
     return rows[:8]
 
 
+def apply_radio_vtx():
+    """vtxAuto: a registered pilot's radio sent its VTX: take it (between races)."""
+    r = state["race"]
+    if not state["settings"].get("vtxAuto", True) or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
+        return
+    pilots = state["pilots"]
+    changed = []
+    for ph, l in RADIOS.items():
+        if not l.get("vtxNew"):
+            continue
+        l["vtxNew"] = False
+        who = [i for i, p in enumerate(pilots) if phrase_of(p) == ph]
+        if len(who) != 1 or not 5180 <= l["vtx"] <= 5917 or pilots[who[0]].get("freq") == l["vtx"]:
+            continue
+        pilots[who[0]]["freq"] = l["vtx"]
+        changed.append(who[0])
+    if changed:
+        broadcast({"type": "active_update", "pilots": active_json()})
+        for i in changed:
+            broadcast({"type": "vtx_auto", "id": i, "freq": pilots[i]["freq"]})
+
+
 def auto_assign():
     t = time.monotonic()
+    apply_radio_vtx()
     for ph, l in RADIOS.items():
         if l.get("reporting") is not None:
             link_report(ph, l["reporting"])
@@ -408,7 +431,7 @@ class Handler(SimpleHTTPRequestHandler):
                 ph = q.get("phrase", ["?"])[0]
             l = radio(ph)
             if "vtx" in q:
-                l["vtx"], l["heard"] = int(q["vtx"][0]), time.monotonic()
+                l["vtx"], l["heard"], l["vtxNew"] = int(q["vtx"][0]), time.monotonic(), True
             if "lq" in q or "off" in q:
                 lq = None if q.get("off", ["0"])[0] == "1" else int(q.get("lq", ["90"])[0])
                 if lq is not None:
@@ -420,6 +443,7 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/mock/seed":
             seed()
             RADIOS.clear()
+            state["settings"].update(assignMode=0, vtxAuto=True)
             with ws_lock:
                 sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})

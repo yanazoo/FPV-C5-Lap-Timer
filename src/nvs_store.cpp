@@ -107,6 +107,7 @@ void saveSettings() {
     prefs.putUShort("sdly", startDelaySec);
     prefs.putBool("sdlyon", startDelayOn);
     prefs.putUChar("amode", assignMode);
+    prefs.putBool("avtx", vtxAuto);
     prefs.end();
 }
 
@@ -208,6 +209,7 @@ void loadAll() {
     startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
     startDelaySec = sd ? sd : 10;
     assignMode = prefs.getUChar("amode", ASSIGN_MANUAL) == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
+    vtxAuto = prefs.getBool("avtx", true);
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

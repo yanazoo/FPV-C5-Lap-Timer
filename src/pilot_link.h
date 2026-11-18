@@ -10,6 +10,10 @@
 // pilots' radio links. NVS "settings"/"amode"; settings JSON "assignMode".
 constexpr uint8_t ASSIGN_MANUAL = 0, ASSIGN_AUTO = 1;
 extern uint8_t assignMode;
+// A registered pilot's radio sends its VTX settings (Lua VTX Administrator,
+// "Send VTx", or on linking): take them as the pilot's VTX frequency.
+// NVS "settings"/"avtx"; settings JSON "vtxAuto". Default on.
+extern bool vtxAuto;
 
 // The ELRS task: the bridge heard a radio (UID) with this uplink LQ / VTX.
 void pilotLinkReport(const uint8_t uid[6], uint8_t lq);

@@ -502,6 +502,10 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       </select>
       <span id="assignStatus" style="font-size:11px;flex-basis:100%"></span>
     </div>
+    <label style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px;font-size:12px;cursor:pointer">
+      <input type="checkbox" id="vtxAutoToggle" onchange="saveVtxAuto()" style="flex-shrink:0;margin-top:2px">
+      <span style="flex:1">送信機の VTX 設定（Lua の Send VTx・リンク時）でパイロットの VTX を自動で変える</span>
+    </label>
     <div id="assignNote" class="assign-note" style="display:none">
       機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
       必要なもの：ELRS 3.4 以降の送信機の Backpack ＞ <b>Telemetry を ESPNOW</b>（3.4.x は On）、ELRS OSD を ON、ESP-NOW ブリッジ v2.11 以降。パイロットのバインドフレーズ（空欄ならパイロット名）と VTX の周波数を登録してください。バックパックの無いパイロットは、手動で選んだチャンネルのままです。

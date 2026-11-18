@@ -116,6 +116,7 @@ void settingsToJson(JsonObject doc) {
     doc["startDelayOn"]  = startDelayOn;
     doc["startDelaySec"] = startDelaySec;
     doc["assignMode"]    = assignMode;
+    doc["vtxAuto"]       = vtxAuto;
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).
@@ -139,6 +140,7 @@ void settingsFromJson(JsonVariantConst doc) {
         if (sd > 0) startDelaySec = (uint16_t)min(sd, (int)START_DELAY_MAX);
         else if (doc["startDelayOn"].isNull()) startDelayOn = false;   // an old backup's "none"
     }
+    if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
     if (!doc["assignMode"].isNull()) assignMode = (int)doc["assignMode"] == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
     saveSettings();
 }

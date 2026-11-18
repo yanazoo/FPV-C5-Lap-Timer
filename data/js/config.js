@@ -88,6 +88,18 @@ function showAssignMode(){
   var n=document.getElementById('assignNote');if(n)n.style.display=assignMode===1?'':'none';
   updateLinkBadges();
 }
+var vtxAuto=true;
+function showVtxAuto(){var t=document.getElementById('vtxAutoToggle');if(t)t.checked=vtxAuto;}
+function saveVtxAuto(){
+  var v=document.getElementById('vtxAutoToggle').checked;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vtxAuto:v})})
+    .then(r=>{if(!r.ok)throw 0;vtxAuto=v;toast(v?'✓ 送信機の VTX 設定でパイロットの VTX を自動で変えます':'✓ パイロットの VTX は自動で変えません');})
+    .catch(()=>{toast('⚠️ 保存エラー');showVtxAuto();});
+}
+function onVtxAuto(d){
+  var r=rosterById[d.id];
+  toast('📡 '+(r?r.name:'#'+d.id)+' の VTX を送信機の設定 '+freqLabel(d.freq)+' に変えました',4000);
+}
 function saveAssignMode(){
   var v=parseInt(document.getElementById('assignModeSelect').value,10)===1?1:0;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assignMode:v})})
