@@ -259,8 +259,14 @@ default is manual.
   or the name when it is empty, as for the goggle OSD).
 - Linked for **2 s**: the lowest free channel. Not linked for **10 s**: off
   its channel (a crash's short dropout doesn't count).
-- **Nothing changes during a race or while laps are not cleared**; it all
-  happens after Clear.
+- Two automatic modes:
+  - **レースの合間だけ** (between races): nothing changes during a race or
+    while laps are not cleared; it all happens after Clear.
+  - **レース中も** (also in races): during a race, a linked pilot joins a
+    channel not used yet in this race (so laps never mix); a pilot not
+    linked for 10 s is **no longer measured** ("📴 計測停止" on the race card;
+    their laps and place stay) and **leaves the channel after Clear**; linked
+    again in the same race, measured again.
 - A pilot who can't join says why in the list: no VTX frequency, the same
   frequency as a pilot already on a channel, no free channel, or a bind phrase
   shared with another pilot or the race director.

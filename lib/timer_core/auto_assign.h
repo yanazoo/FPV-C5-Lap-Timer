@@ -121,6 +121,66 @@ inline bool plan(uint32_t now, const Pilot* pilots, const Link* links, int n, in
     return r.nJoined || r.nLeft;
 }
 
+// During a race ("auto, also in races"): the race's laps stay with their
+// slots, so nobody is taken off a slot until the race is cleared.
+//   * a pilot on a slot who was seen linked and has not been linked for
+//     kLeaveMs is "out": the slot stops measuring (out[slot] = true) but the
+//     pilot, the slot and their laps stay; linked again (kJoinMs), back in;
+//   * a pilot linked for kJoinMs joins a free slot not used in this race
+//     (used[slot]: it has laps, or someone was out there), same waits as plan().
+struct RaceResult {
+    int joined[kSlots]; int nJoined = 0;
+    int out[kSlots];    int nOut = 0;     // roster indexes that went out
+    int back[kSlots];   int nBack = 0;    // roster indexes back in
+};
+inline bool planRace(uint32_t now, const Pilot* pilots, const Link* links, int n, int active[kSlots],
+                     bool out[kSlots], const bool used[kSlots], uint8_t* wait, RaceResult& r) {
+    r.nJoined = r.nOut = r.nBack = 0;
+    for (int i = 0; i < n; i++) wait[i] = kNone;
+    for (int s = 0; s < kSlots; s++) {
+        int i = active[s];
+        if (i < 0 || i >= n) continue;
+        const Link& l = links[i];
+        bool on = linked(l, now);
+        if (!out[s] && l.lastUp && !on && now - l.lastUp >= kLeaveMs) {
+            out[s] = true;
+            r.out[r.nOut++] = i;
+        } else if (out[s] && on && l.upSince && now - l.upSince >= kJoinMs) {
+            out[s] = false;
+            r.back[r.nBack++] = i;
+        }
+    }
+    for (;;) {
+        int pick = -1;
+        for (int i = 0; i < n; i++) {
+            const Link& l = links[i];
+            if (!pilots[i].valid || !linked(l, now) || !l.upSince || now - l.upSince < kJoinMs) continue;
+            bool on = false;
+            for (int s = 0; s < kSlots; s++) on |= active[s] == i;
+            if (on || wait[i] != kNone) continue;
+            if (pick < 0 || (int32_t)(l.upSince - links[pick].upSince) < 0) pick = i;
+        }
+        if (pick < 0) break;
+        const Pilot& p = pilots[pick];
+        int freeSlot = -1;
+        bool sameFreq = false;
+        for (int s = 0; s < kSlots; s++) {
+            int a = active[s];
+            if (a < 0 || a >= n) { if (freeSlot < 0 && !used[s] && !out[s]) freeSlot = s; continue; }
+            if (p.freq && pilots[a].freq == p.freq) sameFreq = true;
+        }
+        if (!p.distinct) wait[pick] = kAmbiguous;
+        else if (!p.freq) wait[pick] = kNoFreq;
+        else if (sameFreq) wait[pick] = kSameFreq;
+        else if (freeSlot < 0) wait[pick] = kFull;
+        else {
+            active[freeSlot] = pick;
+            r.joined[r.nJoined++] = pick;
+        }
+    }
+    return r.nJoined || r.nOut || r.nBack;
+}
+
 // The first two bytes of MSP_SET_VTX_CONFIG, as ELRS's VTX Administrator
 // sends them: (band - 1) * 8 + channel (0-7), bands A B E F R L (the
 // Betaflight default table), or a frequency in MHz (> 63, little-endian).

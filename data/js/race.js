@@ -108,6 +108,7 @@ function buildRaceCards(){
       '<div class="pilot-card-header '+PCLS[p.id]+'">'
         +'<span class="p-name" id="rcName'+p.id+'">'+esc(p.name==='---'?'Ch'+(p.id+1):p.name)+'</span>'
         +'<span class="p-freq" id="rcFreq'+p.id+'">'+(p.freq?esc(freqLabel(p.freq)):'')+'</span>'
+        +'<span class="out-badge" id="rcOut'+p.id+'" title="送信機のリンクが切れたので計測を止めています（クリア後にチャンネルから外れます）">📴 計測停止</span>'
         +'<span class="crossing-badge" id="rcBadge'+p.id+'">CROSSING</span>'
         +'<span class="p-lapcount" id="rcLaps'+p.id+'"></span>'
       +'</div>'
@@ -496,4 +497,10 @@ function checkFinished(p,finished){
       var u=new SpeechSynthesisUtterance(getSpokenName(p)+'、フィニッシュ');u.lang='ja-JP';u.rate=speechRate;speechSynthesis.speak(u);
     }
   }
+}
+
+// Auto assignment in races: slots whose pilot's link is gone (c5 elrs.out).
+function updateOutBadges(){
+  var m=(c5Status&&c5Status.elrs&&c5Status.elrs.out)||0;
+  for(var i=0;i<N;i++){var e=document.getElementById('rcOut'+i);if(e)e.classList.toggle('on',!!(m&(1<<i)));}
 }

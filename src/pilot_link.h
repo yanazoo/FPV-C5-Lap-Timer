@@ -7,8 +7,11 @@
 #include <ArduinoJson.h>
 
 // Channel assignment: manual (the pilot list's channel selects) or from the
-// pilots' radio links. NVS "settings"/"amode"; settings JSON "assignMode".
-constexpr uint8_t ASSIGN_MANUAL = 0, ASSIGN_AUTO = 1;
+// pilots' radio links, between races only or also during races (a pilot
+// whose link goes is then not measured until the race is cleared).
+// NVS "settings"/"amode"; settings JSON "assignMode".
+constexpr uint8_t ASSIGN_MANUAL = 0, ASSIGN_AUTO = 1, ASSIGN_AUTO_RACE = 2;
+inline uint8_t assignModeValid(int v) { return v == ASSIGN_AUTO || v == ASSIGN_AUTO_RACE ? (uint8_t)v : ASSIGN_MANUAL; }
 extern uint8_t assignMode;
 // A registered pilot's radio sends its VTX settings (Lua VTX Administrator,
 // "Send VTx", or on linking): take them as the pilot's VTX frequency.
@@ -21,7 +24,9 @@ void pilotVtxReport(const uint8_t uid[6], uint16_t mhz);
 // The ELRS task: a linked radio whose VTX is not known yet, to ask for it
 // (a few times, some seconds apart). False if none.
 bool pilotVtxWanted(uint8_t uid[6], uint32_t now);
-// raceLoop(): apply automatic assignment (between races).
+// raceLoop(): apply automatic assignment.
+// A slot whose pilot's link is gone during a race (auto in races): not measured.
+bool pilotSlotOut(int slot);
 void pilotLinkLoop(uint32_t now);
 // For the c5 status: in el "linkAge" (s since the last report, -1 never);
 // links: per pilot heard (id, lq, on, wait, vtx); cand: radios heard in the

@@ -161,6 +161,7 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
+    if(typeof updateOutBadges==='function')updateOutBadges();
     if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function'){updateLinkBadges();renderCandidates();}}
     return;
   }
@@ -377,7 +378,7 @@ function applySettings(st){
   if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
   if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
   if(st.vtxAuto!==undefined&&typeof showVtxAuto==='function'){vtxAuto=st.vtxAuto!==false;showVtxAuto();}
-  if(st.assignMode!==undefined&&typeof showAssignMode==='function'){assignMode=st.assignMode===1?1:0;showAssignMode();}
+  if(st.assignMode!==undefined&&typeof showAssignMode==='function'){assignMode=st.assignMode===1||st.assignMode===2?st.assignMode:0;showAssignMode();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

@@ -214,7 +214,7 @@ void loadAll() {
     uint16_t sd = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
     startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
     startDelaySec = sd ? sd : 10;
-    assignMode = prefs.getUChar("amode", ASSIGN_MANUAL) == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
+    assignMode = assignModeValid(prefs.getUChar("amode", ASSIGN_MANUAL));
     vtxAuto = prefs.getBool("avtx", true);
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;

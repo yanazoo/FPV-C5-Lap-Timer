@@ -88,7 +88,7 @@ var assignMode=0;
 var LINK_WAIT={1:'VTX 未設定',2:'周波数が重なる',3:'空きチャンネルなし',4:'バインドフレーズが重複'};
 function showAssignMode(){
   var sel=document.getElementById('assignModeSelect');if(sel&&document.activeElement!==sel)sel.value=String(assignMode);
-  var n=document.getElementById('assignNote');if(n)n.style.display=assignMode===1?'':'none';
+  var n=document.getElementById('assignNote');if(n)n.style.display=assignMode?'':'none';
   updateLinkBadges();
 }
 var vtxAuto=true;
@@ -104,10 +104,10 @@ function onVtxAuto(d){
   toast('📡 '+(r?r.name:'#'+d.id)+' の VTX を送信機の設定 '+freqLabel(d.freq)+' に変えました',4000);
 }
 function saveAssignMode(){
-  var v=parseInt(document.getElementById('assignModeSelect').value,10)===1?1:0;
+  var v=parseInt(document.getElementById('assignModeSelect').value,10);if(v!==1&&v!==2)v=0;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assignMode:v})})
     .then(r=>{if(!r.ok)throw 0;assignMode=v;showAssignMode();
-      toast(v?'✓ チャンネルの割り当てを「自動（ELRS のリンク）」にしました':'✓ チャンネルの割り当てを「手動」にしました');})
+      toast(['✓ チャンネルの割り当てを「手動」にしました','✓ チャンネルの割り当てを「自動（レースの合間だけ）」にしました','✓ チャンネルの割り当てを「自動（レース中も）」にしました'][v]);})
     .catch(()=>{toast('⚠️ 保存エラー');showAssignMode();});
 }
 // Per-pilot link badges and the status next to the mode (from the 1 Hz c5 status).
@@ -125,7 +125,7 @@ function updateLinkBadges(){
       if(diff){vx.textContent='⚠ 機体の VTX は '+freqLabel(l.vtx)+' ▶ 合わせる';vx.title='送信機の VTX Administrator の設定です。タップすると登録の VTX をこれに変えます';vx.onclick=function(){fixVtx(r.id,l.vtx);};}
     }
     if(!l){b.textContent='';b.className='link-badge';b.title='';return;}
-    var w=l.wait&&assignMode===1?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
+    var w=l.wait&&assignMode?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
     b.textContent=(l.on?'📶 LQ '+l.lq:'📴 リンクなし')+w;
     b.className='link-badge'+(l.on?' on':'');
     b.title=l.on?'送信機と機体がリンクしています':'送信機は見えていますが、機体とリンクしていません';
@@ -139,9 +139,10 @@ function updateLinkBadges(){
     st.textContent=c5Status?'⚠ ESP-NOW を受信できません：'+why+'。自動割り当てと VTX の反映は無効で、手動で動きます。':'';
     st.style.color='var(--warn)';return;
   }
-  if(assignMode!==1){st.textContent='';return;}
-  var msg,col='var(--muted)';
-  if(c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0))msg='⏸ レースをクリアしたら反映します';
+  if(!assignMode){st.textContent='';return;}
+  var msg,col='var(--muted)',racing=c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0);
+  if(racing&&assignMode===1)msg='⏸ レースをクリアしたら反映します';
+  else if(racing)msg='🏁 レース中も反映しています（リンクが切れたパイロットは計測を止め、クリア後に外します）',col='var(--ok)';
   else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
   else msg='送信機の電波を待っています';
   st.textContent=msg;st.style.color=col;
@@ -178,6 +179,8 @@ function onAutoAssign(d){
   var nm=id=>(rosterById[id]&&rosterById[id].name)||('#'+id);
   (d.joined||[]).forEach(id=>toast('📶 '+nm(id)+' がリンクしたのでチャンネルに入れました'));
   (d.left||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたのでチャンネルから外しました'));
+  (d.out||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたので計測を止めました（クリア後に外します）',4000));
+  (d.back||[]).forEach(id=>toast('📶 '+nm(id)+' のリンクが戻ったので計測を再開しました'));
 }
 
 // Shared by the add form and inline edit. prefix: 'add' | 'edit'.

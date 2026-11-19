@@ -43,7 +43,7 @@ void applyGateConfig() {
         for (int s = 0; s < MAX_ACTIVE; s++) {
             int ri = activePilots[s];
             en[s] = DEFAULT_ENTER, ex[s] = DEFAULT_EXIT;
-            if (!rosterValid(ri)) continue;
+            if (!rosterValid(ri) || pilotSlotOut(s)) continue;   // nobody, or link gone in a race
             mhz[s] = roster[ri].freqMhz;
             en[s] = (uint16_t)constrain(rosterCal[ri].enterRssi, 0, 1023);
             ex[s] = (uint16_t)constrain(rosterCal[ri].exitRssi, 0, 1023);

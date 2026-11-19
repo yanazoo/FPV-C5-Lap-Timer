@@ -146,7 +146,7 @@ void settingsFromJson(JsonVariantConst doc) {
         else if (doc["startDelayOn"].isNull()) startDelayOn = false;   // an old backup's "none"
     }
     if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
-    if (!doc["assignMode"].isNull()) assignMode = (int)doc["assignMode"] == ASSIGN_AUTO ? ASSIGN_AUTO : ASSIGN_MANUAL;
+    if (!doc["assignMode"].isNull()) assignMode = assignModeValid(doc["assignMode"] | 0);
     saveSettings();
 }
 

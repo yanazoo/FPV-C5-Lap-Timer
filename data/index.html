@@ -326,6 +326,8 @@ body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
 .link-badge.on{color:var(--ok);border-color:var(--ok)}
 .link-badge:empty{display:none}
 .assign-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;flex-wrap:wrap}
+.out-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:var(--sf);color:var(--warn);border:1px solid var(--warn);margin-left:4px;display:none}
+.out-badge.on{display:inline-block}
 #assignModeSelect:disabled,#vtxModeSelect:disabled{opacity:.45;cursor:not-allowed}
 .assign-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px}
 .cand-box{border:1px dashed var(--accent);border-radius:8px;padding:8px 10px;margin-bottom:8px}
@@ -499,7 +501,8 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <span>チャンネルの割り当て</span>
       <select id="assignModeSelect" onchange="saveAssignMode()" style="flex:1;min-width:180px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;font-size:12px">
         <option value="0">手動（下の一覧で選ぶ）</option>
-        <option value="1">自動（ELRS のリンクで）</option>
+        <option value="1">自動（ELRS のリンク・レースの合間だけ）</option>
+        <option value="2">自動（ELRS のリンク・レース中も）</option>
       </select>
       <span id="assignStatus" style="font-size:11px;flex-basis:100%"></span>
     </div>
@@ -511,7 +514,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       </select>
     </div>
     <div id="assignNote" class="assign-note" style="display:none">
-      機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
+      機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。<br>
+      ・<b>レースの合間だけ</b>：レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
+      ・<b>レース中も</b>：レース中も、このレースでまだ使っていないチャンネルに入れます。リンクが切れたパイロットは計測を止め（レースカードに「📴 計測停止」、ラップは残ります）、クリアした後にチャンネルから外します。同じレース中にリンクが戻れば計測を再開します。<br>
       必要なもの：ELRS 3.4 以降の送信機の Backpack ＞ <b>Telemetry を ESPNOW</b>（3.4.x は On）、ELRS OSD を ON、ESP-NOW ブリッジ v2.11 以降。パイロットのバインドフレーズ（空欄ならパイロット名）と VTX の周波数を登録してください。バックパックの無いパイロットは、手動で選んだチャンネルのままです。
     </div>
     <div id="candBox" class="cand-box" style="display:none">

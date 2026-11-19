@@ -339,6 +339,9 @@ def apply_radio_vtx():
             broadcast({"type": "vtx_auto", "id": i, "freq": pilots[i]["freq"]})
 
 
+OUT = set()   # slots not measured: auto in races, the pilot's link gone
+
+
 def auto_assign():
     t = time.monotonic()
     apply_radio_vtx()
@@ -347,38 +350,56 @@ def auto_assign():
             link_report(ph, l["reporting"])
     WAITS.clear()
     r = state["race"]
-    if state["settings"].get("assignMode") != 1 or not link_watch() or r["running"] or r["paused"] or r["laps"] or r.get("seq"):
-        return
+    mode = state["settings"].get("assignMode", 0)
+    busy = bool(r["running"] or r["paused"] or r["laps"] or r.get("seq"))
     act, pilots = state["active"], state["pilots"]
-    joined, left = [], []
-    for s, pid in enumerate(act):
-        l = pilot_radio(pid)
-        if pid >= 0 and l and l["lastUp"] and not link_on(l, t) and t - l["lastUp"] >= LINK_LEAVE:
-            act[s] = -1
-            left.append(pid)
-    ready = []
-    for pid in range(len(pilots)):
-        l = pilot_radio(pid)
-        if l and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN and pid not in act:
-            ready.append((l["up"], pid))
-    for _, pid in sorted(ready):
-        p = pilots[pid]
-        same = [q for q in pilots if q is not p and phrase_of(q) == phrase_of(p)] or phrase_of(p) == state["elrs"]["rdBind"]
-        free = [s for s, a in enumerate(act) if a < 0]
-        if same:
-            WAITS[pid] = 4
-        elif not p.get("freq"):
-            WAITS[pid] = 1
-        elif any(a >= 0 and pilots[a].get("freq") == p["freq"] for a in act):
-            WAITS[pid] = 2
-        elif not free:
-            WAITS[pid] = 3
-        else:
-            act[free[0]] = pid
-            joined.append(pid)
-    if joined or left:
+    joined, left, out, back = [], [], [], []
+    if OUT and (not busy or mode != 2):   # cleared: those out leave; or measured again
+        for s in sorted(OUT):
+            if not busy and act[s] >= 0:
+                left.append(act[s])
+                act[s] = -1
+        OUT.clear()
+    if mode and link_watch() and (not busy or mode == 2):
+        for s, pid in enumerate(act):
+            l = pilot_radio(pid)
+            if pid < 0 or not l:
+                continue
+            gone = l["lastUp"] and not link_on(l, t) and t - l["lastUp"] >= LINK_LEAVE
+            if busy:
+                if s not in OUT and gone:
+                    OUT.add(s)
+                    out.append(pid)
+                elif s in OUT and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN:
+                    OUT.discard(s)
+                    back.append(pid)
+            elif gone:
+                act[s] = -1
+                left.append(pid)
+        used = {lp["slot"] for lp in r["laps"]} | OUT if busy else set()
+        ready = []
+        for pid in range(len(pilots)):
+            l = pilot_radio(pid)
+            if l and link_on(l, t) and l["up"] and t - l["up"] >= LINK_JOIN and pid not in act:
+                ready.append((l["up"], pid))
+        for _, pid in sorted(ready):
+            p = pilots[pid]
+            same = [q for q in pilots if q is not p and phrase_of(q) == phrase_of(p)] or phrase_of(p) == state["elrs"]["rdBind"]
+            free = [s for s, a in enumerate(act) if a < 0 and s not in used]
+            if same:
+                WAITS[pid] = 4
+            elif not p.get("freq"):
+                WAITS[pid] = 1
+            elif any(a >= 0 and pilots[a].get("freq") == p["freq"] for a in act):
+                WAITS[pid] = 2
+            elif not free:
+                WAITS[pid] = 3
+            else:
+                act[free[0]] = pid
+                joined.append(pid)
+    if joined or left or out or back:
         broadcast({"type": "active_update", "pilots": active_json()})
-        broadcast({"type": "auto_assign", "joined": joined, "left": left})
+        broadcast({"type": "auto_assign", "joined": joined, "left": left, "out": out, "back": back})
 
 
 def slot_of(pid):
@@ -456,6 +477,7 @@ class Handler(SimpleHTTPRequestHandler):
             RADIOS.clear()
             state["settings"].update(assignMode=0, vtxAuto=True)
             BRIDGE["watch"] = True
+            OUT.clear()
             with ws_lock:
                 sessions.clear()   # a fresh test: no admins left over from the last one
             return self.reply({"ok": True})
@@ -869,7 +891,7 @@ if __name__ == "__main__":
                 broadcast({"type": "c5", "cpuTemp": 47 + (n // 10) % 3, "online": True, "scanning": True, "state": "SCAN", "fw": "1.0", "gain": 30,
                            "records": n * 100 * act, "gaps": 0, "bad": 0,
                            "rate": [1000 if a >= 0 else 0 for a in state["active"]], "elrs": {"enabled": state["elrs"]["enabled"], "connected": state["elrs"]["enabled"], "peer": "UART",
-                           "watch": link_watch(), "linkAge": 0 if any(l.get("reporting") is not None for l in RADIOS.values()) else -1},
+                           "watch": link_watch(), "out": sum(1 << x for x in OUT), "linkAge": 0 if any(l.get("reporting") is not None for l in RADIOS.values()) else -1},
                            "links": links_json(), "cand": cand_json(),
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],
