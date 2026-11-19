@@ -538,7 +538,8 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
-                               "heapMin": 151000, "heapMax": 110000, "psram": 0})
+                               "heapMin": 151000, "heapMax": 110000, "psram": 0,
+                               "build": os.environ.get("MOCK_FW_BUILD", "9a84395")})
         if p == "/api/sd/status":
             return self.reply({"present": True})
         if p == "/api/sd/files":

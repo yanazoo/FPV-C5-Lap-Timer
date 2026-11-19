@@ -671,6 +671,11 @@ async function loadSysInfo(){
     var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
     var h='起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
       +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
+    // Which build runs: the firmware (upload) and the web UI (uploadfs).
+    var wb=window.WEBUI_BUILD||'-',fb=s.build||'-';
+    h+='<br>ビルド：ファーム '+esc(fb)+'・Web 画面 '+esc(wb);
+    if(fb!=='-'&&wb!=='-'&&fb.replace('+','')!==wb.replace('+',''))
+      h+='<br><span style="color:var(--warn)">⚠ ファームと Web 画面のビルドが違います。upload と uploadfs の両方を、同じ版で書き込んでください</span>';
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
       +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
     el.innerHTML=h;

@@ -95,6 +95,10 @@ String sysJson() {
     d["heapMin"]  = ESP.getMinFreeHeap();
     d["heapMax"]  = ESP.getMaxAllocHeap();
     d["psram"]    = ESP.getFreePsram();
+#ifndef FW_BUILD
+#define FW_BUILD "?"
+#endif
+    d["build"]    = FW_BUILD;   // git commit (build_info.py)
     String s;
     serializeJson(d, s);
     return s;
