@@ -64,6 +64,11 @@ bool    bridgeFilter = false;
 // rebooting says nothing else).
 volatile bool     bridgeLinkWatch = false;
 volatile uint32_t watchAckAt = 0;
+// A bridge older than v2.11 doesn't answer the watch and passes it on over
+// ESP-NOW like any MSP: after 3 unanswered requests, ask once a minute.
+uint8_t  watchTries = 0;
+uint32_t watchTryAt = 0;
+const uint32_t WATCH_RETRY_MS = 60000;
 const uint32_t    WATCH_ACK_MS = 12000;
 bool     listenCfgDue = false;
 uint32_t listenCfgAt = 0;
@@ -199,10 +204,14 @@ void listenForRd(uint32_t now) {
         out.flush();
         // And keep the bridge watching for pilots' radio links (it stops by
         // itself 20 s after the last request).
-        uint8_t on = 1;
-        n = msp::encode(msp::kBridgeLinkWatch, &on, 1, f, sizeof f);
-        out.write(f, n);
-        out.flush();
+        if (bridgeLinkWatch || watchTries < 3 || now - watchTryAt >= WATCH_RETRY_MS) {
+            uint8_t on = 1;
+            n = msp::encode(msp::kBridgeLinkWatch, &on, 1, f, sizeof f);
+            out.write(f, n);
+            out.flush();
+            if (!bridgeLinkWatch && watchTries < 255) watchTries++;
+            watchTryAt = now;
+        }
         listenCfgDue = false;
         listenCfgAt = now;
         rdListenDue = rdValid;   // write() cleared listening; point it back
@@ -289,6 +298,7 @@ void onFrame() {
         if (on != bridgeLinkWatch) Serial.printf("[ELRS] bridge link watch %s\n", on ? "on" : "off");
         bridgeLinkWatch = on;
         watchAckAt = millis();
+        watchTries = 0;
     } else if (parser.function() == msp::kBridgeLinkReport && parser.size() >= 8) {
         pilotLinkReport(parser.payload(), parser.payload()[6]);
     } else if (parser.function() == msp::kBridgeVtxReport && parser.size() >= 8) {
@@ -308,6 +318,7 @@ void disconnect() {
     uartMode = false;
     bridgeFilter = false;
     bridgeLinkWatch = false;
+    watchTries = 0;
     setStatus(false, "");
 }
 
@@ -331,6 +342,7 @@ bool tryConnect(IPAddress ip) {
     listenCfgDue = true;
     bridgeFilter = false;
     bridgeLinkWatch = false;
+    watchTries = 0;
     Serial.printf("[ELRS] connected to elrs-netpack %s\n", peer);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsGetBackpackVersion, nullptr, 0, f, sizeof f);
@@ -391,6 +403,7 @@ void serviceTransport(uint32_t now) {
             listenCfgDue = true;
             bridgeFilter = false;
             bridgeLinkWatch = false;
+            watchTries = 0;
             out.len = 0;
         }
         while (Serial2.available())

@@ -194,7 +194,7 @@ void loadAll() {
         if (prefs.getBytes(key, &rosterCal[i], sizeof rosterCal[i]) != sizeof rosterCal[i])
             rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
         snprintf(key, sizeof key, "u%d", i);
-        rosterUid[i].set = prefs.getBytes(key, rosterUid[i].uid, 6) == 6;
+        rosterUid[i].set = prefs.isKey(key) && prefs.getBytes(key, rosterUid[i].uid, 6) == 6;
     }
     prefs.end();
 

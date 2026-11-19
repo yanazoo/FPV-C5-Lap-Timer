@@ -331,6 +331,8 @@ def apply_radio_vtx():
         who = [i for i, p in enumerate(pilots) if phrase_of(p) == ph]
         if len(who) != 1 or not 5180 <= l["vtx"] <= 5917 or pilots[who[0]].get("freq") == l["vtx"]:
             continue
+        if any(a >= 0 and a != who[0] and pilots[a].get("freq") == l["vtx"] for a in state["active"]):
+            continue   # another pilot on a channel uses it: left to the tap
         pilots[who[0]]["freq"] = l["vtx"]
         changed.append(who[0])
     if changed:

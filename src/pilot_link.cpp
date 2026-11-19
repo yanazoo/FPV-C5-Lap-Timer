@@ -47,10 +47,12 @@ uint32_t   lastLoop = 0;
 // waits kSettleMs after it comes back, until the radios have reported again
 // (else pilots not heard during the outage would leave their channels).
 uint32_t   watchSince = 0;
-// Auto in races: slots whose pilot's link is gone during this race. Not
-// measured (applyGateConfig), the pilot and laps stay until the race is
-// cleared. Under gLock.
-bool       slotOut[MAX_ACTIVE] = {};
+// Auto in races: the pilot (roster index) whose link went during this race,
+// per slot; -1 none. Not measured (applyGateConfig), the pilot and laps stay
+// until the race is cleared. Only while that same pilot is on the slot: a
+// pilot put there by hand is measured. Under gLock.
+int8_t     slotOutWho[MAX_ACTIVE] = {-1, -1, -1, -1, -1, -1, -1, -1};
+inline bool outNow(int s, const int* active) { return slotOutWho[s] >= 0 && slotOutWho[s] == active[s]; }
 constexpr uint32_t kSettleMs = autoassign::kSeenMs + 1000;
 
 int findRadio(const uint8_t uid[6]) {
@@ -130,6 +132,15 @@ bool pilotVtxWanted(uint8_t uid[6], uint32_t now) {
     return found;
 }
 
+// Some radio reported lately. In a race, nobody goes out while none does:
+// a bridge that answers but hears nothing would stop every slot.
+static bool reportsFresh(uint32_t now) {
+    portENTER_CRITICAL(&mux);
+    uint32_t at = lastReportAt;
+    portEXIT_CRITICAL(&mux);
+    return at && now - at <= autoassign::kSeenMs;
+}
+
 static bool raceBusy() {
     if (raceActive()) return true;
     Guard g;
@@ -166,6 +177,17 @@ static void applyRadioVtx() {
             for (int i = 0; i < n; i++)
                 if (memcmp(uids[i], got[k].uid, 6) == 0) who = i, count++;
             if (count != 1 || roster[who].freqMhz == mhz) continue;
+            // Another pilot on a channel uses that frequency: both slots
+            // would count each other's passes. Left to the tap (▶ 合わせる).
+            bool clash = false;
+            for (int s = 0; s < MAX_ACTIVE; s++) {
+                int a = activePilots[s];
+                if (rosterValid(a) && a != who && roster[a].freqMhz == mhz) clash = true;
+            }
+            if (clash) {
+                Serial.printf("[Link] pilot %d VTX %u MHz: another pilot on a channel uses it\n", who, mhz);
+                continue;
+            }
             Serial.printf("[Link] pilot %d VTX %u -> %u MHz (from the radio)\n", who, roster[who].freqMhz, mhz);
             roster[who].freqMhz = mhz;
             saveRosterPilot(who);
@@ -203,7 +225,7 @@ void pilotLinkLoop(uint32_t now) {
     uint16_t          vtx[MAX_REGISTERED] = {};
     uint8_t           uids[MAX_REGISTERED][6];
     bool              heard[MAX_REGISTERED] = {};
-    int               active[MAX_ACTIVE];
+    int               active[MAX_ACTIVE], before[MAX_ACTIVE];
     int               n;
     uint8_t           mode;
     uint8_t           rd[6];
@@ -213,6 +235,7 @@ void pilotLinkLoop(uint32_t now) {
         n = rosterUids(uids, rd, rdOn);
         mode = assignMode;
         memcpy(active, activePilots, sizeof active);
+        memcpy(before, activePilots, sizeof before);
         for (int i = 0; i < n; i++) {
             pilots[i].valid = true;
             pilots[i].freq = roster[i].freqMhz;
@@ -239,7 +262,7 @@ void pilotLinkLoop(uint32_t now) {
     int  left[MAX_ACTIVE], nLeft = 0;
     {
         Guard g;
-        memcpy(out, slotOut, sizeof out);
+        for (int s = 0; s < MAX_ACTIVE; s++) out[s] = outNow(s, active);
         for (int s = 0; s < MAX_ACTIVE; s++) used[s] = raceCore.slot(s).lapCount > 0 || out[s];
     }
     bool anyOut = false;
@@ -260,7 +283,7 @@ void pilotLinkLoop(uint32_t now) {
     if (settled && mode != ASSIGN_MANUAL) {
         if (!busy) {
             changed |= autoassign::plan(now, pilots, links, n, active, wait, res);
-        } else if (mode == ASSIGN_AUTO_RACE) {
+        } else if (mode == ASSIGN_AUTO_RACE && reportsFresh(now)) {
             changed |= autoassign::planRace(now, pilots, links, n, active, out, used, wait, rr);
         }
     }
@@ -277,10 +300,11 @@ void pilotLinkLoop(uint32_t now) {
         // The roster may have changed since the copy, or a race begun or
         // ended: apply only if not.
         bool nowBusy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
-        if (rosterCount != n) return;
+        // A browser changed the channels meanwhile: theirs stands, plan again.
+        if (rosterCount != n || memcmp(activePilots, before, sizeof before) != 0) return;
         if (!busy && nowBusy) return;   // a race began since: plan() is for between races
         memcpy(activePilots, active, sizeof active);
-        memcpy(slotOut, out, sizeof out);
+        for (int s = 0; s < MAX_ACTIVE; s++) slotOutWho[s] = out[s] ? (int8_t)active[s] : (int8_t)-1;
         saveActive();
     }
     applyGateConfig();
@@ -307,7 +331,9 @@ void pilotLinkLoop(uint32_t now) {
     for (int k = 0; k < rr.nBack; k++) Serial.printf("[Link] pilot %d linked again: measured (race)\n", rr.back[k]);
 }
 
-bool pilotSlotOut(int slot) { return slot >= 0 && slot < MAX_ACTIVE && slotOut[slot]; }
+bool pilotSlotOut(int slot) {   // caller holds gLock
+    return slot >= 0 && slot < MAX_ACTIVE && outNow(slot, activePilots);
+}
 
 void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand) {
     uint32_t now = millis();
@@ -340,7 +366,7 @@ void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand) {
     {
         Guard g;
         int mask = 0;
-        for (int s = 0; s < MAX_ACTIVE; s++) if (slotOut[s]) mask |= 1 << s;
+        for (int s = 0; s < MAX_ACTIVE; s++) if (outNow(s, activePilots)) mask |= 1 << s;
         el["out"] = mask;
     }
     // Seconds since the bridge last reported a radio (-1: never).

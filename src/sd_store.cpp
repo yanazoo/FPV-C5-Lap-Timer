@@ -312,7 +312,9 @@ int sdRestoreRoster(const String& path) {
         String u = field(line, 8);
         u.trim();
         rosterUid[id] = {};
-        if (u.length() == 12) {
+        bool hex = u.length() == 12;
+        for (int k = 0; hex && k < 12; k++) hex = isxdigit((unsigned char)u[k]);
+        if (hex) {
             rosterUid[id].set = true;
             for (int k = 0; k < 6; k++) rosterUid[id].uid[k] = (uint8_t)strtoul(u.substring(2 * k, 2 * k + 2).c_str(), nullptr, 16);
         }
