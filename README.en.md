@@ -277,6 +277,26 @@ default is manual.
 - Pilots without a backpack are never moved: they keep the channel picked by
   hand, so manual and automatic pilots can mix.
 
+**More than 8 pilots** (8 channels: the C5 receiver measures 8 frequencies at once)
+
+- From the 9th on, a linked pilot gets no channel and **waits**: the pilot list
+  shows "📶 LQ ○○ · 空きチャンネルなし". Nobody is swapped out; waiting pilots
+  join in the order they linked.
+- One pilot leaves while a 9th waits:
+  - **Between races** (either automatic mode): 10 s after the link went,
+    that pilot leaves and the 9th joins the channel at once (about 0.5 s).
+  - **In a race, "レースの合間だけ"**: nothing changes during the race; at
+    Clear the one who left goes and the 9th joins.
+  - **In a race, "レース中も"**: the one who left goes off the channel, but
+    the channel holds their laps, so it is **kept for them until the race
+    ends**; the 9th waits ("空きチャンネルなし") and joins **at Clear**. If the
+    one who left links again before that, they get their channel back and
+    the 9th keeps waiting.
+- Between races, a channel freed by hand ("未割当", "全チャンネル解除") also goes to
+  a waiting pilot.
+- Tip: the next group keeps their quads off until the current group has
+  powered down; then they come in in order. Up to 20 pilots can be registered.
+
 **Unregistered radios**: radios heard that are not on the roster (nor the race
 director's) are listed under "📡 未登録の送信機" for a minute after they were
 last heard. "＋ 登録" opens the add form with the radio's VTX filled in; the
