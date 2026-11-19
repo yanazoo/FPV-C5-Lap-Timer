@@ -269,7 +269,8 @@ default is manual.
     again in the same race, measured again.
 - A pilot who can't join says why in the list: no VTX frequency, the same
   frequency as a pilot already on a channel, no free channel, or a bind phrase
-  shared with another pilot or the race director.
+  shared with another pilot (the race director's is fine: the RD may fly
+  with the same radio).
 - Each pilot shows "📶 LQ 95" (linked) or "📴 リンクなし" (radio heard, no link
   to the quad), in manual mode too.
 - Pilots without a backpack are never moved: they keep the channel picked by

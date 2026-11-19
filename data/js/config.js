@@ -85,7 +85,7 @@ function renderRoster(){
 
 // ── Channel assignment: manual or from the pilots' ELRS links ─────────────
 var assignMode=0;
-var LINK_WAIT={1:'VTX 未設定',2:'周波数が重なる',3:'空きチャンネルなし',4:'バインドフレーズが重複'};
+var LINK_WAIT={1:'VTX 未設定',2:'周波数が重なる',3:'空きチャンネルなし',4:'ほかのパイロットとバインドフレーズが同じ'};
 function showAssignMode(){
   var sel=document.getElementById('assignModeSelect');if(sel&&document.activeElement!==sel)sel.value=String(assignMode);
   var n=document.getElementById('assignNote');if(n)n.style.display=assignMode?'':'none';

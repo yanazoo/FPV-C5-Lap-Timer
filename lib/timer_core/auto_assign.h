@@ -10,7 +10,8 @@
 //   * a pilot linked for kJoinMs joins the first free channel, unless they
 //     have no VTX frequency, another assigned pilot uses the same frequency,
 //     every channel is taken, or their bind phrase can't tell them apart
-//     (shared with another pilot, or the race director's);
+//     (shared with another pilot; the race director's is fine: the RD may
+//     fly with the same radio);
 //   * a pilot on a channel who was seen linked and has not been linked for
 //     kLeaveMs leaves it. Pilots never seen linked (no backpack, telemetry
 //     off) are left alone, so manual and automatic pilots can mix.
@@ -56,7 +57,7 @@ enum Wait : uint8_t {
     kNoFreq,        // no VTX frequency set
     kSameFreq,      // another assigned pilot uses this frequency
     kFull,          // every channel is taken
-    kAmbiguous,     // bind phrase shared with another pilot / the race director
+    kAmbiguous,     // bind phrase (UID) shared with another pilot
 };
 
 struct Pilot {

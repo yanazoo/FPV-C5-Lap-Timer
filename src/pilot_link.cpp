@@ -216,7 +216,9 @@ void pilotLinkLoop(uint32_t now) {
         for (int i = 0; i < n; i++) {
             pilots[i].valid = true;
             pilots[i].freq = roster[i].freqMhz;
-            pilots[i].distinct = !(rdOn && memcmp(uids[i], rd, 6) == 0);
+            // The race director flying with the same radio is fine: only a UID
+            // two pilots share leaves the radio's pilot unknown.
+            pilots[i].distinct = true;
         }
     }
     for (int i = 0; i < n; i++)

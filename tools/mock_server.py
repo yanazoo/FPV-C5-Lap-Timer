@@ -384,7 +384,7 @@ def auto_assign():
                 ready.append((l["up"], pid))
         for _, pid in sorted(ready):
             p = pilots[pid]
-            same = [q for q in pilots if q is not p and phrase_of(q) == phrase_of(p)] or phrase_of(p) == state["elrs"]["rdBind"]
+            same = [q for q in pilots if q is not p and phrase_of(q) == phrase_of(p)]
             free = [s for s, a in enumerate(act) if a < 0 and s not in used]
             if same:
                 WAITS[pid] = 4
