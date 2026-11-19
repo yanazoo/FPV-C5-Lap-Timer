@@ -131,15 +131,6 @@ bool pilotVtxWanted(uint8_t uid[6], uint32_t now) {
     return found;
 }
 
-// Some radio reported lately. In a race, nobody goes out while none does:
-// a bridge that answers but hears nothing would stop every slot.
-static bool reportsFresh(uint32_t now) {
-    portENTER_CRITICAL(&mux);
-    uint32_t at = lastReportAt;
-    portEXIT_CRITICAL(&mux);
-    return at && now - at <= autoassign::kSeenMs;
-}
-
 static bool raceBusy() {
     if (raceActive()) return true;
     Guard g;
@@ -276,9 +267,11 @@ void pilotLinkLoop(uint32_t now) {
     if (settled && mode != ASSIGN_MANUAL) {
         if (!busy) {
             changed = autoassign::plan(now, pilots, links, n, active, wait, res);
-        } else if (mode == ASSIGN_AUTO_RACE && reportsFresh(now)) {
-            // In a race only while radios report: a bridge that answers but
-            // hears nothing would otherwise take everyone off.
+        } else if (mode == ASSIGN_AUTO_RACE) {
+            // No "some radio reports" condition here: a radio whose aircraft
+            // is off stops reporting, and with nobody else on the air that
+            // kept the pilot on the channel. The bridge itself is known to
+            // be there from its watch answers (settled).
             changed = autoassign::planRace(now, pilots, links, n, active, owner, wait, rr);
         }
     }
