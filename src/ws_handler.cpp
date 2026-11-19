@@ -335,6 +335,8 @@ static void addSlots(JsonArray pa, bool withRace) {
         o["slot"]      = s;
         o["rosterIdx"] = ri;
         o["name"]      = activeName(s);
+        // Left the slot during the race (auto in races): laps stay on it.
+        if (!ok && raceCore.slot(s).lapCount > 0) o["gone"] = true;
         o["yomi"]      = ok ? roster[ri].yomi : "";
         o["freq"]      = ok ? roster[ri].freqMhz : 0;
         o["enter"]     = ok ? rosterCal[ri].enterRssi : DEFAULT_ENTER;

@@ -1005,28 +1005,31 @@ void testAutoAssign() {
     report(l, 100 + kSeenMs + 1, 50);
     CHECK(l.upSince == 100 + kSeenMs + 1);
     CHECK(linked(l, 100 + 2 * kSeenMs + 1) && !linked(l, 100 + 2 * kSeenMs + 2));
-    // During a race: out (slot kept), back in, joins only unused slots.
+    // During a race: leave (the slot stays theirs), back to their own slot,
+    // newcomers only into slots nobody had in this race.
     {
         Link rl[n];
-        int act[kSlots]; bool out[kSlots] = {}, used[kSlots] = {};
+        int act[kSlots], own[kSlots];
         for (int& a : act) a = -1;
+        for (int& o : own) o = -1;
         act[0] = 0; act[1] = 1;
-        used[2] = true;   // slot 2 has laps from earlier in this race
+        own[2] = kBlocked;   // slot 2 has laps from someone unknown
         for (int i = 0; i < n; i++) pilots[i] = {true, (uint16_t)(5658 + 37 * i), true};
         RaceResult rr;
         uint32_t u = 1000;
         auto rtick = [&](uint32_t dt, std::initializer_list<int> up) {
             for (uint32_t x = 0; x < dt; x += 500) { u += 500; for (int i : up) report(rl[i], u, 90); }
-            return planRace(u, pilots, rl, n, act, out, used, wait, rr);
+            return planRace(u, pilots, rl, n, act, own, wait, rr);
         };
         CHECK(!rtick(3000, {0, 1}));
-        CHECK(!rtick(9500, {1}));                 // 0 off for 9.5 s: still in
-        CHECK(rtick(1000, {1}) && rr.nOut == 1 && rr.out[0] == 0 && out[0] && act[0] == 0);   // out, slot kept
-        CHECK(rtick(2500, {0, 1}) && rr.nBack == 1 && !out[0]);   // back in
-        CHECK(rtick(2500, {0, 1, 3}) && rr.nJoined == 1 && act[3] == 3 && act[2] == -1);   // not into used slot 2
-        rtick(11000, {1, 3});                     // 0 out again
-        CHECK(out[0] && act[0] == 0);
-        CHECK(rtick(2500, {1, 3, 4}) && act[4] == 4);   // slot 0 (out) not reused
+        CHECK(own[0] == 0 && own[1] == 1);
+        CHECK(!rtick(9500, {1}));                 // 0 off for 9.5 s: still on
+        CHECK(rtick(1000, {1}) && rr.nLeft == 1 && rr.left[0] == 0 && act[0] == -1 && own[0] == 0);   // left, slot kept for them
+        CHECK(rtick(2500, {1, 3}) && act[3] == 3 && act[0] == -1 && act[2] == -1);   // newcomer: not 0 (0's), not 2 (blocked)
+        CHECK(rtick(2500, {0, 1, 3}) && act[0] == 0);   // 0 back to their own slot
+        rtick(11000, {1, 3});                     // 0 leaves again
+        CHECK(act[0] == -1 && own[0] == 0);
+        CHECK(rtick(2500, {1, 3, 4}) && act[4] == 4);   // 4 not into slot 0
     }
     // VTX Administrator: R3 = (5-1)*8+2, A1 = 0, L8 = 47, a frequency, junk.
     CHECK(vtxConfigMhz(34, 0) == 5732 && vtxConfigMhz(0, 0) == 5865 && vtxConfigMhz(47, 0) == 5621);

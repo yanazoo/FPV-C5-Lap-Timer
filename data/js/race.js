@@ -84,6 +84,7 @@ function applyActiveToSlots(){
     var ri=activeSlotsLocal[s];
     var r=rosterById[ri];
     slots[s].rosterIdx=ri;
+    if(r)slots[s].gone=false;
     slots[s].name=r?r.name:'---';
     slots[s].yomi=r?r.yomi:'';
     slots[s].freq=r?r.freq:0;
@@ -94,7 +95,8 @@ function applyActiveToSlots(){
 
 // A channel is shown on the race tab only when a pilot with a VTX frequency
 // is assigned to it.
-function slotInUse(p){return p.rosterIdx>=0&&p.freq>0;}
+// A pilot on the slot, or (auto in races) one who left it with laps there.
+function slotInUse(p){return (p.rosterIdx>=0&&p.freq>0)||!!p.gone;}
 
 function buildRaceCards(){
   var g=document.getElementById('pilotGrid');g.innerHTML='';
@@ -108,7 +110,7 @@ function buildRaceCards(){
       '<div class="pilot-card-header '+PCLS[p.id]+'">'
         +'<span class="p-name" id="rcName'+p.id+'">'+esc(p.name==='---'?'Ch'+(p.id+1):p.name)+'</span>'
         +'<span class="p-freq" id="rcFreq'+p.id+'">'+(p.freq?esc(freqLabel(p.freq)):'')+'</span>'
-        +'<span class="out-badge" id="rcOut'+p.id+'" title="送信機のリンクが切れたので計測を止めています（クリア後にチャンネルから外れます）">📴 計測停止</span>'
+        +'<span class="out-badge'+(p.gone?' on':'')+'" id="rcOut'+p.id+'" title="送信機のリンクが切れたのでチャンネルから外れました（ラップは残ります）">📴 離脱</span>'
         +'<span class="crossing-badge" id="rcBadge'+p.id+'">CROSSING</span>'
         +'<span class="p-lapcount" id="rcLaps'+p.id+'"></span>'
       +'</div>'
@@ -120,7 +122,7 @@ function buildRaceCards(){
       +'<div class="pilot-best-row">'
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
-        +'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>'
+        +(p.gone?'':'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>')
       +'</div>'
       +'<div class="lap-table-wrap">'
         +'<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead>'
@@ -457,6 +459,10 @@ function onRaceClear(){
   timerFrozenMs=0;
   timerEl.textContent=raceClockText(0);
   lapEpoch++;resetLaps();
+  // Pilots who left during the race (auto in races): their cards go now.
+  var hadGone=slots.some(p=>p.gone);
+  slots.forEach(p=>{p.gone=false;});
+  if(hadGone){buildRaceCards();buildCalibCards();}
   // Clear ends the race; next Start is a fresh race.
   raceStarted=false;
   setBtns(false);
@@ -497,10 +503,4 @@ function checkFinished(p,finished){
       var u=new SpeechSynthesisUtterance(getSpokenName(p)+'、フィニッシュ');u.lang='ja-JP';u.rate=speechRate;speechSynthesis.speak(u);
     }
   }
-}
-
-// Auto assignment in races: slots whose pilot's link is gone (c5 elrs.out).
-function updateOutBadges(){
-  var m=(c5Status&&c5Status.elrs&&c5Status.elrs.out)||0;
-  for(var i=0;i<N;i++){var e=document.getElementById('rcOut'+i);if(e)e.classList.toggle('on',!!(m&(1<<i)));}
 }

@@ -20,7 +20,12 @@ static uint32_t raceEpoch = 0;
 
 const char* activeName(int slot) {
     int ri = activePilots[slot];
-    return rosterValid(ri) ? roster[ri].name : "---";
+    if (rosterValid(ri)) return roster[ri].name;
+    // Auto in races: the pilot who left this slot during the race, while
+    // their laps are on it (the race card and ranking keep their name).
+    int o = pilotRaceOwner(slot);
+    if (rosterValid(o) && raceCore.slot(slot).lapCount > 0) return roster[o].name;
+    return "---";
 }
 
 int activeSlotOf(int ri) {
@@ -43,7 +48,7 @@ void applyGateConfig() {
         for (int s = 0; s < MAX_ACTIVE; s++) {
             int ri = activePilots[s];
             en[s] = DEFAULT_ENTER, ex[s] = DEFAULT_EXIT;
-            if (!rosterValid(ri) || pilotSlotOut(s)) continue;   // nobody, or link gone in a race
+            if (!rosterValid(ri)) continue;
             mhz[s] = roster[ri].freqMhz;
             en[s] = (uint16_t)constrain(rosterCal[ri].enterRssi, 0, 1023);
             ex[s] = (uint16_t)constrain(rosterCal[ri].exitRssi, 0, 1023);

@@ -47,12 +47,11 @@ uint32_t   lastLoop = 0;
 // waits kSettleMs after it comes back, until the radios have reported again
 // (else pilots not heard during the outage would leave their channels).
 uint32_t   watchSince = 0;
-// Auto in races: the pilot (roster index) whose link went during this race,
-// per slot; -1 none. Not measured (applyGateConfig), the pilot and laps stay
-// until the race is cleared. Only while that same pilot is on the slot: a
-// pilot put there by hand is measured. Under gLock.
-int8_t     slotOutWho[MAX_ACTIVE] = {-1, -1, -1, -1, -1, -1, -1, -1};
-inline bool outNow(int s, const int* active) { return slotOutWho[s] >= 0 && slotOutWho[s] == active[s]; }
+// Auto in races: whose slot each is in this race (autoassign::planRace):
+// roster index, -1 nobody's yet, autoassign::kBlocked laps of someone
+// unknown. A slot stays its pilot's after they leave it (their laps are
+// there), and their name stays on it. Cleared when the race is. Under gLock.
+int        raceOwner[MAX_ACTIVE] = {-1, -1, -1, -1, -1, -1, -1, -1};
 constexpr uint32_t kSettleMs = autoassign::kSeenMs + 1000;
 
 int findRadio(const uint8_t uid[6]) {
@@ -258,33 +257,29 @@ void pilotLinkLoop(uint32_t now) {
     autoassign::Result res;
     autoassign::RaceResult rr;
     bool busy = raceBusy();
-    bool out[MAX_ACTIVE], used[MAX_ACTIVE];
-    int  left[MAX_ACTIVE], nLeft = 0;
+    int owner[MAX_ACTIVE];
     {
         Guard g;
-        for (int s = 0; s < MAX_ACTIVE; s++) out[s] = outNow(s, active);
-        for (int s = 0; s < MAX_ACTIVE; s++) used[s] = raceCore.slot(s).lapCount > 0 || out[s];
-    }
-    bool anyOut = false;
-    for (bool o : out) anyOut |= o;
-    bool changed = false;
-    if (anyOut && (!busy || mode != ASSIGN_AUTO_RACE)) {
-        // The race is cleared: those out leave their channels now (auto in
-        // races), or the mode changed: everyone is measured again.
         for (int s = 0; s < MAX_ACTIVE; s++) {
-            if (!out[s]) continue;
-            out[s] = false;
-            if (!busy && active[s] >= 0) left[nLeft++] = active[s], active[s] = -1;
+            owner[s] = busy ? raceOwner[s] : -1;
+            if (!busy) continue;
+            // Laps on a slot nobody owns (a pilot put there by hand, then
+            // taken off): not for anyone else in this race.
+            if (owner[s] == -1 && activePilots[s] < 0 && raceCore.slot(s).lapCount > 0) owner[s] = autoassign::kBlocked;
+            if (owner[s] == -1 && rosterValid(activePilots[s])) owner[s] = activePilots[s];
         }
-        changed = true;
+        memcpy(raceOwner, owner, sizeof owner);
     }
+    bool changed = false;
     // No ESP-NOW (ELRS off, no bridge, or one too old to watch): manual.
     // Otherwise every pilot would leave their channel, their links unheard.
     if (settled && mode != ASSIGN_MANUAL) {
         if (!busy) {
-            changed |= autoassign::plan(now, pilots, links, n, active, wait, res);
+            changed = autoassign::plan(now, pilots, links, n, active, wait, res);
         } else if (mode == ASSIGN_AUTO_RACE && reportsFresh(now)) {
-            changed |= autoassign::planRace(now, pilots, links, n, active, out, used, wait, rr);
+            // In a race only while radios report: a bridge that answers but
+            // hears nothing would otherwise take everyone off.
+            changed = autoassign::planRace(now, pilots, links, n, active, owner, wait, rr);
         }
     }
     for (int i = 0; i < n; i++) {
@@ -297,42 +292,37 @@ void pilotLinkLoop(uint32_t now) {
     if (!changed) return;
     {
         Guard g;
-        // The roster may have changed since the copy, or a race begun or
-        // ended: apply only if not.
         bool nowBusy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
-        // A browser changed the channels meanwhile: theirs stands, plan again.
+        // A browser changed the channels or the roster meanwhile: theirs
+        // stands, plan again. Or a race began / was cleared since.
         if (rosterCount != n || memcmp(activePilots, before, sizeof before) != 0) return;
-        if (!busy && nowBusy) return;   // a race began since: plan() is for between races
+        if (nowBusy != busy) return;
         memcpy(activePilots, active, sizeof active);
-        for (int s = 0; s < MAX_ACTIVE; s++) slotOutWho[s] = out[s] ? (int8_t)active[s] : (int8_t)-1;
+        if (busy) memcpy(raceOwner, owner, sizeof owner);
         saveActive();
     }
     applyGateConfig();
     wsActiveUpdate();
     JsonDocument d;
     d["type"] = "auto_assign";
+    d["race"] = busy;
     JsonArray j = d["joined"].to<JsonArray>();
     for (int k = 0; k < res.nJoined; k++) j.add(res.joined[k]);
     for (int k = 0; k < rr.nJoined; k++) j.add(rr.joined[k]);
     JsonArray l = d["left"].to<JsonArray>();
     for (int k = 0; k < res.nLeft; k++) l.add(res.left[k]);
-    for (int k = 0; k < nLeft; k++) l.add(left[k]);
-    JsonArray o = d["out"].to<JsonArray>();
-    for (int k = 0; k < rr.nOut; k++) o.add(rr.out[k]);
-    JsonArray bk = d["back"].to<JsonArray>();
-    for (int k = 0; k < rr.nBack; k++) bk.add(rr.back[k]);
+    for (int k = 0; k < rr.nLeft; k++) l.add(rr.left[k]);
     String msg;
     serializeJson(d, msg);
     wsText(msg);
     for (int k = 0; k < res.nJoined; k++) Serial.printf("[Link] pilot %d linked: on a channel\n", res.joined[k]);
     for (int k = 0; k < rr.nJoined; k++) Serial.printf("[Link] pilot %d linked: on a channel (race)\n", rr.joined[k]);
     for (int k = 0; k < res.nLeft; k++) Serial.printf("[Link] pilot %d unlinked: off its channel\n", res.left[k]);
-    for (int k = 0; k < rr.nOut; k++) Serial.printf("[Link] pilot %d unlinked: not measured (race)\n", rr.out[k]);
-    for (int k = 0; k < rr.nBack; k++) Serial.printf("[Link] pilot %d linked again: measured (race)\n", rr.back[k]);
+    for (int k = 0; k < rr.nLeft; k++) Serial.printf("[Link] pilot %d unlinked: off its channel (race)\n", rr.left[k]);
 }
 
-bool pilotSlotOut(int slot) {   // caller holds gLock
-    return slot >= 0 && slot < MAX_ACTIVE && outNow(slot, activePilots);
+int pilotRaceOwner(int slot) {   // caller holds gLock
+    return slot >= 0 && slot < MAX_ACTIVE ? raceOwner[slot] : -1;
 }
 
 void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand) {
@@ -362,13 +352,6 @@ void pilotLinkToJson(JsonObject el, JsonArray links, JsonArray cand) {
     memcpy(copy, radios, sizeof copy);
     at = lastReportAt;
     portEXIT_CRITICAL(&mux);
-    // Slots not measured (auto in races, link gone), as a bit mask.
-    {
-        Guard g;
-        int mask = 0;
-        for (int s = 0; s < MAX_ACTIVE; s++) if (outNow(s, activePilots)) mask |= 1 << s;
-        el["out"] = mask;
-    }
     // Seconds since the bridge last reported a radio (-1: never).
     el["linkAge"] = at ? (int)((now - at) / 1000) : -1;
     int listed = 0;

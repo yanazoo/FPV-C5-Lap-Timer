@@ -142,7 +142,7 @@ function updateLinkBadges(){
   if(!assignMode){st.textContent='';return;}
   var msg,col='var(--muted)',racing=c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0);
   if(racing&&assignMode===1)msg='⏸ レースをクリアしたら反映します';
-  else if(racing)msg='🏁 レース中も反映しています（リンクが切れたパイロットは計測を止め、クリア後に外します）',col='var(--ok)';
+  else if(racing)msg='🏁 レース中も反映しています（リンクが切れたパイロットはチャンネルから外れ、ラップは残ります）',col='var(--ok)';
   else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
   else msg='送信機の電波を待っています';
   st.textContent=msg;st.style.color=col;
@@ -178,9 +178,7 @@ async function fixVtx(id,mhz){
 function onAutoAssign(d){
   var nm=id=>(rosterById[id]&&rosterById[id].name)||('#'+id);
   (d.joined||[]).forEach(id=>toast('📶 '+nm(id)+' がリンクしたのでチャンネルに入れました'));
-  (d.left||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたのでチャンネルから外しました'));
-  (d.out||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたので計測を止めました（クリア後に外します）',4000));
-  (d.back||[]).forEach(id=>toast('📶 '+nm(id)+' のリンクが戻ったので計測を再開しました'));
+  (d.left||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたのでチャンネルから外しました'+(d.race?'（ラップは残ります）':''),d.race?4000:undefined));
 }
 
 // Shared by the add form and inline edit. prefix: 'add' | 'edit'.

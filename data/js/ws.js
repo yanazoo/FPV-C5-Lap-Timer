@@ -111,7 +111,7 @@ function onMsg(d){
     applySettings(d);
     (d.pilots||[]).forEach(pd=>{
       var p=slots[pd.slot];if(!p)return;
-      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;
+      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;p.gone=!!pd.gone;
       p.rssi=pd.rssi||0;p.crossing=pd.crossing||false;
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
@@ -148,7 +148,7 @@ function onMsg(d){
   if(d.type==='active_update'){
     (d.pilots||[]).forEach(pd=>{
       var p=slots[pd.slot];if(!p)return;
-      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;
+      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;p.gone=!!pd.gone;
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
       activeSlotsLocal[pd.slot]=pd.rosterIdx;
@@ -161,7 +161,6 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
-    if(typeof updateOutBadges==='function')updateOutBadges();
     if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function'){updateLinkBadges();renderCandidates();}}
     return;
   }

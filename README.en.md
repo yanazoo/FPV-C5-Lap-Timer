@@ -262,11 +262,12 @@ default is manual.
 - Two automatic modes:
   - **レースの合間だけ** (between races): nothing changes during a race or
     while laps are not cleared; it all happens after Clear.
-  - **レース中も** (also in races): during a race, a linked pilot joins a
-    channel not used yet in this race (so laps never mix); a pilot not
-    linked for 10 s is **no longer measured** ("📴 計測停止" on the race card;
-    their laps and place stay) and **leaves the channel after Clear**; linked
-    again in the same race, measured again.
+  - **レース中も** (also in races): a pilot not linked for 10 s **leaves the
+    channel during the race too**; their race card and place stay as
+    "📴 離脱" with their laps (saved to SD as well). The channel is kept for
+    them: linked again in the same race, they go back to it and their laps
+    go on. Newcomers join a channel not used yet in this race (laps never
+    mix).
 - A pilot who can't join says why in the list: no VTX frequency, the same
   frequency as a pilot already on a channel, no free channel, or a bind phrase
   shared with another pilot (the race director's is fine: the RD may fly
