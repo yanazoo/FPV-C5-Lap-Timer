@@ -285,7 +285,10 @@ void pilotLinkLoop(uint32_t now) {
     if (!changed) return;
     {
         Guard g;
-        bool nowBusy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
+        // The same test as raceBusy(): the start under way (the start delay,
+        // レディ, 3-2-1) counts as the race. It didn't here, so every change
+        // planned then was dropped until the clock started.
+        bool nowBusy = raceActive() || raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
         // A browser changed the channels or the roster meanwhile: theirs
         // stands, plan again. Or a race began / was cleared since.
         if (rosterCount != n || memcmp(activePilots, before, sizeof before) != 0) return;
