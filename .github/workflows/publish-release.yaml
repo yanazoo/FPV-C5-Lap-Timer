@@ -17,8 +17,6 @@ jobs:
   release:
     name: Build and publish the release
     runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.params.outputs.skip == 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,10 +95,14 @@ jobs:
         if: steps.params.outputs.skip == 'false'
         run: python3 tools/flasher_site.py site "${{ steps.params.outputs.tag }}"
 
-      - uses: actions/upload-pages-artifact@v3
+      # Published by pages.yml (it runs on main: the github-pages
+      # environment only takes deployments from the default branch).
+      - uses: actions/upload-artifact@v4
         if: steps.params.outputs.skip == 'false'
         with:
+          name: flasher-site
           path: site
+          retention-days: 7
 
       - name: Create release
         if: steps.params.outputs.skip == 'false'
@@ -111,21 +113,3 @@ jobs:
             --target "${{ github.sha }}" \
             --title "${{ steps.params.outputs.title }}" \
             --notes-file "${{ steps.params.outputs.notes }}"
-
-  # The web flasher (docs/flasher) on GitHub Pages, with this release's files.
-  # Needs Settings -> Pages -> Source: "GitHub Actions" (once). Without it
-  # this job fails but the release above is already out.
-  pages:
-    name: Web flasher (GitHub Pages)
-    needs: release
-    if: needs.release.outputs.published == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v4

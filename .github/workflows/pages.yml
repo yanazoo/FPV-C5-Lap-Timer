@@ -1,0 +1,46 @@
+name: Web flasher (GitHub Pages)
+
+# After a release is published (publish-release.yaml), puts its web flasher
+# site (docs/flasher + that release's files) on GitHub Pages. A workflow_run
+# job runs on the default branch, the only one the github-pages environment
+# takes deployments from. Needs Settings -> Pages -> Source: GitHub Actions.
+on:
+  workflow_run:
+    workflows: ["Publish Release"]
+    types: [completed]
+
+permissions:
+  actions: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      # A run that only updated an existing release's notes built no site.
+      - id: site
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: flasher-site
+          path: site
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.site.outcome == 'success'
+        with:
+          path: site
+
+      - id: deploy
+        if: steps.site.outcome == 'success'
+        uses: actions/deploy-pages@v4
