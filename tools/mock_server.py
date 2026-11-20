@@ -644,7 +644,7 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply({"ok": False, "reason": "race"}, 409)
             if p == "/api/update/check":
                 FW.update(state="checking")
-                threading.Timer(1.5, lambda: FW.update(state="checked", latest=os.environ.get("MOCK_FW_LATEST", "v2.3.0"))).start()
+                threading.Timer(1.5, lambda: FW.update(state="checked", latest=os.environ.get("MOCK_FW_LATEST", "v2.2.1"))).start()
                 return self.reply({"ok": True})
             if p == "/api/update/online":
                 if not FW["latest"]:

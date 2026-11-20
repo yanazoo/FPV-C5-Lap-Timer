@@ -199,7 +199,7 @@ Source: GitHub Actions).
 - Settings and pilots are kept; not during a race or with laps not cleared.
   If a web UI write is cut off, a rescue page in the firmware lets you write
   it again.
-- The online update reaches releases from v2.3.0 on (the first with these
+- The online update reaches releases from v2.2.1 on (the first with these
   files); flash a v2.2.0 or older timer once with the web flasher or
   PlatformIO.
 
