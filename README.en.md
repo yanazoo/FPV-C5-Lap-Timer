@@ -191,6 +191,13 @@ Defaults on first boot:
 | Web UI | `http://20.0.0.1` (client mode: `http://fpv-c5-lt.local`) |
 | Admin password (login) | `admin` |
 | netpack XIAO setup AP (WiFi link only) | SSID `ELRS-Netpack-Setup`, password `elrs-netpack`, `http://192.168.4.1` |
+| Pilots | `R2`–`R5` (Raceband R2 5695 / R3 5732 / R4 5769 / R5 5806 on Ch1–Ch4, readings like "あーるつー", bind phrase empty = the name, goggle OSD off) |
+
+The default pilots come only on a timer that never saved a roster (new, or
+its flash erased): flashing never replaces your pilots, and a roster emptied
+by hand stays empty. The names are public defaults: edit them in the pilot
+list. To start over, `pio run -e xiao_esp32s3 -t erase`, then `upload` and
+`uploadfs` (every setting, WiFi included, goes back to its default).
 
 Then join WiFi `FPV-C5-LT` (password `fpv-c5-lt`), open `http://20.0.0.1`,
 log in (`admin`), **change the WiFi (host AP) and admin passwords** in
@@ -247,6 +254,91 @@ the TX, assign the switch to Lua → Backpack → **DVR Rec**.
 
 After `git pull`, run `git submodule update --init --recursive` and flash the
 S3 (`upload` and `uploadfs`) and, for the UART link, the ESP-NOW bridge again.
+
+### 📶 Automatic channels from the pilots' ELRS links (optional)
+
+Settings → 👥 パイロット情報 → "チャンネルの割り当て": with **自動（ELRS のリンクで）**,
+a pilot whose radio links to their quad (quad powered up) **joins a free
+channel by itself**, and leaves it when the link is gone (quad off). The
+default is manual.
+
+- Pilots are told apart by their radio's bind phrase (the pilot's bind phrase,
+  or the name when it is empty, as for the goggle OSD).
+- Linked for **2 s**: the lowest free channel. Not linked for **10 s**: off
+  its channel (a crash's short dropout doesn't count).
+- Two automatic modes:
+  - **レースの合間だけ** (between races): nothing changes during a race or
+    while laps are not cleared; it all happens after Clear.
+  - **レース中も** (also in races): a pilot not linked for 10 s **leaves the
+    channel during the race too**; their race card and place stay as
+    "📴 離脱" with their laps (saved to SD as well). The channel is kept for
+    them: linked again in the same race, they go back to it and their laps
+    go on. Newcomers join a channel not used yet in this race (laps never
+    mix).
+- A pilot who can't join says why in the list: no VTX frequency, the same
+  frequency as a pilot already on a channel, no free channel, or a bind phrase
+  shared with another pilot (the race director's is fine: the RD may fly
+  with the same radio).
+- Each pilot shows "📶 LQ 95" (linked) or "📴 リンクなし" (radio heard, no link
+  to the quad), in manual mode too.
+- Pilots without a backpack are never moved: they keep the channel picked by
+  hand, so manual and automatic pilots can mix.
+
+**More than 8 pilots** (8 channels: the C5 receiver measures 8 frequencies at once)
+
+- From the 9th on, a linked pilot gets no channel and **waits**: the pilot list
+  shows "📶 LQ ○○ · 空きチャンネルなし". Nobody is swapped out; waiting pilots
+  join in the order they linked.
+- One pilot leaves while a 9th waits:
+  - **Between races** (either automatic mode): 10 s after the link went,
+    that pilot leaves and the 9th joins the channel at once (about 0.5 s).
+  - **In a race, "レースの合間だけ"**: nothing changes during the race; at
+    Clear the one who left goes and the 9th joins.
+  - **In a race, "レース中も"**: the one who left goes off the channel, but
+    the channel holds their laps, so it is **kept for them until the race
+    ends**; the 9th waits ("空きチャンネルなし") and joins **at Clear**. If the
+    one who left links again before that, they get their channel back and
+    the 9th keeps waiting.
+- Between races, a channel freed by hand ("未割当", "全チャンネル解除") also goes to
+  a waiting pilot.
+- Tip: the next group keeps their quads off until the current group has
+  powered down; then they come in in order. Up to 20 pilots can be registered.
+
+**Unregistered radios**: radios heard that are not on the roster (nor the race
+director's) are listed under "📡 未登録の送信機" for a minute after they were
+last heard. "＋ 登録" opens the add form with the radio's VTX filled in; the
+bind phrase (or the name) typed is checked against the radio as you type (a
+bind phrase cannot be worked out from the radio's UID, so it has to be typed).
+
+**VTX settings**: a TX whose Lua **VTX Administrator** has a band and channel
+sends them when it links and on **Send VTx**. The timer shows them for
+unregistered radios. With "送信機の VTX 設定でパイロットの VTX を自動で変える" on
+(the default), a registered pilot's VTX becomes the frequency their radio
+sent (not during a race or with laps not cleared: after Clear; not for a
+bind phrase two pilots share, nor outside 5180–5917 MHz). "VTX が送信機と違うとき":
+自動で反映 (the above) or タップで反映 (a difference shows "⚠ 機体の VTX は R5 5806 ▶
+合わせる"; tap to take it).
+
+**Radios without a bind phrase** (bound with the Lua Bind button): in the
+add form opened from an unregistered radio, tick "バインドフレーズが無い（送信機の
+UID で登録）" to register the pilot by the radio's UID ("🔑 UID" in the list;
+links and the goggle OSD use it). Typing a bind phrase later replaces it. The
+SD roster backup carries the UID.
+
+**No ESP-NOW** (ELRS OSD off, no bridge, or no answer from it / an older
+bridge): automatic assignment and taking VTX settings are off and the timer
+works as manual (the selects are greyed out with the reason; nobody leaves
+their channel). Once ESP-NOW is back it waits a few seconds for the radios
+to report before assigning again. Started after the radios linked,
+the timer asks linked radios for their VTX settings (between races only).
+Radios without the VTX Administrator say nothing about their VTX.
+
+Needs: the pilot's ELRS 3.4+ TX with a backpack, Lua **Backpack → Telemetry =
+ESPNOW** (3.4.x: **On**; telemetry to the handset is unchanged); the ESP-NOW
+bridge from elrs-netpack **v2.11+** (UART or through the netpack); ELRS OSD on
+in the timer's settings. With Telemetry on, the TX backpack sends the TX's
+link statistics (LQ) by ESP-NOW to its own bind-phrase address; the bridge
+listens for them and tells the timer which pilots are linked.
 
 ### Goggle OSD
 

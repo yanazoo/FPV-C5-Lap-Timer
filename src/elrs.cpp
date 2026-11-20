@@ -8,6 +8,8 @@
 #include "msp_v2.h"
 #include "wifi_mgr.h"
 #include "race.h"
+#include "pilot_link.h"
+#include "auto_assign.h"
 
 namespace {
 
@@ -56,6 +58,18 @@ uint32_t rdListenAt = 0;       // when the bridge was last pointed at the RD
 // arrives: over netpack it can take tens of ms to come back, by which time
 // the next OSD burst has already moved the bridge to a pilot's UID.
 bool    bridgeFilter = false;
+// The bridge answered kBridgeLinkWatch: it reports pilots' radio links. It
+// answers every request (one each LISTEN_CFG_MS), so an answer older than
+// WATCH_ACK_MS means the bridge is gone (a UART bridge unplugged or
+// rebooting says nothing else).
+volatile bool     bridgeLinkWatch = false;
+volatile uint32_t watchAckAt = 0;
+// A bridge older than v2.11 doesn't answer the watch and passes it on over
+// ESP-NOW like any MSP: after 3 unanswered requests, ask once a minute.
+uint8_t  watchTries = 0;
+uint32_t watchTryAt = 0;
+const uint32_t WATCH_RETRY_MS = 60000;
+const uint32_t    WATCH_ACK_MS = 12000;
 bool     listenCfgDue = false;
 uint32_t listenCfgAt = 0;
 const uint32_t RD_RELISTEN_MS = 2000;   // idle: point the bridge at the RD again
@@ -165,7 +179,7 @@ void refreshConfig() {
     for (int s = 0; s < MAX_ACTIVE; s++) {
         int ri = activePilots[s];
         bool on = enabled && rosterValid(ri) && roster[ri].osd;
-        if (on) msp::bindPhraseUid(roster[ri].bind[0] ? roster[ri].bind : roster[ri].name, uid);
+        if (on) rosterUidOf(ri, uid);
         engine.setRecipient(s, on, uid);
     }
     bool rd = enabled && elrsCfg.rdBind[0];
@@ -188,6 +202,16 @@ void listenForRd(uint32_t now) {
         size_t n = msp::encode(msp::kBridgeSetListen, rdUid, rdValid ? 6 : 0, f, sizeof f);
         out.write(f, n);
         out.flush();
+        // And keep the bridge watching for pilots' radio links (it stops by
+        // itself 20 s after the last request).
+        if (bridgeLinkWatch || watchTries < 3 || now - watchTryAt >= WATCH_RETRY_MS) {
+            uint8_t on = 1;
+            n = msp::encode(msp::kBridgeLinkWatch, &on, 1, f, sizeof f);
+            out.write(f, n);
+            out.flush();
+            if (!bridgeLinkWatch && watchTries < 255) watchTries++;
+            watchTryAt = now;
+        }
         listenCfgDue = false;
         listenCfgAt = now;
         rdListenDue = rdValid;   // write() cleared listening; point it back
@@ -203,6 +227,36 @@ void listenForRd(uint32_t now) {
     rdListenDue = false;
     rdListening = true;
     rdListenAt = now;
+}
+
+// A linked radio whose VTX setting is not known yet (the timer started after
+// the pilot's radio linked): ask its backpack to send it again, as the
+// goggles' backpack does at power-up. From the pilot's UID (the backpack
+// takes requests only from there); the answer goes to that UID, where the
+// bridge's link watch hears it. Between races only, once a second at most.
+uint32_t vtxAskAt = 0;
+void askVtx(uint32_t now) {
+    if (!st.connected || !elrsLinkWatch() || now - vtxAskAt < 1000 || raceActive()) return;
+    vtxAskAt = now;
+    {
+        Guard g;
+        if (raceCore.running() || raceCore.paused()) return;
+    }
+    uint8_t uid[6];
+    if (!pilotVtxWanted(uid, now)) return;
+    uint8_t p[7] = {0x01};
+    memcpy(p + 1, uid, 6);
+    uint8_t f[msp::kMaxFrame];
+    size_t n = msp::encode(msp::kElrsSetSendUid, p, sizeof p, f, sizeof f);
+    out.write(f, n);
+    n = msp::encode(msp::kElrsReqVtxPkt, nullptr, 0, f, sizeof f);
+    out.write(f, n);
+    // Back to the bind-phrase UID, as every OSD burst ends: the bridge sends
+    // the request (under the pilot's UID) when its UID changes.
+    p[0] = 0x00;
+    n = msp::encode(msp::kElrsSetSendUid, p, 1, f, sizeof f);
+    out.write(f, n);
+    out.burstDone();   // write() set rdListenDue: the bridge goes back to the RD next
 }
 
 // A bridge wired to the UART while the netpack (WiFi) is selected: park it,
@@ -239,6 +293,17 @@ void onFrame() {
     } else if (parser.function() == msp::kBridgeSetListen) {
         bridgeFilter = parser.size() >= 1 && parser.payload()[0] == 1;
         Serial.printf("[ELRS] bridge listen filter %s\n", bridgeFilter ? "on" : "off");
+    } else if (parser.function() == msp::kBridgeLinkWatch) {
+        bool on = parser.size() >= 1 && parser.payload()[0] == 1;
+        if (on != bridgeLinkWatch) Serial.printf("[ELRS] bridge link watch %s\n", on ? "on" : "off");
+        bridgeLinkWatch = on;
+        watchAckAt = millis();
+        watchTries = 0;
+    } else if (parser.function() == msp::kBridgeLinkReport && parser.size() >= 8) {
+        pilotLinkReport(parser.payload(), parser.payload()[6]);
+    } else if (parser.function() == msp::kBridgeVtxReport && parser.size() >= 8) {
+        const uint8_t* p = parser.payload();
+        pilotVtxReport(p, autoassign::vtxConfigMhz(p[6], p[7]));
     } else if (parser.function() == msp::kElrsBackpackSetRecordingState && parser.size() >= 1) {
         // A filtering bridge passes on only the RD's frames. An older one
         // passes on everything it hears: then only while it is on the RD's
@@ -252,6 +317,8 @@ void disconnect() {
     if (uartOpen) Serial2.end(), uartOpen = false;
     uartMode = false;
     bridgeFilter = false;
+    bridgeLinkWatch = false;
+    watchTries = 0;
     setStatus(false, "");
 }
 
@@ -274,6 +341,8 @@ bool tryConnect(IPAddress ip) {
     rdListenDue = rdValid;
     listenCfgDue = true;
     bridgeFilter = false;
+    bridgeLinkWatch = false;
+    watchTries = 0;
     Serial.printf("[ELRS] connected to elrs-netpack %s\n", peer);
     uint8_t f[msp::kMaxFrame];
     size_t n = msp::encode(msp::kElrsGetBackpackVersion, nullptr, 0, f, sizeof f);
@@ -333,6 +402,8 @@ void serviceTransport(uint32_t now) {
             rdListenDue = rdValid;
             listenCfgDue = true;
             bridgeFilter = false;
+            bridgeLinkWatch = false;
+            watchTries = 0;
             out.len = 0;
         }
         while (Serial2.available())
@@ -392,6 +463,7 @@ void elrsTask(void*) {
             while (xQueueReceive(evQ, &e, 0) == pdTRUE);
         }
         engine.tick(millis());
+        askVtx(millis());
         listenForRd(millis());
         out.flush();
     }
@@ -471,6 +543,8 @@ void elrsLapEdit(int slot, int laps, int position, uint32_t bestMs, bool finishe
     e.lap.holeshot = finished;   // "still finished"
     post(e);
 }
+
+bool elrsLinkWatch() { return enabled && bridgeLinkWatch && millis() - watchAckAt < WATCH_ACK_MS; }
 
 ElrsStatus elrsStatus() {
     portENTER_CRITICAL(&stMux);

@@ -15,6 +15,7 @@
 #include "sys_diag.h"
 #include "wifi_mgr.h"
 #include "ws_handler.h"
+#include "pilot_link.h"
 
 namespace {
 
@@ -72,6 +73,11 @@ String rosterJson() {
         o["yomi"]       = roster[i].yomi;
         o["freq"]       = roster[i].freqMhz;
         o["bind"]       = roster[i].bind;
+        if (rosterUid[i].set) {
+            char tag[7];
+            snprintf(tag, sizeof tag, "%02x%02x%02x", rosterUid[i].uid[0], rosterUid[i].uid[1], rosterUid[i].uid[2]);
+            o["uidTag"] = tag;   // registered by the radio's UID (first 3 bytes only)
+        }
         o["osd"]        = roster[i].osd;
         o["activeSlot"] = activeSlotOf(i);
         o["enter"]      = rosterCal[i].enterRssi;
@@ -114,6 +120,8 @@ void settingsToJson(JsonObject doc) {
     doc["countLastLap"] = raceRules.countLastLap;
     doc["startDelayOn"]  = startDelayOn;
     doc["startDelaySec"] = startDelaySec;
+    doc["assignMode"]    = assignMode;
+    doc["vtxAuto"]       = vtxAuto;
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).
@@ -137,6 +145,8 @@ void settingsFromJson(JsonVariantConst doc) {
         if (sd > 0) startDelaySec = (uint16_t)min(sd, (int)START_DELAY_MAX);
         else if (doc["startDelayOn"].isNull()) startDelayOn = false;   // an old backup's "none"
     }
+    if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
+    if (!doc["assignMode"].isNull()) assignMode = assignModeValid(doc["assignMode"] | 0);
     saveSettings();
 }
 
@@ -427,6 +437,12 @@ void registerHttpRoutes() {
         server.on(p, HTTP_ANY, [](AsyncWebServerRequest* r) { r->send(204); });
 
     // ── Roster ─────────────────────────────────────────────────────────────
+    // A bind phrase's UID tag (?p=), to check it against a radio heard.
+    server.on(AsyncURIMatcher::exact("/api/bind_uid"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        String p = req->hasParam("p") ? req->getParam("p")->value() : String();
+        req->send(200, "application/json", "{\"tag\":\"" + bindUidTag(p.c_str()) + "\"}");
+    });
+
     server.on(AsyncURIMatcher::exact("/api/pilots"), HTTP_GET, [](AsyncWebServerRequest* req) {
         req->send(200, "application/json", rosterJson());
     });
@@ -447,7 +463,7 @@ void registerHttpRoutes() {
                 if (activePilots[s] == id) activePilots[s] = -1;
                 else if (activePilots[s] > id) activePilots[s]--;
             }
-            for (int i = id; i < rosterCount - 1; i++) roster[i] = roster[i + 1], rosterCal[i] = rosterCal[i + 1];
+            for (int i = id; i < rosterCount - 1; i++) roster[i] = roster[i + 1], rosterCal[i] = rosterCal[i + 1], rosterUid[i] = rosterUid[i + 1];
             rosterCount--;
             saveRosterAll();
             saveActive();
@@ -461,6 +477,14 @@ void registerHttpRoutes() {
         int id = doc["id"] | -1;
         int freq = doc["freq"] | 0;
         if (freq && (freq < 5180 || freq > 5917)) { bad(req, "freq 5180-5917"); return; }
+        // "uidTag": register by the UID of a radio heard (one bound without a
+        // bind phrase). The browser has only the tag; the UID stays here.
+        uint8_t radioUid[6];
+        bool byUid = doc["uidTag"].is<const char*>();
+        if (byUid && !pilotRadioByTag(doc["uidTag"].as<const char*>(), radioUid)) {
+            req->send(409, "application/json", R"({"ok":false,"reason":"radio"})");
+            return;
+        }
         {
             Guard g;
             if (id < -1 || id >= rosterCount) { bad(req, "bad id"); return; }
@@ -469,6 +493,7 @@ void registerHttpRoutes() {
                 id = rosterCount++;
                 memset(&roster[id], 0, sizeof roster[id]);
                 rosterCal[id] = {DEFAULT_ENTER, DEFAULT_EXIT};
+                rosterUid[id] = {};
                 roster[id].osd = true;
             }
             PilotRoster& p = roster[id];
@@ -478,6 +503,13 @@ void registerHttpRoutes() {
             utf8::copy(p.yomi, doc["yomi"] | "", sizeof p.yomi);
             p.freqMhz = (uint16_t)freq;
             if (doc["bind"].is<const char*>()) utf8::copy(p.bind, doc["bind"].as<const char*>(), sizeof p.bind);
+            if (byUid) {
+                rosterUid[id].set = true;
+                memcpy(rosterUid[id].uid, radioUid, 6);
+                p.bind[0] = '\0';
+            } else if (p.bind[0] || doc["uidClear"] == true) {
+                rosterUid[id].set = false;   // a bind phrase typed: it is the UID now
+            }
             if (!doc["osd"].isNull()) p.osd = doc["osd"] | true;
             // Thresholds only as a valid pair (enter above exit).
             int en = doc["enter"].isNull() ? rosterCal[id].enterRssi : constrain((int)doc["enter"], 0, 1023);

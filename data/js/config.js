@@ -50,9 +50,10 @@ function renderRoster(){
   var dup=dupFreqSlots();
   list.innerHTML='';
   filtered.forEach(function(r){
-    var item=document.createElement('div');item.className='roster-item';item.id='ri-'+r.id;
+    var item=document.createElement('div');item.className='roster-item'+(editingRosterId===r.id?'':' rv');item.id='ri-'+r.id;
     if(editingRosterId===r.id){
       item.innerHTML=pilotFormHtml('edit',r)
+        +(r.uidTag?'<div class="uid-check" style="color:var(--accent)">🔑 送信機 '+esc(r.uidTag)+' の UID で登録しています。バインドフレーズを入れると、そちらに変わります。</div>':'')
         +'<div class="roster-actions">'
           +'<button onclick="submitEdit('+r.id+')" class="btn-success" style="font-size:11px;padding:3px 9px">保存</button>'
           +'<button onclick="cancelEdit()" class="btn-secondary" style="font-size:11px;padding:3px 9px">×</button>'
@@ -64,10 +65,13 @@ function renderRoster(){
       var warn=(r.activeSlot>=0&&dup[r.activeSlot])?'<span class="warn-badge" title="同じ周波数のパイロットがいます">⚠ 周波数重複</span>':'';
       var osd=r.osd?'<span class="osd-badge" title="ELRS OSD">🥽 OSD</span>':'';
       item.innerHTML=
-        '<div style="flex:1;min-width:80px"><span class="roster-name">'+esc(r.name)
+        '<div class="rv-name"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +osd+activeBadge+warn
+        +'<div class="rv-badges">'+activeBadge+osd
+          +(r.uidTag?'<span class="osd-badge" title="バインドフレーズではなく、送信機の UID で登録しています">🔑 UID '+esc(r.uidTag)+'</span>':'')
+          +'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
+          +'<span class="warn-badge vtx-fix" id="vx-'+r.id+'" style="display:none"></span></div>'
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
           +'<button onclick="startEdit('+r.id+')" class="btn-gray-soft" style="font-size:11px;padding:3px 8px">編集</button>'
@@ -76,6 +80,105 @@ function renderRoster(){
     }
     list.appendChild(item);
   });
+  updateLinkBadges();
+}
+
+// ── Channel assignment: manual or from the pilots' ELRS links ─────────────
+var assignMode=0;
+var LINK_WAIT={1:'VTX 未設定',2:'周波数が重なる',3:'空きチャンネルなし',4:'ほかのパイロットとバインドフレーズが同じ'};
+function showAssignMode(){
+  var sel=document.getElementById('assignModeSelect');if(sel&&document.activeElement!==sel)sel.value=String(assignMode);
+  var n=document.getElementById('assignNote');if(n)n.style.display=assignMode?'':'none';
+  updateLinkBadges();
+}
+var vtxAuto=true;
+function showVtxAuto(){var t=document.getElementById('vtxModeSelect');if(t&&document.activeElement!==t)t.value=vtxAuto?'1':'0';}
+function saveVtxAuto(){
+  var v=document.getElementById('vtxModeSelect').value==='1';
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vtxAuto:v})})
+    .then(r=>{if(!r.ok)throw 0;vtxAuto=v;toast(v?'✓ VTX の違いを自動で反映します':'✓ VTX の違いはタップで反映します');})
+    .catch(()=>{toast('⚠️ 保存エラー');showVtxAuto();});
+}
+function onVtxAuto(d){
+  var r=rosterById[d.id];
+  toast('📡 '+(r?r.name:'#'+d.id)+' の VTX を送信機の設定 '+freqLabel(d.freq)+' に変えました',4000);
+}
+function saveAssignMode(){
+  var v=parseInt(document.getElementById('assignModeSelect').value,10);if(v!==1&&v!==2)v=0;
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({assignMode:v})})
+    .then(r=>{if(!r.ok)throw 0;assignMode=v;showAssignMode();
+      toast(['✓ チャンネルの割り当てを「手動」にしました','✓ チャンネルの割り当てを「自動（レースの合間だけ）」にしました','✓ チャンネルの割り当てを「自動（レース中も）」にしました'][v]);})
+    .catch(()=>{toast('⚠️ 保存エラー');showAssignMode();});
+}
+// Per-pilot link badges and the status next to the mode (from the 1 Hz c5 status).
+function updateLinkBadges(){
+  var c=c5Status||{},el=c.elrs||{},links={};
+  (c.links||[]).forEach(l=>{links[l.id]=l;});
+  rosterData.forEach(function(r){
+    var b=document.getElementById('lk-'+r.id);if(!b)return;
+    var l=links[r.id];
+    // The radio's VTX Administrator says another frequency than registered.
+    var vx=document.getElementById('vx-'+r.id);
+    if(vx){
+      var diff=l&&l.vtx&&l.vtx!==r.freq;
+      vx.style.display=diff?'':'none';
+      if(diff){vx.textContent='⚠ 機体の VTX は '+freqLabel(l.vtx)+' ▶ 合わせる';vx.title='送信機の VTX Administrator の設定です。タップすると登録の VTX をこれに変えます';vx.onclick=function(){fixVtx(r.id,l.vtx);};}
+    }
+    if(!l){b.textContent='';b.className='link-badge';b.title='';return;}
+    var w=l.wait&&assignMode?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
+    b.textContent=(l.on?'📶 LQ '+l.lq:'📴 リンクなし')+w;
+    b.className='link-badge'+(l.on?' on':'');
+    b.title=l.on?'送信機と機体がリンクしています':'送信機は見えていますが、機体とリンクしていません';
+  });
+  // ESP-NOW reception: without it these functions are off (manual).
+  var avail=!!(c5Status&&el.watch);
+  ['assignModeSelect','vtxModeSelect'].forEach(function(id){var s=document.getElementById(id);if(s)s.disabled=!avail;});
+  var st=document.getElementById('assignStatus');if(!st)return;
+  var why=!el.enabled?'ELRS OSD が OFF です':!el.connected?'ブリッジにつながっていません':'ブリッジから応答がありません（電源・配線、またはブリッジのファームが v2.11 より古い）';
+  if(!avail){
+    st.textContent=c5Status?'⚠ ESP-NOW を受信できません：'+why+'。自動割り当てと VTX の反映は無効で、手動で動きます。':'';
+    st.style.color='var(--warn)';return;
+  }
+  if(!assignMode){st.textContent='';return;}
+  var msg,col='var(--muted)',racing=c.race&&(c.race.run||c.race.paused||c.race.laps>0||c.race.wait>0);
+  if(racing&&assignMode===1)msg='⏸ レースをクリアしたら反映します';
+  else if(racing)msg='🏁 レース中も反映しています（リンクが切れたパイロットはチャンネルから外れ、ラップは残ります）',col='var(--ok)';
+  else if(el.linkAge>=0&&el.linkAge<5)msg='📶 リンクを受信中',col='var(--ok)';
+  else msg='送信機の電波を待っています';
+  st.textContent=msg;st.style.color=col;
+}
+// Unregistered radios (c5 "cand"), redrawn only when something changed.
+var candHtml='';
+function renderCandidates(){
+  var box=document.getElementById('candBox');if(!box)return;
+  var c=(c5Status&&c5Status.cand)||[];
+  var h=c.map(function(x){
+    return '<div class="cand-row"><div class="cand-info"><span>送信機 <span class="cand-id">'+esc(x.tag)+'</span></span>'
+      +'<span class="link-badge'+(x.on?' on':'')+'">'+(x.on?'📶 LQ '+x.lq:'📴 リンクなし')+'</span>'
+      +(x.vtx?'<span class="osd-badge">VTX '+esc(freqLabel(x.vtx))+'</span>':'<span class="res-muted" style="font-size:10px">VTX 不明</span>')
+      +'</div><button class="btn-success" style="font-size:11px;padding:3px 10px" onclick="registerCand(\''+esc(x.tag)+'\')">＋ 登録</button></div>';
+  }).join('');
+  box.style.display=c.length?'':'none';
+  if(h!==candHtml){candHtml=h;document.getElementById('candList').innerHTML=h;}
+}
+function registerCand(tag){
+  var x=((c5Status&&c5Status.cand)||[]).find(function(c){return c.tag===tag;});
+  if(x)showAddForm({tag:x.tag,vtx:x.vtx||0});
+}
+async function fixVtx(id,mhz){
+  var r=rosterById[id];if(!r)return;
+  if(!confirm(r.name+' の VTX を '+freqLabel(r.freq)+' から '+freqLabel(mhz)+' に変えますか？'))return;
+  try{
+    var res=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:id,name:r.name,yomi:r.yomi||'',freq:mhz,bind:r.bind||'',osd:r.osd!==false})});
+    if(!res.ok)throw 0;
+    toast('✓ '+r.name+' の VTX を '+freqLabel(mhz)+' にしました');loadRoster();
+  }catch(e){toast('⚠️ 保存エラー');}
+}
+function onAutoAssign(d){
+  var nm=id=>(rosterById[id]&&rosterById[id].name)||('#'+id);
+  (d.joined||[]).forEach(id=>toast('📶 '+nm(id)+' がリンクしたのでチャンネルに入れました'));
+  (d.left||[]).forEach(id=>toast('📴 '+nm(id)+' のリンクが切れたのでチャンネルから外しました'+(d.race?'（ラップは残ります）':''),d.race?4000:undefined));
 }
 
 // Shared by the add form and inline edit. prefix: 'add' | 'edit'.
@@ -133,17 +236,57 @@ async function postSlots(newSlots,msg){
   }catch(e){toast('⚠️ 接続エラー');}
 }
 
-function showAddForm(){
+// cand: a radio from the unregistered list (its VTX goes in, and the bind
+// phrase typed is checked against it).
+var addCand=null, uidCheckT=null, uidCheckSeq=0;
+function showAddForm(cand){
+  addCand=cand||null;
   var f=document.getElementById('addForm');
-  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add');
+  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
+  document.getElementById('addUidCheck').textContent='';
+  var opt=document.getElementById('addByUidRow');
+  if(opt)opt.style.display=addCand?'':'none';
+  var cb=document.getElementById('addByUid');if(cb)cb.checked=false;
   f.style.display='block';document.getElementById('addName').focus();
+  if(addCand){f.scrollIntoView({block:'nearest'});checkAddUid();}
 }
-function hideAddForm(){document.getElementById('addForm').style.display='none';}
+function hideAddForm(){document.getElementById('addForm').style.display='none';addCand=null;}
+// The phrase (or the name, with the phrase empty) against the radio picked.
+function onAddByUid(){
+  var on=document.getElementById('addByUid').checked,b=document.getElementById('addBind');
+  if(b){b.disabled=on;if(on)b.value='';}
+  checkAddUid();
+}
+function checkAddUid(){
+  clearTimeout(uidCheckT);
+  var out=document.getElementById('addUidCheck');
+  if(!addCand){out.textContent='';return;}
+  if((document.getElementById('addByUid')||{}).checked){
+    addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;
+  }
+  var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';
+  var phrase=bind.trim()||name.trim();
+  if(!phrase){out.textContent='送信機 '+addCand.tag+' のバインドフレーズ（空欄なら名前）を入れてください';out.style.color='var(--muted)';addCand.match=false;return;}
+  var seq=++uidCheckSeq;
+  uidCheckT=setTimeout(function(){
+    fetch('/api/bind_uid?p='+encodeURIComponent(phrase)).then(r=>r.json()).then(function(d){
+      if(seq!==uidCheckSeq||!addCand)return;
+      addCand.match=d.tag===addCand.tag;
+      out.textContent=addCand.match?'✓ 送信機 '+addCand.tag+' と一致しました':'✗ 送信機 '+addCand.tag+' と一致しません（'+(bind.trim()?'バインドフレーズ':'名前（フレーズ空欄）')+'を確かめてください）';
+      out.style.color=addCand.match?'var(--ok)':'var(--err)';
+    }).catch(function(){});
+  },250);
+}
+document.addEventListener('input',function(e){if(addCand&&e.target&&(e.target.id==='addName'||e.target.id==='addBind'))checkAddUid();});
 
 async function submitAdd(){
   var p=readPilotForm('add');if(!validPilot(p))return;
+  var byUid=addCand&&(document.getElementById('addByUid')||{}).checked;
+  if(byUid){p.uidTag=addCand.tag;p.bind='';}
+  else if(addCand&&!addCand.match&&!confirm('バインドフレーズが送信機 '+addCand.tag+' と一致しません。このまま登録しますか？'))return;
   try{
     var r=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    if(r.status===409&&byUid){toast('⚠️ 送信機 '+addCand.tag+' の電波が消えました。送信機の電源を入れて、もう一度試してください',5000);return;}
     if(!r.ok){toast('⚠️ 登録エラー');return;}
     var body=await r.json();
     // Put a new pilot straight into the first free channel.
@@ -526,6 +669,11 @@ async function loadSysInfo(){
     var upTxt=up<60?up+' 秒':up<3600?Math.floor(up/60)+' 分':Math.floor(up/3600)+' 時間'+Math.floor(up%3600/60)+' 分';
     var h='起動から '+upTxt+'・今回の起動：'+(SYS_REASON[s.reason]||s.reason)
       +'<br>空きメモリー '+kb(s.heap)+'（起動後の最小 '+kb(s.heapMin)+'）';
+    // Which build runs: the firmware (upload) and the web UI (uploadfs).
+    var wb=window.WEBUI_BUILD||'-',fb=s.build||'-';
+    h+='<br>ビルド：ファーム '+esc(fb)+'・Web 画面 '+esc(wb);
+    if(fb!=='-'&&wb!=='-'&&fb.replace('+','')!==wb.replace('+',''))
+      h+='<br><span style="color:var(--warn)">⚠ ファームと Web 画面のビルドが違います。upload と uploadfs の両方を、同じ版で書き込んでください</span>';
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
       +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
     el.innerHTML=h;

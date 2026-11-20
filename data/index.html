@@ -158,6 +158,19 @@ body.viewer .lap-btn{display:none}
 .active-badge.p7{background:var(--p7-bg);color:var(--p7);border:1px solid var(--p7)}
 .online-badge{font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(63,185,80,.15);color:var(--ok);border:1px solid var(--ok);white-space:nowrap}
 .roster-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+/* A pilot row (not being edited): the same columns in every row.
+   Phone: name | VTX, then badges | channel, edit, delete. Wide: one line. */
+.roster-item.rv{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name freq" "badges actions";column-gap:8px;row-gap:6px;align-items:center}
+.rv .rv-name{grid-area:name;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.rv .roster-mac{grid-area:freq;min-width:0;text-align:right;white-space:nowrap}
+.rv .rv-badges{grid-area:badges;display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0;min-height:20px}
+.rv .roster-actions{grid-area:actions;justify-self:end}
+.rv .ch-select{width:76px}
+.rv .roster-actions button{min-width:44px}
+@media (min-width:700px){
+  .roster-item.rv{grid-template-columns:minmax(110px,1fr) 96px minmax(0,1.6fr) auto;grid-template-areas:"name freq badges actions"}
+  .rv .roster-mac{text-align:left}
+}
 .roster-item input[type="text"]{background:var(--bg);border:1px solid var(--accent);color:var(--tx);border-radius:5px;padding:3px 7px;font-size:12px}
 .ch-select{background:var(--bg);border:1px solid var(--bd);color:var(--tx);border-radius:5px;padding:3px 5px;font-size:11px;cursor:pointer}
 
@@ -309,6 +322,22 @@ body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
 .p-freq{font-size:10px;font-family:monospace;color:var(--muted);margin-left:6px}
 .warn-badge{font-size:10px;color:var(--warn);border:1px solid var(--warn);border-radius:8px;padding:1px 6px}
 .osd-badge{font-size:10px;color:var(--accent);border:1px solid var(--accent);border-radius:8px;padding:1px 6px}
+.link-badge{font-size:10px;border-radius:8px;padding:1px 6px;border:1px solid var(--muted);color:var(--muted)}
+.link-badge.on{color:var(--ok);border-color:var(--ok)}
+.link-badge:empty{display:none}
+.assign-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;flex-wrap:wrap}
+.out-badge{font-size:9px;font-weight:700;padding:2px 6px;border-radius:3px;background:var(--sf);color:var(--warn);border:1px solid var(--warn);margin-left:4px;display:none}
+.out-badge.on{display:inline-block}
+#assignModeSelect:disabled,#vtxModeSelect:disabled{opacity:.45;cursor:not-allowed}
+.assign-note{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.cand-box{border:1px dashed var(--accent);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.cand-title{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:4px}
+.cand-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--bd);font-size:12px}
+.cand-row:first-of-type{border-top:none}
+.cand-info{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
+.cand-id{font-family:monospace;color:var(--muted)}
+.uid-check{font-size:11px;margin:4px 0 2px}
+.vtx-fix{cursor:pointer}
 .pilot-form{flex:1;min-width:220px;display:flex;flex-direction:column;gap:5px}
 .pf-row{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--tx)}
 .pf-row>span:first-child{width:42px;color:var(--muted);font-size:11px;flex-shrink:0}
@@ -468,6 +497,33 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <div class="card-title" style="margin:0">👥 パイロット情報 <span id="rosterCountBadge" style="color:var(--muted);font-weight:normal"></span></div>
       <button onclick="showAddForm()" class="btn-success" style="font-size:12px;padding:5px 12px">＋ 追加</button>
     </div>
+    <div class="assign-row">
+      <span>チャンネルの割り当て</span>
+      <select id="assignModeSelect" onchange="saveAssignMode()" style="flex:1;min-width:180px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;font-size:12px">
+        <option value="0">手動（下の一覧で選ぶ）</option>
+        <option value="1">自動（ELRS のリンク・レースの合間だけ）</option>
+        <option value="2">自動（ELRS のリンク・レース中も）</option>
+      </select>
+      <span id="assignStatus" style="font-size:11px;flex-basis:100%"></span>
+    </div>
+    <div class="assign-row">
+      <span>VTX が送信機と違うとき</span>
+      <select id="vtxModeSelect" onchange="saveVtxAuto()" style="flex:1;min-width:180px;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:5px 8px;font-size:12px">
+        <option value="1">自動で反映（Send VTx・リンク時）</option>
+        <option value="0">タップで反映</option>
+      </select>
+    </div>
+    <div id="assignNote" class="assign-note" style="display:none">
+      機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。<br>
+      ・<b>レースの合間だけ</b>：レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
+      ・<b>レース中も</b>：レース中もリンクで入れたり外したりします。外れたパイロットのレースカードと順位は「📴 離脱」として残り、ラップも残ります。そのチャンネルはそのパイロットのものとして空けておき、同じレース中にリンクが戻ればそこに戻ります。新しく入る人は、このレースでまだ使っていないチャンネルに入ります（ラップが混ざらないように）。<br>
+      必要なもの：ELRS 3.4 以降の送信機の Backpack ＞ <b>Telemetry を ESPNOW</b>（3.4.x は On）、ELRS OSD を ON、ESP-NOW ブリッジ v2.11 以降。パイロットのバインドフレーズ（空欄ならパイロット名）と VTX の周波数を登録してください。バックパックの無いパイロットは、手動で選んだチャンネルのままです。
+    </div>
+    <div id="candBox" class="cand-box" style="display:none">
+      <div class="cand-title">📡 未登録の送信機</div>
+      <div id="candList"></div>
+      <div class="assign-note" style="margin:4px 0 0">パイロット情報に無い送信機（ELRS バックパック）です。「＋ 登録」で、送信機の VTX を入れた登録フォームが開きます。バインドフレーズはその場で確かめます。</div>
+    </div>
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <button onclick="clearChannelAssignments()" class="btn-secondary" style="flex:1;font-size:12px;padding:5px 0">✖ 全チャンネル解除</button>
     </div>
@@ -477,6 +533,8 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div id="addForm" style="display:none;background:var(--sf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px">新規パイロット追加</div>
       <div id="addFormBody"></div>
+      <label id="addByUidRow" class="uid-check" style="display:none;cursor:pointer"><input type="checkbox" id="addByUid" onchange="onAddByUid()"> バインドフレーズが無い（送信機の UID で登録）</label>
+      <div id="addUidCheck" class="uid-check"></div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button onclick="submitAdd()" class="btn-success" style="flex:1;font-size:12px">登録</button>
         <button onclick="hideAddForm()" class="btn-secondary" style="flex:1;font-size:12px">キャンセル</button>

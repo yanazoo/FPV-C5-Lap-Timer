@@ -111,7 +111,7 @@ function onMsg(d){
     applySettings(d);
     (d.pilots||[]).forEach(pd=>{
       var p=slots[pd.slot];if(!p)return;
-      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;
+      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;p.gone=!!pd.gone;
       p.rssi=pd.rssi||0;p.crossing=pd.crossing||false;
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
@@ -148,7 +148,7 @@ function onMsg(d){
   if(d.type==='active_update'){
     (d.pilots||[]).forEach(pd=>{
       var p=slots[pd.slot];if(!p)return;
-      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;
+      p.name=pd.name||'---';p.yomi=pd.yomi||'';p.rosterIdx=pd.rosterIdx;p.freq=pd.freq||0;p.gone=!!pd.gone;
       if(pd.enter!==undefined){p.enterRssi=pd.enter;syncCalibSliders(pd.slot,pd.enter,p.exitRssi);}
       if(pd.exit!==undefined){p.exitRssi=pd.exit;syncCalibSliders(pd.slot,p.enterRssi,pd.exit);}
       activeSlotsLocal[pd.slot]=pd.rosterIdx;
@@ -161,9 +161,11 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
-    if(activeTab==='config')renderC5Status();
+    if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function'){updateLinkBadges();renderCandidates();}}
     return;
   }
+  if(d.type==='vtx_auto'){if(isAuthed&&typeof onVtxAuto==='function')onVtxAuto(d);return;}
+  if(d.type==='auto_assign'){if(isAuthed&&typeof onAutoAssign==='function')onAutoAssign(d);return;}
   if(d.type==='rssi_all'){
     noteServerTime(d.ts);
     if(d.mic!==undefined&&typeof pushMic==='function')pushMic(d.mic);
@@ -374,6 +376,8 @@ function applySettings(st){
     showRaceRules();renderRanking();}
   if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
   if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
+  if(st.vtxAuto!==undefined&&typeof showVtxAuto==='function'){vtxAuto=st.vtxAuto!==false;showVtxAuto();}
+  if(st.assignMode!==undefined&&typeof showAssignMode==='function'){assignMode=st.assignMode===1||st.assignMode===2?st.assignMode:0;showAssignMode();}
   slots.forEach(p=>updateRaceCard(p));
 }
 

@@ -19,6 +19,7 @@
 #include "race_core.h"
 #include "race_files.h"
 #include "sound_count.h"
+#include "auto_assign.h"
 
 namespace {
 
@@ -946,6 +947,96 @@ std::vector<int> soundSeries(std::vector<std::pair<bool, int>> script, uint16_t 
     return got;
 }
 
+void testAutoAssign() {
+    using namespace autoassign;
+    const int n = 5;
+    Pilot pilots[n];
+    Link links[n];
+    for (int i = 0; i < n; i++) pilots[i] = {true, (uint16_t)(5658 + 37 * i), true};
+    int active[kSlots];
+    for (int& a : active) a = -1;
+    uint8_t wait[n];
+    Result r;
+    uint32_t t = 1000;
+    auto tick = [&](uint32_t dt, std::initializer_list<int> up, std::initializer_list<int> down = {}) {
+        for (uint32_t x = 0; x < dt; x += 500) {
+            t += 500;
+            for (int i : up) report(links[i], t, 90);
+            for (int i : down) report(links[i], t, 0);
+        }
+        return plan(t, pilots, links, n, active, wait, r);
+    };
+    // Not linked long enough yet, then pilot 2 then 0 join, in that order.
+    report(links[2], t, 80);
+    CHECK(!tick(500, {2}));
+    CHECK(active[0] == -1);
+    CHECK(tick(1500, {2}) && r.nJoined == 1 && active[0] == 2);
+    CHECK(!tick(500, {0, 2}));
+    CHECK(tick(2000, {0, 2}) && active[1] == 0 && r.joined[0] == 0);
+    // LQ 0 (aircraft off, radio on): leaves after kLeaveMs, not before.
+    CHECK(!tick(5000, {0}, {2}));
+    CHECK(active[0] == 2);
+    CHECK(tick(5500, {0}, {2}) && r.nLeft == 1 && r.left[0] == 2 && active[0] == -1 && active[1] == 0);
+    // Reports stop altogether (radio off): leaves too.
+    CHECK(!tick(9000, {}));
+    CHECK(tick(1500, {}) && active[1] == -1);
+    // A pilot put on a channel by hand, never heard: stays.
+    active[5] = 4;
+    CHECK(!tick(20000, {}));
+    CHECK(active[5] == 4);
+    // Same frequency as an assigned pilot: waits; shared UID: waits.
+    pilots[1].freq = pilots[4].freq;
+    pilots[3].distinct = false;
+    CHECK(!tick(3000, {1, 3}));
+    CHECK(wait[1] == kSameFreq && wait[3] == kAmbiguous);
+    pilots[1].freq = 0;
+    CHECK(!tick(500, {1, 3}) && wait[1] == kNoFreq);
+    // Earliest linked first when several are ready; a full house waits.
+    pilots[1].freq = 5800;
+    pilots[3].distinct = true;
+    for (int& a : active) a = 4;   // every channel taken (manual, never heard)
+    CHECK(!tick(500, {1, 3}) && wait[1] == kFull && wait[3] == kFull);
+    for (int& a : active) a = -1;
+    active[5] = 4;
+    CHECK(tick(500, {1, 3}) && r.nJoined == 2 && active[0] == 1 && active[1] == 3);
+    // A gap in reports longer than kSeenMs restarts the join clock.
+    Link l;
+    report(l, 100, 50);
+    report(l, 100 + kSeenMs + 1, 50);
+    CHECK(l.upSince == 100 + kSeenMs + 1);
+    CHECK(linked(l, 100 + 2 * kSeenMs + 1) && !linked(l, 100 + 2 * kSeenMs + 2));
+    // During a race: leave (the slot stays theirs), back to their own slot,
+    // newcomers only into slots nobody had in this race.
+    {
+        Link rl[n];
+        int act[kSlots], own[kSlots];
+        for (int& a : act) a = -1;
+        for (int& o : own) o = -1;
+        act[0] = 0; act[1] = 1;
+        own[2] = kBlocked;   // slot 2 has laps from someone unknown
+        for (int i = 0; i < n; i++) pilots[i] = {true, (uint16_t)(5658 + 37 * i), true};
+        RaceResult rr;
+        uint32_t u = 1000;
+        auto rtick = [&](uint32_t dt, std::initializer_list<int> up) {
+            for (uint32_t x = 0; x < dt; x += 500) { u += 500; for (int i : up) report(rl[i], u, 90); }
+            return planRace(u, pilots, rl, n, act, own, wait, rr);
+        };
+        CHECK(!rtick(3000, {0, 1}));
+        CHECK(own[0] == 0 && own[1] == 1);
+        CHECK(!rtick(9500, {1}));                 // 0 off for 9.5 s: still on
+        CHECK(rtick(1000, {1}) && rr.nLeft == 1 && rr.left[0] == 0 && act[0] == -1 && own[0] == 0);   // left, slot kept for them
+        CHECK(rtick(2500, {1, 3}) && act[3] == 3 && act[0] == -1 && act[2] == -1);   // newcomer: not 0 (0's), not 2 (blocked)
+        CHECK(rtick(2500, {0, 1, 3}) && act[0] == 0);   // 0 back to their own slot
+        rtick(11000, {1, 3});                     // 0 leaves again
+        CHECK(act[0] == -1 && own[0] == 0);
+        CHECK(rtick(2500, {1, 3, 4}) && act[4] == 4);   // 4 not into slot 0
+    }
+    // VTX Administrator: R3 = (5-1)*8+2, A1 = 0, L8 = 47, a frequency, junk.
+    CHECK(vtxConfigMhz(34, 0) == 5732 && vtxConfigMhz(0, 0) == 5865 && vtxConfigMhz(47, 0) == 5621);
+    CHECK(vtxConfigMhz(5800 & 0xFF, 5800 >> 8) == 5800);
+    CHECK(vtxConfigMhz(50, 0) == 0 && vtxConfigMhz(0x10, 0x27) == 0);
+}
+
 void testSoundCount() {
     // Two claps (40 ms, 300 ms apart), 0.02 s detection: one series of 2.
     CHECK((soundSeries({{true, 40}, {false, 300}, {true, 40}}, 20) == std::vector<int>{2}));
@@ -1002,6 +1093,7 @@ int runTests() {
     testFormat();
     testRaceFiles();
     testSoundCount();
+    testAutoAssign();
     printf(failures ? "%d FAILED\n" : "all tests passed\n", failures);
     return failures ? 1 : 0;
 }

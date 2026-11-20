@@ -44,6 +44,12 @@ def build(src, dst, gz=True):
     with open(os.path.join(src, "index.html"), encoding="utf-8") as f:
         html, inlined = inline_scripts(f.read(), src)
     skip = {os.path.normpath(p) for p in inlined} | {"index.html"}
+    # The commit this web UI is built from (the settings tab shows it with
+    # the firmware's).
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from build_id import build_id
+    bid = build_id(os.path.dirname(os.path.abspath(src)))
+    html = html.replace("</head>", '<script>var WEBUI_BUILD="%s";</script>\n</head>' % bid, 1)
     out = {"index.html": html.encode("utf-8")}
     for root, _, files in os.walk(src):
         for name in files:

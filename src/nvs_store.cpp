@@ -3,9 +3,11 @@
 #include "nvs_store.h"
 #include "data_model.h"
 #include "wifi_mgr.h"
+#include "pilot_link.h"
 
 PilotRoster  roster[MAX_REGISTERED];
 CalibConfig  rosterCal[MAX_REGISTERED];
+PilotUid     rosterUid[MAX_REGISTERED];
 int          rosterCount = 0;
 int          activePilots[MAX_ACTIVE];
 Settings     settings;
@@ -75,6 +77,9 @@ static void putPilot(int i) {
     prefs.putBytes(key, &roster[i], sizeof roster[i]);
     snprintf(key, sizeof key, "c%d", i);
     prefs.putBytes(key, &rosterCal[i], sizeof rosterCal[i]);
+    snprintf(key, sizeof key, "u%d", i);
+    if (rosterUid[i].set) prefs.putBytes(key, rosterUid[i].uid, 6);
+    else if (prefs.isKey(key)) prefs.remove(key);
 }
 
 void saveRosterPilot(int i) {
@@ -105,6 +110,8 @@ void saveSettings() {
     prefs.putBytes("r", &raceRules, sizeof raceRules);
     prefs.putUShort("sdly", startDelaySec);
     prefs.putBool("sdlyon", startDelayOn);
+    prefs.putUChar("amode", assignMode);
+    prefs.putBool("avtx", vtxAuto);
     prefs.end();
 }
 
@@ -160,6 +167,34 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
     prefs.end();
 }
 
+// The roster of a new timer: Raceband R2-R5 (the usual four-pilot spread)
+// on channels 1-4, named after their channel (public defaults, edit them on
+// the pilot list). The bind phrase is empty (the name is used, as vrxc_elrs)
+// and the goggle OSD off.
+static void seedDefaultPilots() {
+    static const struct { const char* name; const char* yomi; uint16_t mhz; } kDefaults[] = {
+        {"R2", "あーるつー", 5695},
+        {"R3", "あーるすりー", 5732},
+        {"R4", "あーるふぉー", 5769},
+        {"R5", "あーるふぁいぶ", 5806},
+    };
+    rosterCount = 0;
+    for (const auto& d : kDefaults) {
+        int i = rosterCount++;
+        memset(&roster[i], 0, sizeof roster[i]);
+        utf8::copy(roster[i].name, d.name, sizeof roster[i].name);
+        utf8::copy(roster[i].yomi, d.yomi, sizeof roster[i].yomi);
+        roster[i].freqMhz = d.mhz;
+        roster[i].osd = false;   // goggle OSD off until the pilot's real bind phrase is set
+        rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
+        rosterUid[i] = {};
+    }
+    for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = s < rosterCount ? s : -1;
+    saveRosterAll();
+    saveActive();
+    Serial.println("[NVS] new timer: default pilots R2-R5 on channels 1-4");
+}
+
 void loadAll() {
     // The certificate an earlier build kept for its https:// redirect: gone
     // with that feature, free its NVS space.
@@ -167,6 +202,9 @@ void loadAll() {
     if (prefs.isKey("crt")) prefs.clear();
     prefs.end();
     prefs.begin("pilots", true);
+    // Never saved a roster (a new or erased timer): start with the default
+    // pilots below. A roster emptied by hand has its count (0) and stays empty.
+    bool freshRoster = !prefs.isKey("count");
     rosterCount = constrain(prefs.getInt("count", 0), 0, MAX_REGISTERED);
     for (int i = 0; i < rosterCount; i++) {
         char key[16];
@@ -186,6 +224,8 @@ void loadAll() {
         snprintf(key, sizeof key, "c%d", i);
         if (prefs.getBytes(key, &rosterCal[i], sizeof rosterCal[i]) != sizeof rosterCal[i])
             rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
+        snprintf(key, sizeof key, "u%d", i);
+        rosterUid[i].set = prefs.isKey(key) && prefs.getBytes(key, rosterUid[i].uid, 6) == 6;
     }
     prefs.end();
 
@@ -195,6 +235,7 @@ void loadAll() {
     if (prefs.getBytes("slots", tmp, sizeof tmp) == sizeof tmp)
         for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = rosterValid(tmp[s]) ? tmp[s] : -1;
     prefs.end();
+    if (freshRoster) seedDefaultPilots();
 
     prefs.begin("settings", true);
     Settings st;
@@ -205,6 +246,8 @@ void loadAll() {
     uint16_t sd = min(prefs.getUShort("sdly", 0), START_DELAY_MAX);
     startDelayOn = prefs.isKey("sdlyon") ? prefs.getBool("sdlyon", false) : sd > 0;
     startDelaySec = sd ? sd : 10;
+    assignMode = assignModeValid(prefs.getUChar("amode", ASSIGN_MANUAL));
+    vtxAuto = prefs.getBool("avtx", true);
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

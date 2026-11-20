@@ -2,6 +2,7 @@
 #include <memory>
 #include <vector>
 #include "ws_handler.h"
+#include "pilot_link.h"
 #include "c5_link.h"
 #include "data_model.h"
 #include "race.h"
@@ -334,6 +335,8 @@ static void addSlots(JsonArray pa, bool withRace) {
         o["slot"]      = s;
         o["rosterIdx"] = ri;
         o["name"]      = activeName(s);
+        // Left the slot during the race (auto in races): laps stay on it.
+        if (!ok && raceCore.slot(s).lapCount > 0) o["gone"] = true;
         o["yomi"]      = ok ? roster[ri].yomi : "";
         o["freq"]      = ok ? roster[ri].freqMhz : 0;
         o["enter"]     = ok ? rosterCal[ri].enterRssi : DEFAULT_ENTER;
@@ -361,6 +364,8 @@ static void addSettings(JsonDocument& d) {
     d["countLastLap"] = raceRules.countLastLap;
     d["startDelayOn"]  = startDelayOn;
     d["startDelaySec"] = startDelaySec;
+    d["assignMode"]    = assignMode;
+    d["vtxAuto"]       = vtxAuto;
 }
 
 void wsSettings() {
