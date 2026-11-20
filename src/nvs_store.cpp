@@ -169,7 +169,8 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
 
 // The roster of a new timer: Raceband R2-R5 (the usual four-pilot spread)
 // on channels 1-4, named after their channel (public defaults, edit them on
-// the pilot list). The bind phrase is empty, so the name is used (as vrxc_elrs).
+// the pilot list). The bind phrase is empty (the name is used, as vrxc_elrs)
+// and the goggle OSD off.
 static void seedDefaultPilots() {
     static const struct { const char* name; const char* yomi; uint16_t mhz; } kDefaults[] = {
         {"R2", "あーるつー", 5695},
@@ -184,7 +185,7 @@ static void seedDefaultPilots() {
         utf8::copy(roster[i].name, d.name, sizeof roster[i].name);
         utf8::copy(roster[i].yomi, d.yomi, sizeof roster[i].yomi);
         roster[i].freqMhz = d.mhz;
-        roster[i].osd = true;
+        roster[i].osd = false;   // goggle OSD off until the pilot's real bind phrase is set
         rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
         rosterUid[i] = {};
     }
