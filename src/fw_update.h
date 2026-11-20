@@ -1,7 +1,7 @@
 // Updating the timer's own firmware and web UI from the browser:
 //   * online: in client mode with internet, the timer reads the latest
 //     release's version from GitHub, downloads its firmware.bin and
-//     littlefs.bin (HTTPS, checked against src/github_ca.h) and restarts;
+//     littlefs.bin (HTTPS, checked against the core's root store) and restarts;
 //   * from files: the browser sends firmware.bin / littlefs.bin (from the
 //     release zip) and the timer writes them.
 // Never during a race (or with laps not cleared). Settings and pilots stay

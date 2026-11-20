@@ -6,9 +6,9 @@
 #include <NetworkClientSecure.h>
 #include <Update.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <time.h>
 #include "data_model.h"
-#include "github_ca.h"
 #include "race.h"
 #include "sys_diag.h"
 #include "wifi_mgr.h"
@@ -40,7 +40,7 @@ State   state = kIdle;
 uint8_t phase = 0;        // updating: 1 firmware, 2 web UI
 uint8_t pct = 0;
 char    latest[24] = "";  // the newest release's tag, from the check
-char    error[80] = "";
+char    error[160] = "";
 bool    taskRunning = false;
 
 void setState(State s, const char* err = nullptr) {
@@ -67,24 +67,91 @@ bool online() {
     return n.connected && !n.fallback;
 }
 
-// TLS checks certificate dates: set the clock first (NTP) if nobody has.
-void syncClock() {
-    if (time(nullptr) > 1700000000) return;
-    configTime(0, 0, "pool.ntp.org", "time.google.com");
-    for (int i = 0; i < 40 && time(nullptr) < 1700000000; i++) delay(250);
+// The full Mozilla root store built into the core (esp_crt_bundle), so a
+// change of CA at GitHub or its download hosts doesn't break the update.
+extern const uint8_t crtBundleStart[] asm("_binary_x509_crt_bundle_start");
+extern const uint8_t crtBundleEnd[]   asm("_binary_x509_crt_bundle_end");
+
+void useRootStore(NetworkClientSecure& tls) {
+    tls.setCACertBundle(crtBundleStart, crtBundleEnd - crtBundleStart);
+}
+
+// Before talking TLS: the clock (certificate dates, NTP) and the name
+// lookup. False with the reason in `why`.
+bool netReady(char* why, size_t n) {
+    IPAddress ip;
+    if (!WiFi.hostByName("github.com", ip)) {
+        snprintf(why, n, "github.com の名前を引けませんでした（DNS）");
+        return false;
+    }
+    if (time(nullptr) < 1700000000) {
+        configTime(0, 0, "pool.ntp.org", "time.google.com", "time.cloudflare.com");
+        for (int i = 0; i < 60 && time(nullptr) < 1700000000; i++) delay(250);
+    }
+    if (time(nullptr) < 1700000000) {
+        snprintf(why, n, "時計を合わせられませんでした（NTP）");
+        return false;
+    }
+    return true;
+}
+
+// "（code：TLS の理由）" for a failed request.
+void failText(char* out, size_t n, const char* what, int code, NetworkClientSecure& tls) {
+    char t[96] = "";
+    tls.lastError(t, sizeof t);
+    if (t[0]) snprintf(out, n, "%s（%d：%s）", what, code, t);
+    else      snprintf(out, n, "%s（%d）", what, code);
+    Serial.printf("[Update] %s, free heap %u (largest %u)\n", out, (unsigned)ESP.getFreeHeap(),
+                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+}
+
+// GETs `url`, following redirects one hop at a time with a new TLS client
+// for each: the core's client drops its root store when a connection closes
+// (stop() clears it), so a redirect followed on the same client fails with
+// "No CA chain". Tries the whole chain up to 3 times. On 200 `url` becomes
+// the final address and, with `body`, the response is read into it;
+// otherwise `why` says what failed.
+int getFinal(String& url, String* body, char* why, size_t n) {
+    int code = -1;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (attempt) delay(1500);
+        String u = url;
+        for (int hop = 0; hop < 6; hop++) {
+            NetworkClientSecure tls;
+            useRootStore(tls);
+            HTTPClient http;
+            http.setReuse(false);
+            http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+            http.setTimeout(15000);
+            code = http.begin(tls, u) ? http.GET() : -1;
+            String next = http.getLocation();
+            if (code >= 300 && code < 400 && next.startsWith("https://")) {
+                http.end();
+                u = next;
+                continue;
+            }
+            if (code == 200) {
+                if (body) *body = http.getString();
+                http.end();
+                url = u;
+                return 200;
+            }
+            failText(why, n, "GitHub に接続できませんでした", code, tls);
+            http.end();
+            break;
+        }
+    }
+    return code;
 }
 
 void checkTask(void*) {
-    syncClock();
-    NetworkClientSecure tls;
-    tls.setCACert(kGithubRootCAs);
-    HTTPClient http;
-    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http.setTimeout(15000);
-    String url = String(kReleases) + "/latest/download/" + kVerAsset;
-    int code = http.begin(tls, url) ? http.GET() : -1;
-    if (code == 200) {
-        String v = http.getString();
+    char e[160];
+    String url = String(kReleases) + "/latest/download/" + kVerAsset, v;
+    if (!netReady(e, sizeof e)) {
+        setState(kFailed, e);
+    } else if (getFinal(url, &v, e, sizeof e) != 200) {
+        setState(kFailed, e);
+    } else {
         v.trim();
         if (v.length() > 1 && v.length() < sizeof latest && v[0] == 'v') {
             portENTER_CRITICAL(&mux);
@@ -95,26 +162,25 @@ void checkTask(void*) {
         } else {
             setState(kFailed, "バージョンを読めませんでした");
         }
-    } else {
-        char e[80];
-        snprintf(e, sizeof e, "GitHub に接続できませんでした（%d）", code);
-        setState(kFailed, e);
     }
-    http.end();
     taskRunning = false;
     vTaskDelete(nullptr);
 }
 
 void updateTask(void*) {
-    syncClock();
+    char e[160];
+    if (!netReady(e, sizeof e)) {
+        setState(kFailed, e);
+        taskRunning = false;
+        vTaskDelete(nullptr);
+        return;
+    }
     char tag[24];
     portENTER_CRITICAL(&mux);
     strlcpy(tag, latest, sizeof tag);
     portEXIT_CRITICAL(&mux);
     String base = String(kReleases) + "/download/" + tag + "/";
-    NetworkClientSecure tls;
-    tls.setCACert(kGithubRootCAs);
-    httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    httpUpdate.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     httpUpdate.rebootOnUpdate(false);
     httpUpdate.onProgress([](int cur, int total) {
         portENTER_CRITICAL(&mux);
@@ -122,13 +188,21 @@ void updateTask(void*) {
         portEXIT_CRITICAL(&mux);
     });
     // Firmware first (into the other app slot: a failure leaves the running
-    // one as it is), then the web UI.
+    // one as it is), then the web UI. Each download address is resolved
+    // first (redirects, see getFinal) and then fetched on a fresh client.
     phase = 1, pct = 0;
     Serial.printf("[Update] firmware %s\n", tag);
-    t_httpUpdate_return r = httpUpdate.update(tls, base + kFwAsset);
+    String url = base + kFwAsset;
+    t_httpUpdate_return r = HTTP_UPDATE_FAILED;
+    if (getFinal(url, nullptr, e, sizeof e) == 200) {
+        NetworkClientSecure tls;
+        useRootStore(tls);
+        r = httpUpdate.update(tls, url);
+        if (r != HTTP_UPDATE_OK)
+            failText(e, sizeof e, ("ファームの書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
+                     httpUpdate.getLastError(), tls);
+    }
     if (r != HTTP_UPDATE_OK) {
-        char e[80];
-        snprintf(e, sizeof e, "ファームの書き込みに失敗しました：%s", httpUpdate.getLastErrorString().c_str());
         setState(kFailed, e);
         taskRunning = false;
         vTaskDelete(nullptr);
@@ -136,12 +210,19 @@ void updateTask(void*) {
     }
     phase = 2, pct = 0;
     Serial.printf("[Update] web UI %s\n", tag);
-    LittleFS.end();
-    r = httpUpdate.updateSpiffs(tls, base + kFsAsset);
+    url = base + kFsAsset;
+    r = HTTP_UPDATE_FAILED;
+    if (getFinal(url, nullptr, e, sizeof e) == 200) {
+        LittleFS.end();
+        NetworkClientSecure tls;
+        useRootStore(tls);
+        r = httpUpdate.updateSpiffs(tls, url);
+        if (r != HTTP_UPDATE_OK)
+            failText(e, sizeof e, ("Web 画面の書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
+                     httpUpdate.getLastError(), tls);
+    }
     if (r != HTTP_UPDATE_OK) {
         // The new firmware is in; its rescue page can bring the web UI back.
-        char e[80];
-        snprintf(e, sizeof e, "Web 画面の書き込みに失敗しました：%s", httpUpdate.getLastErrorString().c_str());
         setState(kFailed, e);
         Serial.println("[Update] web UI failed: restarting into the new firmware (rescue page)");
         sysRequestRestart(3000);
@@ -167,10 +248,10 @@ bool startTask(TaskFunction_t fn, const char* name) {
 }
 
 String statusJson() {
-    char buf[320];
+    char buf[480];
     portENTER_CRITICAL(&mux);
     State s = state;
-    char lt[24], er[80];
+    char lt[24], er[160];
     strlcpy(lt, latest, sizeof lt);
     strlcpy(er, error, sizeof er);
     uint8_t ph = phase, pc = pct;
