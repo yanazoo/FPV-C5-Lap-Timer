@@ -167,6 +167,33 @@ void saveNet(uint8_t mode, const String& apS, const String& apP, const String& s
     prefs.end();
 }
 
+// The roster of a new timer: Raceband R2-R5 (the usual four-pilot spread)
+// on channels 1-4, named after their channel (public defaults, edit them on
+// the pilot list). The bind phrase is empty, so the name is used (as vrxc_elrs).
+static void seedDefaultPilots() {
+    static const struct { const char* name; const char* yomi; uint16_t mhz; } kDefaults[] = {
+        {"R2", "あーるつー", 5695},
+        {"R3", "あーるすりー", 5732},
+        {"R4", "あーるふぉー", 5769},
+        {"R5", "あーるふぁいぶ", 5806},
+    };
+    rosterCount = 0;
+    for (const auto& d : kDefaults) {
+        int i = rosterCount++;
+        memset(&roster[i], 0, sizeof roster[i]);
+        utf8::copy(roster[i].name, d.name, sizeof roster[i].name);
+        utf8::copy(roster[i].yomi, d.yomi, sizeof roster[i].yomi);
+        roster[i].freqMhz = d.mhz;
+        roster[i].osd = true;
+        rosterCal[i] = {DEFAULT_ENTER, DEFAULT_EXIT};
+        rosterUid[i] = {};
+    }
+    for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = s < rosterCount ? s : -1;
+    saveRosterAll();
+    saveActive();
+    Serial.println("[NVS] new timer: default pilots R2-R5 on channels 1-4");
+}
+
 void loadAll() {
     // The certificate an earlier build kept for its https:// redirect: gone
     // with that feature, free its NVS space.
@@ -174,6 +201,9 @@ void loadAll() {
     if (prefs.isKey("crt")) prefs.clear();
     prefs.end();
     prefs.begin("pilots", true);
+    // Never saved a roster (a new or erased timer): start with the default
+    // pilots below. A roster emptied by hand has its count (0) and stays empty.
+    bool freshRoster = !prefs.isKey("count");
     rosterCount = constrain(prefs.getInt("count", 0), 0, MAX_REGISTERED);
     for (int i = 0; i < rosterCount; i++) {
         char key[16];
@@ -204,6 +234,7 @@ void loadAll() {
     if (prefs.getBytes("slots", tmp, sizeof tmp) == sizeof tmp)
         for (int s = 0; s < MAX_ACTIVE; s++) activePilots[s] = rosterValid(tmp[s]) ? tmp[s] : -1;
     prefs.end();
+    if (freshRoster) seedDefaultPilots();
 
     prefs.begin("settings", true);
     Settings st;

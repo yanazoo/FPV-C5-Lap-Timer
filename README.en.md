@@ -191,6 +191,13 @@ Defaults on first boot:
 | Web UI | `http://20.0.0.1` (client mode: `http://fpv-c5-lt.local`) |
 | Admin password (login) | `admin` |
 | netpack XIAO setup AP (WiFi link only) | SSID `ELRS-Netpack-Setup`, password `elrs-netpack`, `http://192.168.4.1` |
+| Pilots | `R2`–`R5` (Raceband R2 5695 / R3 5732 / R4 5769 / R5 5806 on Ch1–Ch4, readings like "あーるつー", bind phrase empty = the name) |
+
+The default pilots come only on a timer that never saved a roster (new, or
+its flash erased): flashing never replaces your pilots, and a roster emptied
+by hand stays empty. The names are public defaults: edit them in the pilot
+list. To start over, `pio run -e xiao_esp32s3 -t erase`, then `upload` and
+`uploadfs` (every setting, WiFi included, goes back to its default).
 
 Then join WiFi `FPV-C5-LT` (password `fpv-c5-lt`), open `http://20.0.0.1`,
 log in (`admin`), **change the WiFi (host AP) and admin passwords** in

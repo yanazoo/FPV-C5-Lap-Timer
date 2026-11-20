@@ -82,8 +82,11 @@ MIC_LOUD = {"until": 0.0, "lvl": 0}
 MIC_PRESENT = os.environ.get("MOCK_NO_MIC") != "1"   # MOCK_NO_MIC=1: a plain XIAO, no Sense board
 BOOT_ID = random.randint(1, 2**31)
 state = {
-    "pilots": [],
-    "active": [-1] * 8,
+    # A new timer's roster (src/nvs_store.cpp seedDefaultPilots)
+    "pilots": [{"name": n, "yomi": y, "freq": f, "bind": "", "osd": True, "enter": 350, "exit": 280}
+               for n, y, f in (("R2", "あーるつー", 5695), ("R3", "あーるすりー", 5732),
+                               ("R4", "あーるふぉー", 5769), ("R5", "あーるふぁいぶ", 5806))],
+    "active": [0, 1, 2, 3, -1, -1, -1, -1],
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 30,
                  "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10,
                  "assignMode": 0, "vtxAuto": True},
