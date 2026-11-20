@@ -2,6 +2,12 @@
 
 🌐 [日本語](README.md) | **English**
 
+> [!TIP]
+> **Flashing and updating**
+> - **Web flasher** (Chrome / Edge on a PC, USB; no PlatformIO): https://yanazoo.github.io/FPV-C5-Lap-Timer/
+> - **Latest release** (notes, prebuilt files): https://github.com/yanazoo/FPV-C5-Lap-Timer/releases/latest
+> - The timer also updates itself from Settings → "⬆️ ファーム更新" (online or from files); see [Build and flash](#build-and-flash).
+
 ### Up to 8 quads timed at once
 
 - **One receiver times up to 8 quads at the same time** (8 channels; each quad is told apart by its VTX frequency).

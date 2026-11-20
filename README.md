@@ -2,6 +2,12 @@
 
 🌐 **日本語** | [English](README.en.md)
 
+> [!TIP]
+> **書き込み・更新はここから**
+> - **Web 書き込みページ**（PC の Chrome / Edge と USB。PlatformIO 不要）：https://yanazoo.github.io/FPV-C5-Lap-Timer/
+> - **最新リリース**（リリースノート・ビルド済みファイル）：https://github.com/yanazoo/FPV-C5-Lap-Timer/releases/latest
+> - タイマーは設定タブの「⬆️ ファーム更新」からも更新できます（ネットから・ファイルから）。詳しくは「[ファームの更新](#ファームの更新)」。
+
 ### 最大 8 機を同時に計測
 
 - **受信機 1 台で、最大 8 機のドローンを同時に計測**できます（8 チャンネル。各機の VTX の電波を周波数で見分けます）。
