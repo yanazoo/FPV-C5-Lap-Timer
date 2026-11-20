@@ -105,23 +105,53 @@ void failText(char* out, size_t n, const char* what, int code, NetworkClientSecu
                   (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
 }
 
+// GETs `url`, following redirects one hop at a time with a new TLS client
+// for each: the core's client drops its root store when a connection closes
+// (stop() clears it), so a redirect followed on the same client fails with
+// "No CA chain". Tries the whole chain up to 3 times. On 200 `url` becomes
+// the final address and, with `body`, the response is read into it;
+// otherwise `why` says what failed.
+int getFinal(String& url, String* body, char* why, size_t n) {
+    int code = -1;
+    for (int attempt = 0; attempt < 3; attempt++) {
+        if (attempt) delay(1500);
+        String u = url;
+        for (int hop = 0; hop < 6; hop++) {
+            NetworkClientSecure tls;
+            useRootStore(tls);
+            HTTPClient http;
+            http.setReuse(false);
+            http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
+            http.setTimeout(15000);
+            code = http.begin(tls, u) ? http.GET() : -1;
+            String next = http.getLocation();
+            if (code >= 300 && code < 400 && next.startsWith("https://")) {
+                http.end();
+                u = next;
+                continue;
+            }
+            if (code == 200) {
+                if (body) *body = http.getString();
+                http.end();
+                url = u;
+                return 200;
+            }
+            failText(why, n, "GitHub に接続できませんでした", code, tls);
+            http.end();
+            break;
+        }
+    }
+    return code;
+}
+
 void checkTask(void*) {
     char e[160];
+    String url = String(kReleases) + "/latest/download/" + kVerAsset, v;
     if (!netReady(e, sizeof e)) {
         setState(kFailed, e);
-        taskRunning = false;
-        vTaskDelete(nullptr);
-        return;
-    }
-    NetworkClientSecure tls;
-    useRootStore(tls);
-    HTTPClient http;
-    http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    http.setTimeout(15000);
-    String url = String(kReleases) + "/latest/download/" + kVerAsset;
-    int code = http.begin(tls, url) ? http.GET() : -1;
-    if (code == 200) {
-        String v = http.getString();
+    } else if (getFinal(url, &v, e, sizeof e) != 200) {
+        setState(kFailed, e);
+    } else {
         v.trim();
         if (v.length() > 1 && v.length() < sizeof latest && v[0] == 'v') {
             portENTER_CRITICAL(&mux);
@@ -132,11 +162,7 @@ void checkTask(void*) {
         } else {
             setState(kFailed, "バージョンを読めませんでした");
         }
-    } else {
-        failText(e, sizeof e, "GitHub に接続できませんでした", code, tls);
-        setState(kFailed, e);
     }
-    http.end();
     taskRunning = false;
     vTaskDelete(nullptr);
 }
@@ -154,9 +180,7 @@ void updateTask(void*) {
     strlcpy(tag, latest, sizeof tag);
     portEXIT_CRITICAL(&mux);
     String base = String(kReleases) + "/download/" + tag + "/";
-    NetworkClientSecure tls;
-    useRootStore(tls);
-    httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    httpUpdate.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);
     httpUpdate.rebootOnUpdate(false);
     httpUpdate.onProgress([](int cur, int total) {
         portENTER_CRITICAL(&mux);
@@ -164,13 +188,21 @@ void updateTask(void*) {
         portEXIT_CRITICAL(&mux);
     });
     // Firmware first (into the other app slot: a failure leaves the running
-    // one as it is), then the web UI.
+    // one as it is), then the web UI. Each download address is resolved
+    // first (redirects, see getFinal) and then fetched on a fresh client.
     phase = 1, pct = 0;
     Serial.printf("[Update] firmware %s\n", tag);
-    t_httpUpdate_return r = httpUpdate.update(tls, base + kFwAsset);
+    String url = base + kFwAsset;
+    t_httpUpdate_return r = HTTP_UPDATE_FAILED;
+    if (getFinal(url, nullptr, e, sizeof e) == 200) {
+        NetworkClientSecure tls;
+        useRootStore(tls);
+        r = httpUpdate.update(tls, url);
+        if (r != HTTP_UPDATE_OK)
+            failText(e, sizeof e, ("ファームの書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
+                     httpUpdate.getLastError(), tls);
+    }
     if (r != HTTP_UPDATE_OK) {
-        failText(e, sizeof e, ("ファームの書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
-                 httpUpdate.getLastError(), tls);
         setState(kFailed, e);
         taskRunning = false;
         vTaskDelete(nullptr);
@@ -178,12 +210,19 @@ void updateTask(void*) {
     }
     phase = 2, pct = 0;
     Serial.printf("[Update] web UI %s\n", tag);
-    LittleFS.end();
-    r = httpUpdate.updateSpiffs(tls, base + kFsAsset);
+    url = base + kFsAsset;
+    r = HTTP_UPDATE_FAILED;
+    if (getFinal(url, nullptr, e, sizeof e) == 200) {
+        LittleFS.end();
+        NetworkClientSecure tls;
+        useRootStore(tls);
+        r = httpUpdate.updateSpiffs(tls, url);
+        if (r != HTTP_UPDATE_OK)
+            failText(e, sizeof e, ("Web 画面の書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
+                     httpUpdate.getLastError(), tls);
+    }
     if (r != HTTP_UPDATE_OK) {
         // The new firmware is in; its rescue page can bring the web UI back.
-        failText(e, sizeof e, ("Web 画面の書き込みに失敗しました：" + httpUpdate.getLastErrorString()).c_str(),
-                 httpUpdate.getLastError(), tls);
         setState(kFailed, e);
         Serial.println("[Update] web UI failed: restarting into the new firmware (rescue page)");
         sysRequestRestart(3000);
