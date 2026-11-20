@@ -275,6 +275,7 @@ const char* refusal(AsyncWebServerRequest* req) {
 // A firmware or web UI file in the request body (raw, not a form).
 struct Upload {
     bool        began;
+    bool        done;     // Update.end() ran (or the update was aborted)
     bool        fs;
     size_t      got;
     int         code;
@@ -354,6 +355,7 @@ void fwUpdateRoutes() {
             Serial.printf("[Update] %s written from the browser (%u bytes)\n", u->fs ? "web UI" : "firmware", (unsigned)u->got);
             req->send(200, "application/json", R"({"ok":true})");
             if (restart) sysRequestRestart(1500);
+            else if (u->fs) LittleFS.begin();   // the new web UI, until the restart
         },
         nullptr,
         [](AsyncWebServerRequest* req, uint8_t* data, size_t len, size_t index, size_t total) {
@@ -362,9 +364,13 @@ void fwUpdateRoutes() {
                 if (!n) return;
                 *n = Upload{};
                 req->_tempObject = n;
-                // The browser went away half way: free the update for the next try.
-                req->onDisconnect([]() {
-                    if (Update.isRunning()) Update.abort();
+                // The browser went away half way: free the update for the next
+                // try. Only this request's own unfinished update: the previous
+                // file's connection can close while the next file is being
+                // written (web UI then firmware), and must not abort it.
+                req->onDisconnect([req]() {
+                    Upload* u = reinterpret_cast<Upload*>(req->_tempObject);
+                    if (u && u->began && !u->done && Update.isRunning()) Update.abort();
                 });
                 String part = req->hasParam("part") ? req->getParam("part")->value() : "";
                 n->fs = part == "fs";
@@ -382,10 +388,14 @@ void fwUpdateRoutes() {
             if (!u || u->why || index != u->got) return;
             if (Update.write(data, len) != len) {
                 Update.abort();
+                u->done = true;
                 u->code = 500, u->why = R"({"ok":false,"reason":"write"})";
                 return;
             }
             u->got = index + len;
-            if (u->got == total && !Update.end(true)) u->code = 500, u->why = R"({"ok":false,"reason":"verify"})";
+            if (u->got == total) {
+                u->done = true;
+                if (!Update.end(true)) u->code = 500, u->why = R"({"ok":false,"reason":"verify"})";
+            }
         });
 }
