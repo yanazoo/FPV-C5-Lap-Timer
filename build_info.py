@@ -7,8 +7,10 @@ import sys
 
 project = env.subst("$PROJECT_DIR")  # noqa: F821
 sys.path.insert(0, os.path.join(project, "tools"))
-from build_id import build_id  # noqa: E402
+from build_id import build_id, release_version  # noqa: E402
 
 bid = build_id(project)
-env.Append(CPPDEFINES=[("FW_BUILD", env.StringifyMacro(bid))])  # noqa: F821
-print("build_info.py: FW_BUILD = %s" % bid)
+ver = release_version(project)
+env.Append(CPPDEFINES=[("FW_BUILD", env.StringifyMacro(bid)),  # noqa: F821
+                       ("FW_VERSION", env.StringifyMacro(ver))])  # noqa: F821
+print("build_info.py: FW_BUILD = %s, FW_VERSION = %s" % (bid, ver))

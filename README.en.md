@@ -182,6 +182,27 @@ found, hold BOOT while pressing RESET and retry. Prebuilt binaries are in the
 CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 `elrs-espnow-bridge`.
 
+**Without PlatformIO: the web flasher.** Open the
+[web flasher](https://yanazoo.github.io/FPV-C5-Lap-Timer/) in Chrome or Edge
+on a PC, plug the device in by USB and press "書き込む": the latest release
+for the timer (S3), the receiver (C5) and the ESP-NOW bridge (XIAO C3 /
+Wrover-E). Leave "Erase device" unticked to keep settings and pilots. It is
+published to GitHub Pages with every release (once: Settings → Pages →
+Source: GitHub Actions).
+
+**Updating the timer from its own page** (no USB): Settings → "⬆️ ファーム更新".
+- *Online*: in client mode with internet, "最新版を確認" then "vX.Y.Z に更新":
+  the timer downloads the latest release from GitHub (certificates checked),
+  writes it and restarts.
+- *From files*: pick `firmware.bin` and `littlefs.bin` (web UI) from the
+  release zip; works in host mode too.
+- Settings and pilots are kept; not during a race or with laps not cleared.
+  If a web UI write is cut off, a rescue page in the firmware lets you write
+  it again.
+- The online update reaches releases from v2.3.0 on (the first with these
+  files); flash a v2.2.0 or older timer once with the web flasher or
+  PlatformIO.
+
 Defaults on first boot:
 
 | Setting | Default |

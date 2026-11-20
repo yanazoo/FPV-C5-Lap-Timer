@@ -17,6 +17,8 @@ jobs:
   release:
     name: Build and publish the release
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.params.outputs.skip == 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -84,14 +86,46 @@ jobs:
               third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/$env \
               bootloader.bin partitions.bin firmware.bin
           done
+          # For the timer's online update: the same names in every release
+          # (releases/latest/download/<name>).
+          cp .pio/build/xiao_esp32s3/firmware.bin dist/fpv-c5-lap-timer-xiao_esp32s3-firmware.bin
+          cp .pio/build/xiao_esp32s3/littlefs.bin dist/fpv-c5-lap-timer-xiao_esp32s3-littlefs.bin
+          echo "$TAG" > dist/fpv-c5-lap-timer-version.txt
           ls -l dist
+
+      - name: Web flasher site
+        if: steps.params.outputs.skip == 'false'
+        run: python3 tools/flasher_site.py site "${{ steps.params.outputs.tag }}"
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.params.outputs.skip == 'false'
+        with:
+          path: site
 
       - name: Create release
         if: steps.params.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip \
+          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip dist/*.bin dist/*.txt \
             --target "${{ github.sha }}" \
             --title "${{ steps.params.outputs.title }}" \
             --notes-file "${{ steps.params.outputs.notes }}"
+
+  # The web flasher (docs/flasher) on GitHub Pages, with this release's files.
+  # Needs Settings -> Pages -> Source: "GitHub Actions" (once). Without it
+  # this job fails but the release above is already out.
+  pages:
+    name: Web flasher (GitHub Pages)
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

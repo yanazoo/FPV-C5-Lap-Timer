@@ -781,3 +781,72 @@ function postStartDelay(n){
     .then(r=>toast(r.ok?'✓ スタートの待ち時間を '+n+' 秒にしました':'⚠️ 保存エラー'))
     .catch(()=>toast('⚠️ 接続エラー'));
 }
+
+// ── ファーム更新 ──────────────────────────────────────────────────────────
+var fwPoll=null;
+var FW_REASON={login:'ログインし直してください',race:'レース中・ラップが残っている間は更新できません（クリアしてください）',
+  busy:'ほかの更新が動いています',offline:'インターネットにつながっていません（クライアントモードでルーターに接続してください）',
+  nocheck:'先に「最新版を確認」を押してください',part:'ファイルの種類が違います',empty:'ファイルが空です',
+  notfirmware:'firmware.bin ではないようです',size:'ファイルが大きすぎます',write:'書き込みに失敗しました',verify:'書き込んだ内容の確認に失敗しました'};
+function fwSay(t,col){var e=document.getElementById('fwStatus');if(e){e.textContent=t;e.style.color=col||'';}}
+async function loadFwInfo(){
+  try{
+    var s=await (await fetch('/api/update')).json();
+    var v=document.getElementById('fwVer');
+    if(v)v.textContent='このタイマー：'+s.version+'（ビルド '+s.build+'）'+(s.online?'':'・インターネット：つながっていません');
+    var b=document.getElementById('fwCheckBtn');if(b)b.disabled=!s.online;
+    return s;
+  }catch(e){return null;}
+}
+async function fwPost(url){
+  var r=await fetch(url+(url.indexOf('?')<0?'?':'&')+'token='+encodeURIComponent(authToken||''),{method:'POST'});
+  var j={};try{j=await r.json();}catch(e){}
+  if(!r.ok||j.ok===false)throw (FW_REASON[j.reason]||j.reason||('HTTP '+r.status));
+  return j;
+}
+async function fwCheck(){
+  clearInterval(fwPoll);
+  document.getElementById('fwOnlineBtn').style.display='none';
+  try{
+    await fwPost('/api/update/check');fwSay('最新版を確認しています…');
+    fwPoll=setInterval(async function(){
+      var s=await loadFwInfo();if(!s||s.state==='checking')return;
+      clearInterval(fwPoll);
+      if(s.state==='failed'){fwSay('⚠ '+s.error,'var(--warn)');return;}
+      if(s.latest===s.version){fwSay('✓ 最新版です（'+s.latest+'）','var(--ok)');return;}
+      fwSay('新しい版があります：'+s.latest+'（このタイマーは '+s.version+'）','var(--accent)');
+      var b=document.getElementById('fwOnlineBtn');b.style.display='';b.textContent='⬇️ '+s.latest+' に更新';
+    },1000);
+  }catch(e){fwSay('⚠ '+e,'var(--warn)');}
+}
+async function fwOnline(){
+  clearInterval(fwPoll);
+  var s=await loadFwInfo();if(!s)return;
+  if(!confirm(s.latest+' に更新します。書き込みに 1〜2 分かかり、終わると再起動します。途中で電源を切らないでください。'))return;
+  try{
+    await fwPost('/api/update/online');
+    fwPoll=setInterval(async function(){
+      var t;try{t=await (await fetch('/api/update')).json();}catch(e){clearInterval(fwPoll);fwSay('再起動しています…（しばらくすると画面が開き直します）');return;}
+      if(t.state==='failed'){clearInterval(fwPoll);fwSay('⚠ '+t.error,'var(--warn)');return;}
+      if(t.state==='done'){clearInterval(fwPoll);fwSay('✓ 書き込みました。再起動しています…（しばらくすると画面が開き直します）','var(--ok)');return;}
+      fwSay((t.phase===1?'ファーム':'Web 画面')+'を書き込んでいます… '+t.pct+'%');
+    },1000);
+  }catch(e){fwSay('⚠ '+e,'var(--warn)');}
+}
+async function fwUpload(){
+  var fw=document.getElementById('fwFile').files[0],fs=document.getElementById('fsFile').files[0];
+  if(!fw&&!fs){fwSay('ファイルを選んでください','var(--warn)');return;}
+  if(!confirm('選んだファイルを書き込みます。終わると再起動します。途中で電源を切らないでください。'))return;
+  clearInterval(fwPoll);
+  try{
+    // The web UI first (the page stays on screen), the firmware last; restart after the last one.
+    var list=[];if(fs)list.push(['fs',fs,'Web 画面']);if(fw)list.push(['fw',fw,'ファーム']);
+    for(var i=0;i<list.length;i++){
+      fwSay(list[i][2]+'を書き込んでいます…（'+Math.round(list[i][1].size/1024)+' KB）');
+      var r=await fetch('/api/update/upload?part='+list[i][0]+'&restart='+(i===list.length-1?1:0)+'&token='+encodeURIComponent(authToken||''),{method:'POST',body:list[i][1]});
+      var j={};try{j=await r.json();}catch(e){}
+      if(!r.ok||!j.ok)throw (FW_REASON[j.reason]||j.reason||('HTTP '+r.status));
+    }
+    fwSay('✓ 書き込みました。再起動しています…（しばらくすると画面が開き直します）','var(--ok)');
+  }catch(e){fwSay('⚠ '+e,'var(--warn)');}
+}

@@ -20,5 +20,20 @@ def build_id(project):
         return "?"
 
 
+def release_version(project):
+    """The release this is: the release branch CI builds (GITHUB_REF_NAME
+    v2.2.0), else the nearest release tag (v2.2.0, or v2.2.0-3-gabc1234 past
+    it), else "dev"."""
+    ref = os.environ.get("GITHUB_REF_NAME", "")
+    if os.environ.get("GITHUB_REF_TYPE") == "branch" and ref[:1] == "v" and ref[1:2].isdigit():
+        return ref
+    try:
+        out = subprocess.run(["git", "-C", project, "describe", "--tags", "--match", "v[0-9]*"],
+                             capture_output=True, text=True, timeout=10).stdout.strip()
+        return out or "dev"
+    except Exception:
+        return "dev"
+
+
 if __name__ == "__main__":
     print(build_id(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))

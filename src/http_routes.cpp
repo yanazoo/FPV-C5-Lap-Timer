@@ -16,6 +16,7 @@
 #include "wifi_mgr.h"
 #include "ws_handler.h"
 #include "pilot_link.h"
+#include "fw_update.h"
 
 namespace {
 
@@ -994,7 +995,13 @@ void registerHttpRoutes() {
         req->send(200, "application/json", sysJson());
     });
 
+    fwUpdateRoutes();
+
     // ── Static files, then the captive portal catch-all ────────────────────
+    // No web UI files (an update of them cut off): the firmware's rescue
+    // page, to write them again.
+    server.on(AsyncURIMatcher::exact("/"), HTTP_GET, [](AsyncWebServerRequest* req) { fwSendRescuePage(req); })
+        .setFilter([](AsyncWebServerRequest*) { return fwWebUiMissing(); });
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html").setCacheControl("no-cache");
     server.onNotFound([](AsyncWebServerRequest* req) {
         if (req->method() == HTTP_OPTIONS) { req->send(204); return; }
