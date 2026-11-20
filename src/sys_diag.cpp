@@ -1,4 +1,5 @@
 #include "sys_diag.h"
+#include "fw_update.h"
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <WiFi.h>
@@ -99,6 +100,7 @@ String sysJson() {
 #define FW_BUILD "?"
 #endif
     d["build"]    = FW_BUILD;   // git commit (build_info.py)
+    d["version"]  = fwVersion();
     String s;
     serializeJson(d, s);
     return s;

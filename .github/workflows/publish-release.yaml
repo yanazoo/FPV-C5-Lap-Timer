@@ -84,14 +84,32 @@ jobs:
               third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/$env \
               bootloader.bin partitions.bin firmware.bin
           done
+          # For the timer's online update: the same names in every release
+          # (releases/latest/download/<name>).
+          cp .pio/build/xiao_esp32s3/firmware.bin dist/fpv-c5-lap-timer-xiao_esp32s3-firmware.bin
+          cp .pio/build/xiao_esp32s3/littlefs.bin dist/fpv-c5-lap-timer-xiao_esp32s3-littlefs.bin
+          echo "$TAG" > dist/fpv-c5-lap-timer-version.txt
           ls -l dist
+
+      - name: Web flasher site
+        if: steps.params.outputs.skip == 'false'
+        run: python3 tools/flasher_site.py site "${{ steps.params.outputs.tag }}"
+
+      # Published by pages.yml (it runs on main: the github-pages
+      # environment only takes deployments from the default branch).
+      - uses: actions/upload-artifact@v4
+        if: steps.params.outputs.skip == 'false'
+        with:
+          name: flasher-site
+          path: site
+          retention-days: 7
 
       - name: Create release
         if: steps.params.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip \
+          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip dist/*.bin dist/*.txt \
             --target "${{ github.sha }}" \
             --title "${{ steps.params.outputs.title }}" \
             --notes-file "${{ steps.params.outputs.notes }}"

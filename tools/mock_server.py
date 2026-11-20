@@ -347,6 +347,15 @@ def apply_radio_vtx():
 OWNER = {}   # auto in races: slot -> pilot whose slot it is in this race (laps stay with it)
 
 
+FW = {"state": "idle", "latest": "", "phase": 0, "pct": 0, "error": "", "uploads": []}
+
+
+def fw_status():
+    return {"version": os.environ.get("MOCK_FW_VERSION", "v2.2.0"), "build": os.environ.get("MOCK_FW_BUILD", "9a84395"),
+            "latest": FW["latest"], "state": FW["state"], "phase": FW["phase"], "pct": FW["pct"],
+            "error": FW["error"], "online": True, "race": race_busy()}
+
+
 def race_busy():
     r = state["race"]
     return bool(r["running"] or r["paused"] or r["laps"] or r.get("seq"))
@@ -542,6 +551,8 @@ class Handler(SimpleHTTPRequestHandler):
                 logins = len(live_sessions())
             return self.reply({**CONN, **CONN_LIMITS, "ap": True, "admins": admins, "logins": logins,
                                "viewers": viewers, "viewerLimit": CONN["viewHost"]})
+        if p == "/api/update":
+            return self.reply(fw_status())
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
                                "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
@@ -625,6 +636,35 @@ class Handler(SimpleHTTPRequestHandler):
         p = urlparse(self.path).path
         n = int(self.headers.get("Content-Length") or 0)
         raw = self.rfile.read(n) if n else b""
+        if p.startswith("/api/update/"):   # the timer's own firmware update (src/fw_update.cpp)
+            q = parse_qs(urlparse(self.path).query)
+            if q.get("token", [""])[0] not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            if race_busy():
+                return self.reply({"ok": False, "reason": "race"}, 409)
+            if p == "/api/update/check":
+                FW.update(state="checking")
+                threading.Timer(1.5, lambda: FW.update(state="checked", latest=os.environ.get("MOCK_FW_LATEST", "v2.2.1"))).start()
+                return self.reply({"ok": True})
+            if p == "/api/update/online":
+                if not FW["latest"]:
+                    return self.reply({"ok": False, "reason": "nocheck"}, 409)
+                def run():
+                    for ph in (1, 2):
+                        for pc in range(0, 101, 25):
+                            FW.update(state="updating", phase=ph, pct=pc)
+                            time.sleep(0.4)
+                    FW.update(state="done")
+                threading.Thread(target=run, daemon=True).start()
+                return self.reply({"ok": True})
+            if p == "/api/update/upload":
+                part = q.get("part", [""])[0]
+                if part not in ("fw", "fs"):
+                    return self.reply({"ok": False, "reason": "part"}, 400)
+                if part == "fw" and raw[:1] != b"\xe9":
+                    return self.reply({"ok": False, "reason": "notfirmware"}, 400)
+                FW["uploads"].append([part, len(raw), q.get("restart", ["0"])[0]])
+                return self.reply({"ok": True})
         if p == "/api/sd/upload":   # a QR image (PNG body)
             q = parse_qs(urlparse(self.path).query)
             path = q.get("path", [""])[0]

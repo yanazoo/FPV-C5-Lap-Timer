@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FPV C5 Lap Timer 書き込み</title>
+<script type="module" src="https://unpkg.com/esp-web-tools@10.5.2/dist/web/install-button.js?module"></script>
+<style>
+:root{--bg:#0d1117;--sf:#161b22;--bd:#30363d;--tx:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--warn:#d29922;--ok:#3fb950}
+@media (prefers-color-scheme: light){:root{--bg:#f6f8fa;--sf:#fff;--bd:#d0d7de;--tx:#1f2328;--muted:#59636e;--accent:#0969da;--warn:#9a6700;--ok:#1a7f37}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.6}
+main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:0 0 4px}
+.ver{color:var(--muted);font-size:14px;margin-bottom:20px}
+.card{background:var(--sf);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:12px}
+.card h2{font-size:16px;margin:0 0 4px}
+.card p{margin:4px 0 12px;color:var(--muted);font-size:14px}
+.note{font-size:14px}
+.note li{margin:4px 0}
+.warn{color:var(--warn)}
+esp-web-install-button button,esp-web-install-button [slot=activate]{font:inherit}
+.btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:15px;cursor:pointer}
+.unsupported{color:var(--warn);font-size:14px}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<h1>FPV C5 Lap Timer 書き込み</h1>
+<div class="ver" id="ver">リリース</div>
+
+<div class="card note">
+  <b>使い方</b>
+  <ul>
+    <li>PC の <b>Chrome</b> または <b>Edge</b> で開きます（iPhone・Safari・Firefox では使えません）。</li>
+    <li>機器を USB で PC につなぎ、書き込みたい機器の「書き込む」を押して、表示されるポートを選びます。</li>
+    <li>つながらないときは、機器の <b>BOOT</b> ボタンを押したまま RESET を押す（または USB を挿し直す）と書き込みモードになります。</li>
+    <li class="warn">「デバイスを消去する（Erase device）」にチェックを入れると、WiFi・パスワード・パイロット情報などの<b>設定がすべて消えます</b>。ふだんの更新ではチェックしないでください。</li>
+    <li>タイマーは、クライアントモードでインターネットにつながっていれば、設定タブの「ファーム更新」からも更新できます（USB 不要）。</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h2>タイマー（XIAO ESP32-S3）</h2>
+  <p>ファームと Web 画面の両方を書き込みます。</p>
+  <esp-web-install-button manifest="manifest-timer-s3.json">
+    <button slot="activate" class="btn">書き込む</button>
+    <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。PC の Chrome / Edge で開いてください。</span>
+    <span slot="not-allowed" class="unsupported">https で開いてください。</span>
+  </esp-web-install-button>
+</div>
+
+<div class="card">
+  <h2>受信機（XIAO ESP32-C5・FPVGate C5MK）</h2>
+  <p>VTX の電波を測る受信機です。</p>
+  <esp-web-install-button manifest="manifest-receiver-c5.json">
+    <button slot="activate" class="btn">書き込む</button>
+    <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
+  </esp-web-install-button>
+</div>
+
+<div class="card">
+  <h2>ESP-NOW ブリッジ（XIAO ESP32-C3）</h2>
+  <p>ゴーグル OSD・送信機のリンクの読み取りに使います（elrs-netpack）。</p>
+  <esp-web-install-button manifest="manifest-bridge-c3.json">
+    <button slot="activate" class="btn">書き込む</button>
+    <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
+  </esp-web-install-button>
+</div>
+
+<div class="card">
+  <h2>ESP-NOW ブリッジ（ESP32 Wrover-E）</h2>
+  <p>Wrover-E でブリッジを作った場合はこちら。</p>
+  <esp-web-install-button manifest="manifest-bridge-esp32.json">
+    <button slot="activate" class="btn">書き込む</button>
+    <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
+  </esp-web-install-button>
+</div>
+
+<p class="note"><a href="https://github.com/yanazoo/FPV-C5-Lap-Timer/releases/latest">リリースノート・ビルド済みファイル（GitHub）</a></p>
+</main>
+<script>
+fetch('version.json').then(r=>r.json()).then(v=>{document.getElementById('ver').textContent='リリース '+v.version;}).catch(()=>{});
+</script>
+</body>
+</html>

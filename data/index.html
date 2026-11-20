@@ -784,6 +784,23 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <p id="sysInfo" class="section-desc" style="margin:8px 0 0"></p>
   </div>
 
+  <!-- ── ファーム更新 ── -->
+  <div class="global-config-card">
+    <h3 class="global-title">⬆️ ファーム更新</h3>
+    <p class="section-desc">タイマー（XIAO ESP32-S3）のファームと Web 画面を更新します。設定とパイロット情報はそのまま残ります。レース中・ラップが残っている間は更新できません。書き込み中は電源を切らないでください（終わると自動で再起動します）。受信機（C5）とブリッジは、<a href="https://yanazoo.github.io/FPV-C5-Lap-Timer/" target="_blank" rel="noopener" style="color:var(--accent)">Web 書き込みページ</a>（PC の Chrome / Edge と USB）で更新します。</p>
+    <div id="fwVer" class="section-desc" style="margin:0 0 8px"></div>
+    <div style="font-size:13px;font-weight:600;margin:6px 0 4px">ネットから（クライアントモードでインターネットにつながっているとき）</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <button onclick="fwCheck()" class="btn-secondary" id="fwCheckBtn">🔍 最新版を確認</button>
+      <button onclick="fwOnline()" class="btn-success" id="fwOnlineBtn" style="display:none">⬇️ ネットから更新</button>
+    </div>
+    <div style="font-size:13px;font-weight:600;margin:12px 0 4px">ファイルから（リリースの zip の中のファイル）</div>
+    <div class="pf-row" style="font-size:12px;gap:6px;flex-wrap:wrap"><span style="min-width:110px">firmware.bin</span><input type="file" id="fwFile" accept=".bin"></div>
+    <div class="pf-row" style="font-size:12px;gap:6px;flex-wrap:wrap"><span style="min-width:110px">littlefs.bin（Web 画面）</span><input type="file" id="fsFile" accept=".bin"></div>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px"><button onclick="fwUpload()" class="btn-secondary">⬆️ ファイルで更新</button></div>
+    <div id="fwStatus" class="section-desc" style="margin:8px 0 0"></div>
+  </div>
+
   <!-- ── 管理者パスワード ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔒 管理者パスワード</h3>
