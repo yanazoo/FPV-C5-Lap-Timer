@@ -98,6 +98,7 @@ var sdPollSent=null;   // what the timer was last told (null: not told, or it fa
 function switchTab(tab){
   // Soft auth gate — non-race tabs require admin login.
   if(tab!=='race'&&!isAuthed){pendingTab=tab;openLoginModal();return;}
+  if(tab!=='calib'&&typeof zoomId!=='undefined'&&zoomId>=0)closeCalibZoom();
   activeTab=tab;
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));

@@ -64,7 +64,10 @@ connected).
 
 **Calibration**: each pilot's RSSI trace with the Enter (green dashed) and
 Exit (red dashed) thresholds. Set them so a gate pass rises above Enter and
-falls back below Exit.
+falls back below Exit. Defaults: gain 15, Enter 300, Exit 280 (new pilots
+get them too). **Tap a pilot's name** on a card for a full-screen close-up:
+a big chart, the live RSSI and the peak / floor of the last ~20 s, ±1 / ±10
+buttons, and the green / red lines can be dragged on the chart.
 
 ![Calibration tab](docs/images/calib-pc.png)
 

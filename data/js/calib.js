@@ -10,7 +10,7 @@ var chartDirty=Array(N).fill(false);
   requestAnimationFrame(chartLoop);
   if(activeTab!=='calib')return;
   for(var i=0;i<N;i++){
-    if(chartDirty[i]&&charts[i]){drawChart(i);chartDirty[i]=false;}
+    if(chartDirty[i]&&charts[i]){drawChart(i);if(zoomId===i)drawZoom();chartDirty[i]=false;}
   }
 })();
 
@@ -19,8 +19,8 @@ function buildCalibCards(){
   slots.forEach(function(p){
     var d=document.createElement('div');d.className='calib-card';
     d.innerHTML=
-      '<div class="calib-header '+PCLS[p.id]+'">'
-        +'<span id="calName'+p.id+'">'+esc(p.name==='---'?'Ch'+(p.id+1):p.name)+'</span>'
+      '<div class="calib-header '+PCLS[p.id]+'" onclick="openCalibZoom('+p.id+')" title="タップで拡大して調整" style="cursor:pointer">'
+        +'<span id="calName'+p.id+'">'+esc(p.name==='---'?'Ch'+(p.id+1):p.name)+' <span class="calib-zoom-hint">🔍</span></span>'
         +'<span class="rssi-live-badge">'+(p.freq?esc(freqLabel(p.freq))+' ｜ ':'')+'RSSI: <strong id="calRssi'+p.id+'">---</strong></span>'
       +'</div>'
       +'<canvas id="calCanvas'+p.id+'"></canvas>'
@@ -78,7 +78,13 @@ function calcChartRange(id){
 
 function drawChart(id){
   var c=charts[id];if(!c)return;
-  var cv=c.cv,ctx=c.ctx,w=cv.width,h=cv.height,p=slots[id];
+  drawChartOn(id,c.cv,c.ctx,9);
+}
+// One pilot's chart on any canvas (the card's, or the close-up's with a
+// bigger font for the scale).
+function drawChartOn(id,cv,ctx,fontPx){
+  var c=charts[id];
+  var w=cv.width,h=cv.height,p=slots[id];
   var range=calcChartRange(id);
   var yMin=range.yMin,yMax=range.yMax,rng=yMax-yMin;
   var toY=function(v){return h-((Math.max(yMin,Math.min(yMax,v))-yMin)/rng)*h;};
@@ -92,7 +98,7 @@ function drawChart(id){
   for(var db=tickStart;db<=yMax;db+=100){
     var ty=toY(db);
     ctx.beginPath();ctx.moveTo(0,ty);ctx.lineTo(w,ty);ctx.stroke();
-    ctx.fillStyle='#444';ctx.font='9px monospace';ctx.fillText(String(db),2,ty-2);
+    ctx.fillStyle='#555';ctx.font=fontPx+'px monospace';ctx.fillText(String(db),2,ty-2);
   }
   // Thresholds: solid colours, 2 px dashes, so they stand out from the trace.
   ctx.setLineDash([6,4]);ctx.lineWidth=2;
@@ -103,9 +109,96 @@ function drawChart(id){
   for(var j=0;j<200;j++){var x=j*dx,y=toY(c.data[j]);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
   ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();
   ctx.fillStyle=col+'28';ctx.fill();
-  ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();
+  ctx.strokeStyle=col;ctx.lineWidth=fontPx>9?2:1.5;ctx.beginPath();
   for(var j=0;j<200;j++){var x=j*dx,y=toY(c.data[j]);j===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
   ctx.stroke();
+  if(fontPx>9){   // close-up: the two values next to their lines
+    ctx.font='bold '+fontPx+'px monospace';
+    ctx.fillStyle='#3fb950';ctx.fillText('入 '+p.enterRssi,w-90,toY(p.enterRssi)-6);
+    ctx.fillStyle='#f85149';ctx.fillText('出 '+p.exitRssi,w-90,toY(p.exitRssi)+fontPx+4);
+  }
+  return {toY:toY,yMin:yMin,yMax:yMax};
+}
+
+// ── Close-up of one pilot (tap the name on a card) ────────────────────────
+// A big chart and big controls; the green / red lines can be dragged on the
+// chart. Changes go through the same path as the card's sliders.
+var zoomId=-1,zoomMap=null,zoomDrag=null;
+function openCalibZoom(id){
+  var p=slots[id];if(!p||!charts[id])return;
+  zoomId=id;
+  bindZoom();
+  var m=document.getElementById('calibZoom');
+  document.getElementById('czName').textContent=p.name==='---'?'Ch'+(id+1):p.name;
+  document.getElementById('czName').className='cz-name '+PCLS[id];
+  document.getElementById('czFreq').textContent=p.freq?freqLabel(p.freq):'';
+  m.style.display='flex';
+  var cv=document.getElementById('czCanvas');
+  cv.width=cv.offsetWidth||window.innerWidth-32;
+  cv.height=Math.max(220,Math.min(480,Math.round(window.innerHeight*0.45)));
+  showZoomValues();drawZoom();
+}
+function closeCalibZoom(){zoomId=-1;zoomDrag=null;document.getElementById('calibZoom').style.display='none';}
+function showZoomValues(){
+  var p=slots[zoomId];if(!p)return;
+  ['enter','exit'].forEach(function(w){
+    var v=p[w+'Rssi'];
+    document.getElementById('cz'+cap(w)).value=v;document.getElementById('cz'+cap(w)+'N').value=v;
+  });
+}
+function drawZoom(){
+  if(zoomId<0)return;
+  var cv=document.getElementById('czCanvas'),c=charts[zoomId];if(!cv||!c)return;
+  zoomMap=drawChartOn(zoomId,cv,cv.getContext('2d'),13);
+  // Live value, and the peak / floor seen in the chart (about 20 s).
+  var p=slots[zoomId],hi=0,lo=0;
+  for(var i=0;i<200;i++){var v=c.data[i];if(v>0){if(v>hi)hi=v;if(!lo||v<lo)lo=v;}}
+  document.getElementById('czRssi').textContent=p.rssiSignal?p.rssi:'---';
+  document.getElementById('czPeak').textContent=hi||'---';
+  document.getElementById('czFloor').textContent=lo||'---';
+}
+// Set Enter / Exit from the close-up: the card's controls follow and the
+// value is saved like a slider move.
+function setZoomValue(which,v){
+  var id=zoomId,p=slots[id];if(!p)return;
+  v=Math.max(0,Math.min(RSSI_MAX,Math.round(v)));
+  p[which+'Rssi']=v;
+  syncCalibSliders(id,p.enterRssi,p.exitRssi);
+  showZoomValues();drawChart(id);drawZoom();
+  scheduleCalibSave(id);
+}
+function zoomStep(which,d){var p=slots[zoomId];if(p)setZoomValue(which,p[which+'Rssi']+d);}
+function zoomSlider(which){setZoomValue(which,parseInt(document.getElementById('cz'+cap(which)).value,10));}
+function zoomNumber(which){
+  var v=parseInt(document.getElementById('cz'+cap(which)+'N').value,10);
+  if(isNaN(v)){showZoomValues();return;}
+  setZoomValue(which,v);
+}
+// Drag a line on the chart: the one nearest the finger (within 28 px).
+function zoomY(e){var cv=document.getElementById('czCanvas'),r=cv.getBoundingClientRect();return (e.clientY-r.top)*cv.height/r.height;}
+function zoomValueAt(y){var cv=document.getElementById('czCanvas'),m=zoomMap;return m.yMin+(cv.height-y)/cv.height*(m.yMax-m.yMin);}
+// Bound the first time the close-up opens (the page's scripts may run after
+// DOMContentLoaded).
+var zoomBound=false;
+function bindZoom(){
+  if(zoomBound)return;
+  var cv=document.getElementById('czCanvas');if(!cv)return;
+  zoomBound=true;
+  cv.addEventListener('pointerdown',function(e){
+    if(zoomId<0||!zoomMap)return;
+    var p=slots[zoomId],y=zoomY(e),dEn=Math.abs(zoomMap.toY(p.enterRssi)-y),dEx=Math.abs(zoomMap.toY(p.exitRssi)-y);
+    if(Math.min(dEn,dEx)>28)return;
+    zoomDrag=dEn<=dEx?'enter':'exit';
+    // The range would follow the line being dragged; hold it still.
+    zoomMap={toY:zoomMap.toY,yMin:zoomMap.yMin,yMax:zoomMap.yMax,held:true};
+    cv.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  cv.addEventListener('pointermove',function(e){
+    if(!zoomDrag)return;
+    var held=zoomMap;setZoomValue(zoomDrag,zoomValueAt(zoomY(e)));zoomMap=held;e.preventDefault();
+  });
+  ['pointerup','pointercancel'].forEach(function(t){cv.addEventListener(t,function(){zoomDrag=null;drawZoom();});});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&zoomId>=0)closeCalibZoom();});
 }
 
 function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
