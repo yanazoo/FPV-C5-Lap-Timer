@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <esp_system.h>
+#include <esp_wifi.h>
 #include "wifi_mgr.h"
 #include "data_model.h"
 #include "race.h"
@@ -86,8 +87,12 @@ static void startAp() {
     bool ok = WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
     // All 10 stations: browsers are limited on the WebSocket (ws_handler),
     // and the netpack XIAO must always find a place (wsLoop frees one).
-    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL, 0, AP_MAX_STATIONS) && ok;
+    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), apChannel, 0, AP_MAX_STATIONS) && ok;
     if (!ok) Serial.println("[WiFi] AP start failed");
+    // 20 MHz wide, said outright: 40 MHz would also cover the neighbouring
+    // channels (and, from 6 up, reach towards ESP-NOW's 1 less than it
+    // looks), for no gain with a handful of phones.
+    esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
     // Wildcard DNS for the captive portal.
     dnsServer.setErrorReplyCode(DNSReplyCode::NoError);
     dnsServer.setTTL(30);
@@ -96,7 +101,10 @@ static void startAp() {
     staMode = false;
     staJoined = false;
     rtcStaTrying = 0;
-    Serial.printf("[WiFi] AP  SSID=%s  IP=%s\n", apSsid.c_str(), AP_IP.toString().c_str());
+    int8_t pw = 0;
+    esp_wifi_get_max_tx_power(&pw);
+    Serial.printf("[WiFi] AP  SSID=%s  ch %u (20 MHz, max %.1f dBm)  IP=%s\n", apSsid.c_str(), apChannel, pw / 4.0,
+                  AP_IP.toString().c_str());
 }
 
 static bool crashedWhileTrying() {
@@ -105,10 +113,51 @@ static bool crashedWhileTrying() {
     return crash && rtcStaTrying == kStaTrying;
 }
 
+// Index of a configured client network with this SSID, or -1.
+static int knownNet(const String& ssid) {
+    for (int i = 0; i < STA_NETS; i++)
+        if (staNets[i].ssid.length() && staNets[i].ssid == ssid) return i;
+    return -1;
+}
+
+static bool anyNet() {
+    for (int i = 0; i < STA_NETS; i++)
+        if (staNets[i].ssid.length()) return true;
+    return false;
+}
+
+// Client mode, automatic: the strongest configured network in range (a scan
+// of every channel, a few seconds). None in range: the selected one, so the
+// usual wait and fallback to the access point follow.
+static void pickNetwork() {
+    int pick = staNets[staSel].ssid.length() ? staSel : -1;
+    if (staAuto) {
+        int n = WiFi.scanNetworks(false, false);
+        int best = -1, bestRssi = -1000;
+        for (int i = 0; i < n; i++) {
+            int k = knownNet(WiFi.SSID(i));
+            if (k >= 0 && WiFi.RSSI(i) > bestRssi) best = k, bestRssi = WiFi.RSSI(i);
+        }
+        WiFi.scanDelete();
+        if (best >= 0) {
+            pick = best;
+            Serial.printf("[WiFi] client: automatic, \"%s\" is the strongest known (%d dBm)\n",
+                          staNets[best].ssid.c_str(), bestRssi);
+        } else {
+            Serial.println("[WiFi] client: automatic, no known network in range");
+        }
+    }
+    if (pick < 0)
+        for (int i = 0; i < STA_NETS && pick < 0; i++)
+            if (staNets[i].ssid.length()) pick = i;
+    staSsid = pick >= 0 ? staNets[pick].ssid : String();
+    staPass = pick >= 0 ? staNets[pick].pass : String();
+}
+
 void netBegin() {
     // Settings live in our own NVS keys; don't let the WiFi driver write them too.
     WiFi.persistent(false);
-    if (netMode == NET_STA && staSsid.length()) {
+    if (netMode == NET_STA && anyNet()) {
         if (rtcProbe.magic != kProbeMagic) rtcProbe = {kProbeMagic, 0};   // power on
         if (crashedWhileTrying()) {
             Serial.println("[WiFi] client: crashed while joining last time, starting the access point");
@@ -120,6 +169,7 @@ void netBegin() {
         WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
+        pickNetwork();
         WiFi.setAutoReconnect(true);
         // Look on every channel and take the strongest access point of the
         // network: the library's default joins the first one it hears, the
@@ -166,14 +216,14 @@ static void probeForNetwork(uint32_t now) {
         int16_t n = WiFi.scanComplete();
         if (n == WIFI_SCAN_RUNNING) return;
         probing = false;
-        bool seen = false;
+        bool seen = false;   // automatic: any configured network
         for (int i = 0; i < n; i++)
-            if (WiFi.SSID(i) == staSsid) seen = true;
+            if (staAuto ? knownNet(WiFi.SSID(i)) >= 0 : WiFi.SSID(i) == staSsid) seen = true;
         WiFi.scanDelete();
         if (!seen) return;
         if (raceKeepsUs() || WiFi.softAPgetStationNum() > 0) return;   // next look
         rtcProbe.restarts++;
-        Serial.printf("[WiFi] \"%s\" is there again: restarting into client mode\n", staSsid.c_str());
+        Serial.println("[WiFi] the client network is there again: restarting into client mode");
         sysRequestRestart(200);
         return;
     }

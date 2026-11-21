@@ -100,7 +100,9 @@ state = {
                 "lapResults": "8,-1", "bestLap": "12,0", "totalTime": "3,-1", "results": "10,-1",
                 "raceClock": "2,-1"},
     },
-    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "staSsid": "", "staPassSet": False, "fallbackSec": 30, "raceHoldSec": 60,
+    "net": {"mode": 0, "apSsid": "FPV-C5-LT", "apPass": "fpv-c5-lt", "apChannel": 6, "staSsid": "",
+            "nets": [{"ssid": "", "passSet": False} for _ in range(5)], "staSel": 0, "staAuto": False,
+            "fallbackSec": 30, "raceHoldSec": 60,
             "ipFixed": False, "ip": "", "mask": "", "gw": "", "dns": "",
             "status": {"ap": True, "connected": False, "fallback": False, "ip": "20.0.0.1", "rssi": 0,
                        "reason": 0, "retrying": False}},
@@ -534,8 +536,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not p.startswith("/api/"):
             return super().do_GET()
         if p == "/api/pilots":   # the radio's phrase behind a UID registration stays here
-            return self.reply([{**{k: v for k, v in x.items() if k != "uidPhrase"}, "id": i, "activeSlot": slot_of(i)}
-                               for i, x in enumerate(state["pilots"])])
+            return self.reply([{**{k: v for k, v in x.items() if k not in ("uidPhrase", "uidTag") and v is not None},
+                                "id": i, "activeSlot": slot_of(i)} for i, x in enumerate(state["pilots"])])
         if p == "/api/active":
             return self.reply(active_json())
         if p == "/api/settings":
@@ -689,8 +691,9 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sd/settings/backup":
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)
-            net = {k: v for k, v in state["net"].items() if k not in ("status", "staPassSet")}
-            net.update(staPass="router-pass" if state["net"].get("staSsid") else "", staPassClear=not state["net"].get("staSsid"))
+            net = {k: v for k, v in state["net"].items() if k not in ("status", "nets", "staSsid")}
+            net["nets"] = [{"ssid": n["ssid"], "pass": "router-pass" if n["passSet"] else "",
+                            "passClear": not n["passSet"]} for n in state["net"]["nets"]]
             doc = {"kind": "fpv-c5-lt-settings", "ver": 1, "saved": int(time.time()),
                    "settings": state["settings"], "elrs": state["elrs"],
                    "conn": dict(CONN),
@@ -731,9 +734,15 @@ class Handler(SimpleHTTPRequestHandler):
                 ph = next((ph for ph in RADIOS if uid_tag(ph) == d["uidTag"]), None)
                 if ph is None:
                     return self.reply({"ok": False, "reason": "radio"}, 409)
-                rec.update(bind="", uidPhrase=ph, uidTag=d["uidTag"])
-            elif d.get("bind"):
-                rec.update(uidPhrase=None, uidTag=None)
+                rec.update(bind="", uidPhrase=ph, uidTag=d["uidTag"],
+                           uid=",".join(str(int(d["uidTag"][k:k + 2], 16)) for k in (0, 2, 4)) + ",0,0,0")
+            elif d.get("uid"):   # typed in the ELRS field with "UID" ticked
+                nums = [x for x in d["uid"].replace(",", " ").replace(".", " ").split() if x]
+                if len(nums) != 6 or not all(x.isdigit() and int(x) <= 255 for x in nums):
+                    return self.reply({"ok": False, "error": "uid"}, 400)
+                rec.update(bind="", uid=",".join(nums), uidPhrase=None, uidTag=None)
+            elif d.get("bind") or d.get("uidClear"):
+                rec.update(uidPhrase=None, uidTag=None, uid=None)
             if pid == -1:
                 state["pilots"].append(rec)
                 pid = len(state["pilots"]) - 1
@@ -805,10 +814,15 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/net":
             state["net"].update({k: d[k] for k in ("ipFixed", "ip", "mask", "gw", "dns") if k in d})
             state["net"].update(mode=d.get("mode", 0), apSsid=d.get("apSsid"), apPass=d.get("apPass"),
-                                staSsid=d.get("staSsid", ""), fallbackSec=d.get("fallbackSec", 30),
+                                apChannel=d.get("apChannel", 6), staSel=d.get("staSel", 0),
+                                staAuto=bool(d.get("staAuto")), fallbackSec=d.get("fallbackSec", 30),
                                 raceHoldSec=d.get("raceHoldSec", 60))
-            if d.get("staPass"):
-                state["net"]["staPassSet"] = True
+            for i, n in enumerate(d.get("nets", [])[:5]):
+                old = state["net"]["nets"][i]
+                old["passSet"] = bool(n.get("ssid")) and (bool(n.get("pass")) or old["passSet"])
+                old["ssid"] = n.get("ssid", "")
+            sel = state["net"]["nets"][state["net"]["staSel"]]["ssid"]
+            state["net"]["staSsid"] = sel
             return self.reply({"ok": True})
         if p == "/api/elrs":
             state["elrs"].update(d)

@@ -63,6 +63,43 @@ void cpRedirect(AsyncWebServerRequest* req) {
     req->send(res);
 }
 
+// A pilot's UID as the ELRS configurator shows it: six numbers, "210,141,...".
+static void uidText(const uint8_t uid[6], char out[24]) {
+    snprintf(out, 24, "%u,%u,%u,%u,%u,%u", uid[0], uid[1], uid[2], uid[3], uid[4], uid[5]);
+}
+
+// A UID typed in: six numbers 0..255 (commas, spaces or dots between), or
+// twelve hex digits (colons or dashes allowed).
+static bool parseUid(const char* s, uint8_t uid[6]) {
+    int n = 0;
+    const char* p = s;
+    while (*p && n < 7) {
+        while (*p == ' ' || *p == ',' || *p == '.') p++;
+        if (!*p) break;
+        if (!isdigit((unsigned char)*p)) { n = -1; break; }
+        unsigned v = 0;
+        int digits = 0;
+        while (isdigit((unsigned char)*p)) v = v * 10 + (*p++ - '0'), digits++;
+        if (v > 255 || digits > 3 || (*p && *p != ' ' && *p != ',' && *p != '.')) { n = -1; break; }
+        if (n < 6) uid[n] = (uint8_t)v;
+        n++;
+    }
+    if (n == 6) return true;
+    char hex[13];
+    int h = 0;
+    for (p = s; *p; p++) {
+        if (*p == ':' || *p == '-' || *p == ' ') continue;
+        if (!isxdigit((unsigned char)*p) || h >= 12) return false;
+        hex[h++] = *p;
+    }
+    if (h != 12) return false;
+    for (int k = 0; k < 6; k++) {
+        char b[3] = {hex[2 * k], hex[2 * k + 1], 0};
+        uid[k] = (uint8_t)strtoul(b, nullptr, 16);
+    }
+    return true;
+}
+
 String rosterJson() {
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
@@ -74,10 +111,10 @@ String rosterJson() {
         o["yomi"]       = roster[i].yomi;
         o["freq"]       = roster[i].freqMhz;
         o["bind"]       = roster[i].bind;
-        if (rosterUid[i].set) {
-            char tag[7];
-            snprintf(tag, sizeof tag, "%02x%02x%02x", rosterUid[i].uid[0], rosterUid[i].uid[1], rosterUid[i].uid[2]);
-            o["uidTag"] = tag;   // registered by the radio's UID (first 3 bytes only)
+        if (rosterUid[i].set) {   // registered by the radio's UID, not a phrase
+            char u[24];
+            uidText(rosterUid[i].uid, u);
+            o["uid"] = u;
         }
         o["osd"]        = roster[i].osd;
         o["activeSlot"] = activeSlotOf(i);
@@ -278,18 +315,40 @@ void connFromJson(JsonVariantConst d) {
 const char* netFromJson(JsonVariantConst d) {
     uint8_t mode = (int)(d["mode"] | 0) == NET_STA ? NET_STA : NET_AP;
     String apS = d["apSsid"] | "", apP = d["apPass"] | "";
-    String staS = d["staSsid"] | "", staP = d["staPass"] | "";
     if (apS.length() < 1 || apS.length() > 31) return "AP SSID 1..31";
     if (apP.length() < 8 || apP.length() > 63) return "AP password 8..63";
-    if (mode == NET_STA && (staS.length() < 1 || staS.length() > 32)) return "client SSID 1..32";
+    int apCh = d["apChannel"] | (int)apChannel;
+    if (apCh < AP_CHANNEL_MIN || apCh > AP_CHANNEL_MAX) return "AP channel 6..13";
+    // Client networks: "nets" [{ssid, pass, passClear}] x STA_NETS, or (a
+    // settings backup from older firmware) "staSsid" / "staPass" = the first.
+    // An empty password keeps the stored one (the UI never shows it);
+    // "passClear" makes it an open network.
+    StaNet nets[STA_NETS];
+    for (int i = 0; i < STA_NETS; i++) nets[i] = staNets[i];
+    JsonArrayConst a = d["nets"].as<JsonArrayConst>();
+    bool old = a.isNull() && !d["staSsid"].isNull();
+    for (int i = 0; i < STA_NETS; i++) {
+        JsonVariantConst e = old ? (i ? JsonVariantConst() : d) : a[i];
+        if (!old && a.isNull()) break;   // no client networks sent: keep them
+        String s = e[old ? "staSsid" : "ssid"] | "", p = e[old ? "staPass" : "pass"] | "";
+        bool clear = e[old ? "staPassClear" : "passClear"] | false;
+        s.trim();
+        if (s.length() > 32) return "client SSID 1..32";
+        if (!p.length() && !clear && s.length()) p = staNets[i].pass;
+        if (!s.length()) p = "";
+        if (p.length() && (p.length() < 8 || p.length() > 63)) return "client password 8..63";
+        nets[i].ssid = s, nets[i].pass = p;
+    }
+    int sel = d["staSel"] | (int)staSel;
+    if (sel < 0 || sel >= STA_NETS) sel = 0;
+    bool autoSel = d["staAuto"].isNull() ? staAuto != 0 : (d["staAuto"] | false);
+    bool any = false;
+    for (int i = 0; i < STA_NETS; i++) any = any || nets[i].ssid.length();
+    if (mode == NET_STA && (autoSel ? !any : !nets[sel].ssid.length())) return "client SSID 1..32";
     int fbSec = d["fallbackSec"] | (int)netFallbackSec;
     if (!netFallbackValid(fbSec)) return "fallbackSec 15/30/60";
     int rhSec = d["raceHoldSec"] | (int)netRaceHoldSec;
     if (!netRaceHoldValid(rhSec)) return "raceHoldSec 0/15/30/60/180/300";
-    // Empty client password keeps the stored one (the UI never shows it);
-    // "staPassClear" switches to an open network.
-    if (!staP.length() && !(d["staPassClear"] | false)) staP = staPass;
-    if (staP.length() && (staP.length() < 8 || staP.length() > 63)) return "client password 8..63";
     // Client mode address: DHCP, or fixed (address, mask, gateway; DNS
     // defaults to the gateway).
     StaIpConfig ipc = staIp;
@@ -306,7 +365,11 @@ const char* netFromJson(JsonVariantConst d) {
             ipc.dns = *dnsS ? (uint32_t)dns : 0;
         }
     }
-    saveNet(mode, apS, apP, staS, staP, (uint8_t)fbSec, (uint16_t)rhSec);
+    for (int i = 0; i < STA_NETS; i++) staNets[i] = nets[i];
+    staSel = (uint8_t)sel;
+    staAuto = autoSel ? 1 : 0;
+    apChannel = (uint8_t)apCh;
+    saveNet(mode, apS, apP, (uint8_t)fbSec, (uint16_t)rhSec);
     staIp = ipc;
     saveStaIp();
     return nullptr;
@@ -344,9 +407,16 @@ String settingsBackupJson() {
     n["mode"]        = netMode;
     n["apSsid"]      = apSsid;
     n["apPass"]      = apPass;
-    n["staSsid"]     = staSsid;
-    n["staPass"]     = staPass;
-    n["staPassClear"] = staPass.length() == 0;
+    n["apChannel"]   = apChannel;
+    JsonArray nets = n["nets"].to<JsonArray>();
+    for (int i = 0; i < STA_NETS; i++) {
+        JsonObject e = nets.add<JsonObject>();
+        e["ssid"] = staNets[i].ssid;
+        e["pass"] = staNets[i].pass;
+        e["passClear"] = staNets[i].pass.length() == 0;
+    }
+    n["staSel"]      = staSel;
+    n["staAuto"]     = staAuto != 0;
     n["fallbackSec"] = netFallbackSec;
     n["raceHoldSec"] = netRaceHoldSec;
     ipToJson(n);
@@ -480,11 +550,16 @@ void registerHttpRoutes() {
         if (freq && (freq < 5180 || freq > 5917)) { bad(req, "freq 5180-5917"); return; }
         // "uidTag": register by the UID of a radio heard (one bound without a
         // bind phrase). The browser has only the tag; the UID stays here.
+        // "uid": typed in the bind phrase field with "UID" ticked.
         uint8_t radioUid[6];
         bool byUid = doc["uidTag"].is<const char*>();
         if (byUid && !pilotRadioByTag(doc["uidTag"].as<const char*>(), radioUid)) {
             req->send(409, "application/json", R"({"ok":false,"reason":"radio"})");
             return;
+        }
+        if (!byUid && doc["uid"].is<const char*>()) {
+            if (!parseUid(doc["uid"].as<const char*>(), radioUid)) { bad(req, "uid"); return; }
+            byUid = true;
         }
         {
             Guard g;
@@ -922,8 +997,16 @@ void registerHttpRoutes() {
         d["mode"]      = netMode;
         d["apSsid"]    = apSsid;
         d["apPass"]    = apPass;
-        d["staSsid"]   = staSsid;
-        d["staPassSet"] = staPass.length() > 0;
+        d["apChannel"] = apChannel;
+        JsonArray nets = d["nets"].to<JsonArray>();
+        for (int i = 0; i < STA_NETS; i++) {
+            JsonObject e = nets.add<JsonObject>();
+            e["ssid"]    = staNets[i].ssid;
+            e["passSet"] = staNets[i].pass.length() > 0;
+        }
+        d["staSel"]    = staSel;
+        d["staAuto"]   = staAuto != 0;
+        d["staSsid"]   = staSsid;   // the network joined (or being joined)
         d["fallbackSec"] = netFallbackSec;
         d["raceHoldSec"] = netRaceHoldSec;
         ipToJson(d.as<JsonObject>());

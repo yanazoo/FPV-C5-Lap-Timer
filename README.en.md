@@ -248,7 +248,10 @@ during the wait cancels the start.
 director's bind phrase ("ディレクターバインドフレーズ") and pick the switch
 kind: **toggle** (a switch that stays put: on starts, off stops) or **push**
 (a button: each press starts or stops; presses within 1.5 s count once). On
-the TX, assign the switch to Lua → Backpack → **DVR Rec**.
+the TX, assign the switch to Lua → Backpack → **DVR Rec**. The radio sends
+the switch once per flip: use the ESP-NOW bridge from elrs-netpack **v2.12+**,
+which also hears it while sending the OSD on a pilot's UID (older bridges
+missed flips during the OSD and reacted only sometimes).
 
 ## Racing
 
@@ -302,20 +305,17 @@ default is manual.
     them: linked again in the same race, they go back to it and their laps
     go on. Newcomers join a channel not used yet in this race (laps never
     mix).
-- A pilot who can't join says why in the list: no VTX frequency, the same
-  frequency as a pilot already on a channel, no free channel, or a bind phrase
-  shared with another pilot (the race director's is fine: the RD may fly
-  with the same radio).
-- Each pilot shows "📶 LQ 95" (linked) or "📴 リンクなし" (radio heard, no link
-  to the quad), in manual mode too.
+- A pilot can't join with no VTX frequency, the same frequency as a pilot
+  already on a channel, no free channel, or a bind phrase shared with another
+  pilot (the race director's is fine: the RD may fly with the same radio).
+- The pilot list doesn't show the link state (LQ) or the UID, to keep it tidy.
 - Pilots without a backpack are never moved: they keep the channel picked by
   hand, so manual and automatic pilots can mix.
 
 **More than 8 pilots** (8 channels: the C5 receiver measures 8 frequencies at once)
 
-- From the 9th on, a linked pilot gets no channel and **waits**: the pilot list
-  shows "📶 LQ ○○ · 空きチャンネルなし". Nobody is swapped out; waiting pilots
-  join in the order they linked.
+- From the 9th on, a linked pilot gets no channel and **waits**. Nobody is
+  swapped out; waiting pilots join in the order they linked.
 - One pilot leaves while a 9th waits:
   - **Between races** (either automatic mode): 10 s after the link went,
     that pilot leaves and the 9th joins the channel at once (about 0.5 s).
@@ -346,11 +346,13 @@ bind phrase two pilots share, nor outside 5180–5917 MHz). "VTX が送信機と
 自動で反映 (the above) or タップで反映 (a difference shows "⚠ 機体の VTX は R5 5806 ▶
 合わせる"; tap to take it).
 
-**Radios without a bind phrase** (bound with the Lua Bind button): in the
-add form opened from an unregistered radio, tick "バインドフレーズが無い（送信機の
-UID で登録）" to register the pilot by the radio's UID ("🔑 UID" in the list;
-links and the goggle OSD use it). Typing a bind phrase later replaces it. The
-SD roster backup carries the UID.
+**Radios without a bind phrase** (bound with the Lua Bind button): tick
+"UID" next to the pilot's ELRS field and type the radio's UID there (the six
+numbers the ELRS configurator shows, e.g. `210,141,145,12,34,56`, or 12 hex
+digits). Links and the goggle OSD use it just like a bind phrase; untick and
+type a phrase to switch back. From an unregistered radio's "＋ 登録", tick
+"UID" and leave the field empty to use that radio's UID. The SD roster backup
+(`pilots.csv`, column `uid`) saves and restores it.
 
 **No ESP-NOW** (ELRS OSD off, no bridge, or no answer from it / an older
 bridge): automatic assignment and taking VTX settings are off and the timer
@@ -392,7 +394,15 @@ To cover lost packets:
 
 ### WiFi modes (Settings → 📶 WiFi)
 
-- **Host** (default): the timer is an access point, `http://20.0.0.1`.
+- **Host** (default): the timer is an access point, `http://20.0.0.1`. Its
+  WiFi channel is picked in "チャンネル", 6–13 (default 6; ESP-NOW for the
+  goggle OSD is on channel 1, so 5 and below aren't offered).
+- **Client networks**: up to **5** can be stored. "接続先の選び方" **automatic**
+  joins the strongest stored network in range at boot (say, the home router
+  and the field's pocket WiFi); **select** joins the one marked ●.
+- **Band and power**: the ESP32-S3 has 2.4 GHz WiFi only (802.11 b/g/n). The
+  access point is 20 MHz wide at the ESP32-S3's full power (about 20 dBm);
+  in client mode the router decides the channel and width.
 - **Client**: the timer joins an existing 2.4 GHz router and is reachable at
   `http://fpv-c5-lt.local` (it redirects to the IP address: Chrome's Local
   Network Access blocks a plain-http page on a .local name from loading its

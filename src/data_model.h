@@ -140,7 +140,14 @@ extern uint8_t      elrsRdSwitch;
 extern String       adminPassword;
 extern String       apSsid, apPass;     // host mode: our access point
 extern uint8_t      netMode;            // NetMode (wifi_mgr.h)
-extern String       staSsid, staPass;   // client mode: network to join
+extern String       staSsid, staPass;   // client mode: the network being joined (chosen at boot)
+// Client mode: up to STA_NETS networks. staAuto: join the strongest one in
+// range; else staNets[staSel].
+struct StaNet { String ssid, pass; };
+extern StaNet       staNets[STA_NETS];
+extern uint8_t      staSel;
+extern uint8_t      staAuto;
+extern uint8_t      apChannel;          // host mode: WiFi channel (AP_CHANNEL_MIN..MAX)
 extern uint8_t      netFallbackSec;     // client mode: seconds without a link before the AP starts (15/30/60)
 extern uint16_t     netRaceHoldSec;     // client mode, link lost during a race: seconds before the AP starts (0: never)
 

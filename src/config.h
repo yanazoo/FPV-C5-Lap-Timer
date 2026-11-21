@@ -43,7 +43,10 @@
 // they are stored in NVS, never in this repository.
 #define AP_DEFAULT_SSID "FPV-C5-LT"
 #define AP_DEFAULT_PASS "fpv-c5-lt"
-#define AP_CHANNEL       6
+#define AP_CHANNEL       6     // default; the Config tab picks 6..13
+#define AP_CHANNEL_MIN   6     // ESP-NOW (the goggles' backpacks) is on 1: stay clear of it
+#define AP_CHANNEL_MAX   13
+#define STA_NETS         5     // client mode: networks to choose from / join automatically
 #define MDNS_NAME       "fpv-c5-lt"
 static const IPAddress AP_IP      (20, 0, 0, 1);
 static const IPAddress AP_GATEWAY (20, 0, 0, 1);

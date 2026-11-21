@@ -533,7 +533,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div id="addForm" style="display:none;background:var(--sf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px">新規パイロット追加</div>
       <div id="addFormBody"></div>
-      <label id="addByUidRow" class="uid-check" style="display:none;cursor:pointer"><input type="checkbox" id="addByUid" onchange="onAddByUid()"> バインドフレーズが無い（送信機の UID で登録）</label>
       <div id="addUidCheck" class="uid-check"></div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button onclick="submitAdd()" class="btn-success" style="flex:1;font-size:12px">登録</button>
@@ -699,10 +698,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="1">クライアント（WiFi に接続）</option>
       </select></div>
     <div class="net-sta">
-      <div class="config-row" style="gap:8px"><label style="width:110px">接続先 SSID</label>
-        <input type="text" id="netStaSsid" maxlength="32" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
-      <div class="config-row" style="gap:8px"><label style="width:110px">接続先パスワード</label>
-        <input type="text" class="pw-mask" id="netStaPass" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">接続先の選び方</label>
+        <select id="netStaAuto" onchange="onNetStaAuto()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="1">自動（登録した中で電波が一番強いもの）</option>
+          <option value="0">選択（● を付けたもの）</option>
+        </select></div>
+      <div id="netStaList"></div>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">接続先を 5 つまで登録できます。自動は、起動したときに周りの WiFi を探して、登録した中で一番電波の強いものに接続します。パスワードは表示しません（変更しない場合は空欄のまま）。SSID を消すと、その接続先は削除されます。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">ホストに切替</label>
         <select id="netFallback" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="15">15 秒接続できなければ</option>
@@ -741,6 +743,14 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <input type="text" id="netSsid" maxlength="31" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
       <input type="text" id="netPass" maxlength="63" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+    <div class="config-row" style="gap:8px"><label style="width:110px">チャンネル</label>
+      <select id="netApCh" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="6">6 ch（2437 MHz・初期値）</option><option value="7">7 ch（2442 MHz）</option>
+        <option value="8">8 ch（2447 MHz）</option><option value="9">9 ch（2452 MHz）</option>
+        <option value="10">10 ch（2457 MHz）</option><option value="11">11 ch（2462 MHz）</option>
+        <option value="12">12 ch（2467 MHz）</option><option value="13">13 ch（2472 MHz）</option>
+      </select></div>
+    <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">ホストのアクセスポイントの WiFi チャンネルです。ゴーグルの OSD（ESP-NOW）は 1 ch を使うので、6 ch 以上から選べます。周りの WiFi と重なって画面がつながりにくいときに変えてください。</p>
     <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>

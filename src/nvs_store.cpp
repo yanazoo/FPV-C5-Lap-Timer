@@ -24,6 +24,10 @@ String       adminPassword = "admin";   // public default; changed from the Conf
 String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
 String       staSsid, staPass;
+StaNet       staNets[STA_NETS];
+uint8_t      staSel = 0;
+uint8_t      staAuto = 0;
+uint8_t      apChannel = AP_CHANNEL;
 uint8_t      netFallbackSec = NET_FALLBACK_DEFAULT_S;
 uint16_t     netRaceHoldSec = NET_RACE_HOLD_DEFAULT_S;
 
@@ -149,19 +153,26 @@ void saveStaIp() {
     prefs.end();
 }
 
-void saveNet(uint8_t mode, const String& apS, const String& apP, const String& staS, const String& staP,
-             uint8_t fallbackSec, uint16_t raceHoldSec) {
+// Client network i's NVS keys: the first keeps the keys of the single
+// network older firmware stored.
+static String staKey(const char* base, int i) { return i ? String(base) + i : String(base); }
+
+void saveNet(uint8_t mode, const String& apS, const String& apP, uint8_t fallbackSec, uint16_t raceHoldSec) {
     netMode = mode;
     netFallbackSec = fallbackSec;
     netRaceHoldSec = raceHoldSec;
     apSsid = apS, apPass = apP;
-    staSsid = staS, staPass = staP;
     prefs.begin("net", false);
     prefs.putUChar("mode", mode);
     prefs.putString("ssid", apS);
     prefs.putString("pass", apP);
-    prefs.putString("stassid", staS);
-    prefs.putString("stapass", staP);
+    for (int i = 0; i < STA_NETS; i++) {
+        prefs.putString(staKey("stassid", i).c_str(), staNets[i].ssid);
+        prefs.putString(staKey("stapass", i).c_str(), staNets[i].pass);
+    }
+    prefs.putUChar("stasel", staSel);
+    prefs.putUChar("staauto", staAuto);
+    prefs.putUChar("apch", apChannel);
     prefs.putUChar("fbsec", fallbackSec);
     prefs.putUShort("rhold", raceHoldSec);
     prefs.end();
@@ -299,8 +310,19 @@ void loadAll() {
     apSsid = prefs.getString("ssid", AP_DEFAULT_SSID);
     apPass = prefs.getString("pass", AP_DEFAULT_PASS);
     netMode = prefs.getUChar("mode", 0);
-    staSsid = prefs.getString("stassid", "");
-    staPass = prefs.getString("stapass", "");
+    for (int i = 0; i < STA_NETS; i++) {
+        // isKey first: reading a missing key logs an NVS error.
+        String k = staKey("stassid", i), kp = staKey("stapass", i);
+        staNets[i].ssid = prefs.isKey(k.c_str()) ? prefs.getString(k.c_str(), "") : String();
+        staNets[i].pass = prefs.isKey(kp.c_str()) ? prefs.getString(kp.c_str(), "") : String();
+    }
+    staSel = prefs.getUChar("stasel", 0);
+    if (staSel >= STA_NETS) staSel = 0;
+    staAuto = prefs.getUChar("staauto", 0) ? 1 : 0;
+    apChannel = prefs.getUChar("apch", AP_CHANNEL);
+    if (apChannel < AP_CHANNEL_MIN || apChannel > AP_CHANNEL_MAX) apChannel = AP_CHANNEL;
+    staSsid = staNets[staSel].ssid;   // netBegin picks again in automatic mode
+    staPass = staNets[staSel].pass;
     netFallbackSec = prefs.getUChar("fbsec", NET_FALLBACK_DEFAULT_S);
     netRaceHoldSec = prefs.getUShort("rhold", NET_RACE_HOLD_DEFAULT_S);
     StaIpConfig ipc;
