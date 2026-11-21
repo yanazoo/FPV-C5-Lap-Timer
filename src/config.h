@@ -8,7 +8,7 @@
 #define C5_TX_PIN        4
 #define C5_RX_PIN        5
 #define C5_RX_BUFFER  4096    // ~95 ms of data at 8 pilots
-#define C5_DEFAULT_GAIN 30
+#define C5_DEFAULT_GAIN 15
 
 // ── elrs-netpack, direct UART mode (optional) ──────────────────────────────
 // Replaces the netpack's XIAO: the S3 talks to the ESP-NOW bridge itself
@@ -31,9 +31,9 @@
 // ── Pilots and timing ──────────────────────────────────────────────────────
 #define MAX_REGISTERED  20
 #define MAX_ACTIVE       8
-// Thresholds on the C5's 0..1023 scale (16 counts per dB; floor ~116 at
-// gain 30). Calibrate per venue in the Calib tab.
-#define DEFAULT_ENTER  350
+// Thresholds on the C5's 0..1023 scale (16 counts per dB), for the default
+// gain 15. Calibrate per venue in the Calib tab.
+#define DEFAULT_ENTER  300
 #define DEFAULT_EXIT   280
 #define RSSI_INTERVAL_MS  100UL   // UI telemetry rate; detection runs on every reading
 #define SIGNAL_LOST_MS    300UL

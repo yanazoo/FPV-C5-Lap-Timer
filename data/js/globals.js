@@ -5,9 +5,9 @@ const PCOLORS = ['var(--p0)','var(--p1)','var(--p2)','var(--p3)',
 const PCLS    = ['p0','p1','p2','p3','p4','p5','p6','p7'];
 const N = 8;
 
-// RSSI is the C5MK scale: 0..1023, 16 counts per dB, floor ~116 at gain 30.
+// RSSI is the C5MK scale: 0..1023, 16 counts per dB (default gain 15).
 const RSSI_MAX = 1023;
-const DEF_ENTER = 350, DEF_EXIT = 280;
+const DEF_ENTER = 300, DEF_EXIT = 280;
 
 // 5.8 GHz VTX bands. The C5 receives 5180-5917 MHz (E7/E8 are out of range).
 const BANDS = {

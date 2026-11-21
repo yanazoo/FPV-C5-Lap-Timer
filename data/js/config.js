@@ -67,7 +67,8 @@ function renderRoster(){
         '<div class="rv-name"><span class="roster-name">'+esc(r.name)
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
-        +'<div class="rv-badges">'+activeBadge+osd+warn
+        +'<div class="rv-badges">'+activeBadge+osd
+          +'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
           +'<span class="warn-badge vtx-fix" id="vx-'+r.id+'" style="display:none"></span></div>'
         +'<div class="roster-actions">'
           +'<select class="ch-select" data-rid="'+r.id+'" onchange="onChSelectChange(this)">'+chOpts+'</select>'
@@ -112,6 +113,7 @@ function updateLinkBadges(){
   var c=c5Status||{},el=c.elrs||{},links={};
   (c.links||[]).forEach(l=>{links[l.id]=l;});
   rosterData.forEach(function(r){
+    var b=document.getElementById('lk-'+r.id);if(!b)return;
     var l=links[r.id];
     // The radio's VTX Administrator says another frequency than registered.
     var vx=document.getElementById('vx-'+r.id);
@@ -120,6 +122,11 @@ function updateLinkBadges(){
       vx.style.display=diff?'':'none';
       if(diff){vx.textContent='⚠ 機体の VTX は '+freqLabel(l.vtx)+' ▶ 合わせる';vx.title='送信機の VTX Administrator の設定です。タップすると登録の VTX をこれに変えます';vx.onclick=function(){fixVtx(r.id,l.vtx);};}
     }
+    if(!l){b.textContent='';b.className='link-badge';b.title='';return;}
+    var w=l.wait&&assignMode?' · '+(LINK_WAIT[l.wait]||'待機中'):'';
+    b.textContent=(l.on?'📶 LQ '+l.lq:'📴 リンクなし')+w;
+    b.className='link-badge'+(l.on?' on':'');
+    b.title=l.on?'送信機と機体がリンクしています':'送信機は見えていますが、機体とリンクしていません';
   });
   // ESP-NOW reception: without it these functions are off (manual).
   var avail=!!(c5Status&&el.watch);
@@ -377,7 +384,7 @@ function saveGlobalConfig(){
 }
 
 function saveGain(){
-  var g=Math.max(0,Math.min(89,parseInt(document.getElementById('gainInput').value)||30));
+  var g=Math.max(0,Math.min(89,parseInt(document.getElementById('gainInput').value)||15));
   document.getElementById('gainInput').value=g;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gain:g})})
     .then(r=>toast(r.ok?'✓ ゲインを '+g+' に設定しました（閾値の再調整を推奨）':'⚠️ 保存エラー',3000)).catch(()=>toast('⚠️ 接続エラー'));

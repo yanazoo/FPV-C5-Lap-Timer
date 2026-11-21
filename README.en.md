@@ -308,14 +308,17 @@ default is manual.
 - A pilot can't join with no VTX frequency, the same frequency as a pilot
   already on a channel, no free channel, or a bind phrase shared with another
   pilot (the race director's is fine: the RD may fly with the same radio).
-- The pilot list doesn't show the link state (LQ) or the UID, to keep it tidy.
+- Each pilot shows "📶 LQ 95" (linked) or "📴 リンクなし" (radio heard, no link
+  to the quad), in manual mode too, with the reason when it can't join. The
+  UID isn't shown in the list.
 - Pilots without a backpack are never moved: they keep the channel picked by
   hand, so manual and automatic pilots can mix.
 
 **More than 8 pilots** (8 channels: the C5 receiver measures 8 frequencies at once)
 
-- From the 9th on, a linked pilot gets no channel and **waits**. Nobody is
-  swapped out; waiting pilots join in the order they linked.
+- From the 9th on, a linked pilot gets no channel and **waits**: the pilot list
+  shows "📶 LQ ○○ · 空きチャンネルなし". Nobody is swapped out; waiting pilots
+  join in the order they linked.
 - One pilot leaves while a 9th waits:
   - **Between races** (either automatic mode): 10 s after the link went,
     that pilot leaves and the 9th joins the channel at once (about 0.5 s).
