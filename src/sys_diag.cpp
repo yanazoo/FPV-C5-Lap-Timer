@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <Preferences.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 #include <esp_sleep.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
@@ -78,6 +79,14 @@ void sysLoop(uint32_t now) {
     delay(300);   // the frames go out
     sdShutdown();
     Serial.flush();
+    // A new firmware written to the other app slot (update from the page):
+    // reset instead. Waking from deep sleep, the bootloader starts the app it
+    // started last time (it skips reading the OTA data), so the new firmware
+    // would only run after a power cycle.
+    if (esp_ota_get_boot_partition() != esp_ota_get_running_partition()) {
+        delay(2000);   // as long as the sleep below: the router sees us gone
+        esp_restart();
+    }
     esp_sleep_enable_timer_wakeup(2000 * 1000);   // 2 s: off long enough for the router to see us gone
     esp_deep_sleep_start();
 }
