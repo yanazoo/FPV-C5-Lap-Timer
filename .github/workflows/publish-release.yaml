@@ -108,8 +108,13 @@ jobs:
         if: steps.params.outputs.skip == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
+          # Through the environment, not pasted into the script: a title with
+          # quotes in it (from the notes' first line) must not break the shell.
+          TAG: ${{ steps.params.outputs.tag }}
+          TITLE: ${{ steps.params.outputs.title }}
+          NOTES: ${{ steps.params.outputs.notes }}
         run: |
-          gh release create "${{ steps.params.outputs.tag }}" dist/*.zip dist/*.bin dist/*.txt \
+          gh release create "$TAG" dist/*.zip dist/*.bin dist/*.txt \
             --target "${{ github.sha }}" \
-            --title "${{ steps.params.outputs.title }}" \
-            --notes-file "${{ steps.params.outputs.notes }}"
+            --title "$TITLE" \
+            --notes-file "$NOTES"
