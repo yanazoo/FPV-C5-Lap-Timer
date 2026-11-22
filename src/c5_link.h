@@ -45,6 +45,10 @@ bool c5PopPass(C5Pass* out);
 // one per C5_REC_MS) from byte `from`; returns the bytes copied.
 void     c5RecStart(uint32_t raceStartMs, bool fresh);
 void     c5RecStop();
+// Size the record for this many minutes of race time (drops what is in
+// it): the minutes it holds (less if PSRAM is short, 0 without PSRAM).
+uint32_t c5RecSize(uint32_t minutes);
+uint32_t c5RecCapMs();   // race time the record holds, ms (0: none)
 uint32_t c5RecMs();
 // A slot's record (racing: still being written; samples are single 16-bit
 // stores, so reading it is safe).

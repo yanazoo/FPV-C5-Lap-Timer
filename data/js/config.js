@@ -446,6 +446,22 @@ function saveTotalLaps(){
     .then(r=>toast(r.ok?'✓ 総周回数を保存しました':'⚠️ 保存エラー')).catch(()=>toast('⚠️ 接続エラー'));
 }
 
+// How long the race's RSSI is recorded (the race stops when it is full).
+var REC_MIN_LABEL={30:'30 分',60:'1 時間',120:'2 時間',180:'3 時間',240:'4 時間'};
+function showRecMin(st){
+  var s=document.getElementById('recMinSelect');if(!s)return;
+  if(document.activeElement!==s&&st.recMin)s.value=String(st.recMin);
+  var n=document.getElementById('recMinNote');
+  if(n&&st.recMinNow!==undefined&&st.recMin&&st.recMinNow<st.recMin&&!n.dataset.short){
+    n.dataset.short='1';n.insertAdjacentHTML('afterbegin','<b style="color:var(--warn)">⚠ メモリーが足りないため、今は '+(st.recMinNow||0)+' 分まで記録します。</b> ');
+  }
+}
+function saveRecMin(){
+  var v=parseInt(document.getElementById('recMinSelect').value,10);
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({recMin:v})})
+    .then(r=>toast(r.ok?'✓ RSSI の記録時間を '+REC_MIN_LABEL[v]+' にしました':'⚠️ 保存エラー')).catch(()=>toast('⚠️ 接続エラー'));
+}
+
 // ── ELRS OSD (vrxc_elrs settings) ─────────────────────────────────────────
 const ELRS_BOOLS=['enabled','showRaceClock','showBestLap','positionMode','showTotalTime','resultsMode'];
 const ELRS_TEXTS=['host','rdBind','eventName','stageMsg','startMsg','pilotDoneMsg','raceStopMsg'];

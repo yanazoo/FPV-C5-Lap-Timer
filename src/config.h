@@ -36,11 +36,14 @@
 #define DEFAULT_ENTER  300
 #define DEFAULT_EXIT   280
 #define RSSI_INTERVAL_MS  100UL   // UI telemetry rate; detection runs on every reading
-// RSSI recorded during a race, for adding a missed lap afterwards: the
-// highest reading of every 40 ms (25 a second), up to 30 min of race time,
-// per channel, in PSRAM (8 x 45000 x 2 bytes = 720 KB).
+// RSSI recorded during a race, for counting the laps again afterwards: the
+// highest reading of every 40 ms (25 a second) per channel, in PSRAM: 400
+// bytes a second for 8 channels, 1.44 MB an hour. How long is a setting
+// (REC_MIN_CHOICES, minutes of race time; the race stops when it is full):
+// 4 h is 5.8 MB of the 8 MB.
 #define C5_REC_MS        40
-#define C5_REC_SAMPLES   45000
+#define REC_MIN_DEFAULT  30
+#define REC_MIN_MAX      240
 #define SIGNAL_LOST_MS    300UL
 
 // ── WiFi access point ──────────────────────────────────────────────────────

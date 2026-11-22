@@ -487,6 +487,12 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <input type="number" id="startDelayCustom" min="1" max="600" value="20" onchange="saveStartDelay()" style="width:80px"><span class="unit">秒（1〜600）</span>
       </div>
     </div>
+    <div class="config-row"><label>RSSI の記録時間</label>
+      <select id="recMinSelect" onchange="saveRecMin()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="30">30 分</option><option value="60">1 時間</option><option value="120">2 時間</option>
+        <option value="180">3 時間</option><option value="240">4 時間</option>
+      </select></div>
+    <p class="section-desc" style="margin-top:-2px" id="recMinNote">レース中の RSSI を記録して、あとから入・出を合わせてラップを数え直せます（レースカードの「RSSI」）。この時間に達すると、レースを自動でストップします（ラップは残り、スタートで続きから再開できます。再開後は記録しません）。長い練習でクリアしない場合は長めにしてください。レース中やクリア前に変えたときは、次のスタートから反映します。</p>
     <p class="section-desc" style="margin-top:-2px">ON にすると、スタートボタン・ディレクターのスイッチで始めたとき、待ち時間だけ待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
     <div class="config-row rank-timed">
       <label>制限時間</label>

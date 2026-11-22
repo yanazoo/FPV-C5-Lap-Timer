@@ -222,6 +222,7 @@ function onMsg(d){
   if(d.type==='race_start'){onRaceStart(d.ts);return;}
   if(d.type==='race_resume'){onRaceResume(d.ts);return;}
   if(d.type==='race_stop'){onRaceStop(d.elapsed);return;}
+  if(d.type==='rec_full'){toast('⏹ RSSI の記録時間（'+(REC_MIN_LABEL[d.min]||d.min+' 分')+'）に達したので、レースをストップしました',10000);return;}
   if(d.type==='sd_status'){updateSdSection(d.present);return;}
 }
 
@@ -378,6 +379,7 @@ function applySettings(st){
   if(st.startDelayOn!==undefined)startDelayOn=!!st.startDelayOn;
   if(st.startDelaySec!==undefined){startDelaySec=st.startDelaySec||10;showStartDelay();}
   if(st.vtxAuto!==undefined&&typeof showVtxAuto==='function'){vtxAuto=st.vtxAuto!==false;showVtxAuto();}
+  if(st.recMin!==undefined&&typeof showRecMin==='function')showRecMin(st);
   if(st.assignMode!==undefined&&typeof showAssignMode==='function'){assignMode=st.assignMode===1||st.assignMode===2?st.assignMode:0;showAssignMode();}
   slots.forEach(p=>updateRaceCard(p));
 }

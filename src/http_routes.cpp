@@ -124,6 +124,8 @@ void settingsToJson(JsonObject doc) {
     doc["startDelaySec"] = startDelaySec;
     doc["assignMode"]    = assignMode;
     doc["vtxAuto"]       = vtxAuto;
+    doc["recMin"]        = recMinutes;
+    doc["recMinNow"]     = c5RecCapMs() / 60000;   // what the record holds now (less if PSRAM is short)
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).
@@ -149,7 +151,11 @@ void settingsFromJson(JsonVariantConst doc) {
     }
     if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
     if (!doc["assignMode"].isNull()) assignMode = assignModeValid(doc["assignMode"] | 0);
+    if (!doc["recMin"].isNull() && recMinutesValid(doc["recMin"] | 0)) recMinutes = doc["recMin"] | REC_MIN_DEFAULT;
     saveSettings();
+    // The record takes the new size now when no race needs it (racing, or
+    // stopped with laps to count again), else at the next start.
+    if (!raceActive() && !raceCore.running() && !raceCore.paused() && raceCore.lapCount() == 0) c5RecSize(recMinutes);
 }
 
 // ELRS OSD (caller holds gLock).
@@ -688,7 +694,7 @@ void registerHttpRoutes() {
         if (slot < 0 || slot >= MAX_ACTIVE) { req->send(400, "text/plain", "slot"); return; }
         uint32_t ms = c5RecMs();
         size_t len = ms ? (size_t)(ms / C5_REC_MS + 1) * 2 : 0;   // 0: nothing recorded (or no PSRAM)
-        if (len > (size_t)C5_REC_SAMPLES * 2) len = (size_t)C5_REC_SAMPLES * 2;
+        if (len > (size_t)c5RecCapMs() / C5_REC_MS * 2) len = (size_t)c5RecCapMs() / C5_REC_MS * 2;
         AsyncWebServerResponse* res = req->beginResponse("application/octet-stream", len,
             [slot](uint8_t* buf, size_t maxLen, size_t index) -> size_t { return c5RecRead(slot, index, buf, maxLen); });
         res->addHeader("X-Rec-Ms", String(C5_REC_MS));

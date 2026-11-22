@@ -89,7 +89,7 @@ state = {
     "active": [0, 1, 2, 3, -1, -1, -1, -1],
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 15,
                  "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10,
-                 "assignMode": 0, "vtxAuto": True},
+                 "assignMode": 0, "vtxAuto": True, "recMin": 30, "recMinNow": 30},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
@@ -818,6 +818,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/api/settings":
             state["settings"].update(d)
+            if "recMin" in d:
+                state["settings"]["recMinNow"] = d["recMin"]
             broadcast(dict(state["settings"], type="settings"))
             return self.reply({"ok": True})
         r = state["race"]

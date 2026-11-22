@@ -41,6 +41,7 @@ void setup() {
     sdInit();
 
     c5Begin();
+    c5RecSize(recMinutes);
     elrsBegin();
     raceBegin();
     micBegin();

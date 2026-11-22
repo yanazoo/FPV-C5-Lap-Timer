@@ -85,6 +85,8 @@ void raceStage() {
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
 
+static bool recFullStopped = false;   // the race was stopped for a full RSSI record
+
 void raceStart() { raceStartAt(millis()); }
 
 void raceStartAt(uint32_t now) {
@@ -94,7 +96,9 @@ void raceStartAt(uint32_t now) {
         raceCore.start(now);
         sdNoteRaceStart();
     }
+    c5RecSize(recMinutes);   // the length set (no-op if unchanged)
     c5RecStart(now, true);
+    recFullStopped = false;
     raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
@@ -369,6 +373,26 @@ void sendC5Status() {
 // ends their race (race::Core marks it, FINISHED! on the goggles); without,
 // every pilot who had started is done at once. The race keeps running (the
 // clock counts on below zero) until Stop is pressed.
+
+// The RSSI record is full: stop the race, once (the laps so far stay;
+// Start carries on, without a record for the rest).
+static void serviceRecordFull(uint32_t now) {
+    uint32_t cap = c5RecCapMs();
+    if (!cap || recFullStopped) return;
+    bool full;
+    {
+        Guard g;
+        full = raceCore.running() && raceCore.elapsed(now) >= cap;
+    }
+    if (!full) return;
+    recFullStopped = true;
+    Serial.printf("[Race] RSSI record full (%lu min): stopping\n", (unsigned long)(cap / 60000));
+    raceStop();
+    JsonDocument d;
+    d["type"] = "rec_full";
+    d["min"] = cap / 60000;
+    wsJson(d);
+}
 
 static void serviceTimedRace(uint32_t now) {
     if (raceRules.rankMode != 2 && !timeUpHandled) return;   // not a timed race: nothing to do
@@ -659,6 +683,7 @@ void raceLoop() {
     }
     uint32_t now = millis();
     serviceTimedRace(now);
+    serviceRecordFull(now);
     pilotLinkLoop(now);
     if (now - lastRssiSend >= RSSI_INTERVAL_MS) {
         lastRssiSend = now;
