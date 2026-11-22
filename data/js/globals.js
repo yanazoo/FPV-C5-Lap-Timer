@@ -40,6 +40,7 @@ function rebuildRosterIndex(){
 var activeSlotsLocal = Array(N).fill(-1);
 
 var raceRunning=false, timerH=null, countdownH=null;
+var recFull=false;   // stopped for a full RSSI record: Start stays off until Clear
 var raceStarted=false, timerFrozenMs=0;
 var lapEpoch=0;   // bumped by Start and Clear: a lap list fetched before is stale
 var voiceEnabled = localStorage.getItem('voice')!=='0';

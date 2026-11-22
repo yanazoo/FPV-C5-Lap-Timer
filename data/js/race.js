@@ -472,7 +472,8 @@ function onRaceClear(){
 function setBtns(running){
   // Viewers (unauthed) can never operate race controls regardless of state.
   var locked=!isAuthed,waiting=!!waitH;
-  document.getElementById('btnStart').disabled=locked||running||waiting;
+  // Stopped for a full RSSI record: no carrying on, Clear first.
+  document.getElementById('btnStart').disabled=locked||running||waiting||recFull;
   // Stop also calls off a delayed start.
   document.getElementById('btnStop').disabled=locked||(!running&&!waiting);
   // Clear is only allowed while stopped (not during a running race).

@@ -281,7 +281,9 @@ missed flips during the OSD and reacted only sometimes).
   every channel's RSSI (the highest reading of every 40 ms; not while paused).
   How long is set in Settings → "RSSI の記録時間": 30 min, 1, 2, 3 or 4 h
   (default 30 min; 4 h uses about 5.8 MB of PSRAM). When it is full the race
-  stops by itself (the laps stay; Start carries on, unrecorded). The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
+  stops by itself: the laps stay and can be counted again, but that race
+  can't be carried on (Start is off, so no lap past the record's end could be
+  lost to a count); Clear and start a new race. The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
   the pilot's RSSI over the whole race, full screen ("🔍 詳細" zooms to 20 s
   around the point tapped, "全体" goes back).
   - Vertical lines are the passes counted now; green line Enter, red line Exit.

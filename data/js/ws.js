@@ -161,6 +161,7 @@ function onMsg(d){
   if(d.type==='c5'){
     if(d.race)reconcileRace(d.race);
     c5Status=d;updateHeaderStatus();
+    if(d.race&&d.race.recFull!==undefined&&!!d.race.recFull!==recFull){recFull=!!d.race.recFull;setBtns(raceRunning);}
     if(activeTab==='config'){renderC5Status();if(typeof updateLinkBadges==='function'){updateLinkBadges();renderCandidates();}}
     return;
   }
@@ -216,13 +217,17 @@ function onMsg(d){
   }
   if(d.type==='race_ready'){if(!raceRunning)onRaceReady();return;}
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
-  if(d.type==='race_clear'){onRaceClear();return;}
+  if(d.type==='race_clear'){recFull=false;onRaceClear();return;}
   if(d.type==='laps_changed'){lapEpoch++;if(lapQueue)setTimeout(syncLaps,400);else syncLaps();return;}   // a lap was deleted
   if(d.type==='time_up'){toast('⏱ 時間切れ');return;}
   if(d.type==='race_start'){onRaceStart(d.ts);return;}
   if(d.type==='race_resume'){onRaceResume(d.ts);return;}
   if(d.type==='race_stop'){onRaceStop(d.elapsed);return;}
-  if(d.type==='rec_full'){toast('⏹ RSSI の記録時間（'+(REC_MIN_LABEL[d.min]||d.min+' 分')+'）に達したので、レースをストップしました',10000);return;}
+  if(d.type==='rec_full'){
+    recFull=true;setBtns(raceRunning);
+    toast(d.refused?'⚠ RSSI の記録時間に達したレースは再開できません。クリアしてから新しくスタートしてください'
+      :'⏹ RSSI の記録時間（'+(REC_MIN_LABEL[d.min]||d.min+' 分')+'）に達したので、レースをストップしました。続けるにはクリアしてください',10000);
+    return;}
   if(d.type==='sd_status'){updateSdSection(d.present);return;}
 }
 

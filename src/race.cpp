@@ -110,6 +110,16 @@ void raceStartAt(uint32_t now) {
 }
 
 bool raceResume() {
+    // Stopped because the RSSI record was full: no carrying on (counting
+    // again would lose the laps past the record). Clear, then a new race.
+    if (recFullStopped) {
+        JsonDocument d;
+        d["type"] = "rec_full";
+        d["min"] = c5RecCapMs() / 60000;
+        d["refused"] = true;
+        wsJson(d);
+        return false;
+    }
     uint32_t elapsed, at = millis();
     {
         Guard g;
@@ -240,6 +250,7 @@ String raceClear() {
         raceCore.clear();
     }
     c5RecStop();
+    recFullStopped = false;
     raceEpoch++;
     elrsLapsClear();
     // Clear on one browser clears every browser.
@@ -359,6 +370,7 @@ void sendC5Status() {
         uint32_t now = millis();
         rs["run"]    = raceCore.running();
         rs["paused"] = raceCore.paused();
+        rs["recFull"] = recFullStopped;   // stopped for a full RSSI record: Start is refused until Clear
         rs["el"]     = raceCore.elapsed(now);
         rs["now"]    = now;
         rs["laps"]   = raceCore.lapCount();
@@ -374,8 +386,9 @@ void sendC5Status() {
 // every pilot who had started is done at once. The race keeps running (the
 // clock counts on below zero) until Stop is pressed.
 
-// The RSSI record is full: stop the race, once (the laps so far stay;
-// Start carries on, without a record for the rest).
+// The RSSI record is full: stop the race. Start is refused until Clear
+// (carrying on unrecorded, a count from the record would lose the laps
+// past its end).
 static void serviceRecordFull(uint32_t now) {
     uint32_t cap = c5RecCapMs();
     if (!cap || recFullStopped) return;
