@@ -223,6 +223,12 @@ function onBindKind(prefix){
   if(prefix==='add')checkAddUid();
 }
 var UID_DEC=/^\s*\d{1,3}([\s,.]+\d{1,3}){5}\s*$/, UID_HEX=/^\s*([0-9a-fA-F]{2}[:\-\s]?){5}[0-9a-fA-F]{2}\s*$/;
+// Typed with a Japanese IME: full-width digits, commas (，、), dots and
+// spaces become plain ones.
+function uidAscii(s){
+  return s.replace(/[０-９ａ-ｆＡ-Ｆ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[，、]/g,',').replace(/[．。]/g,'.').replace(/[：]/g,':').replace(/[－ー]/g,'-').replace(/\u3000/g,' ');
+}
 function validUid(s){
   if(UID_HEX.test(s)&&!UID_DEC.test(s))return true;
   return UID_DEC.test(s)&&s.trim().split(/[\s,.]+/).every(x=>parseInt(x,10)<=255);
@@ -235,7 +241,7 @@ function readPilotForm(prefix){
     enter:Math.max(0,Math.min(RSSI_MAX,parseInt(v('Enter').value)||DEF_ENTER)),
     exit:Math.max(0,Math.min(RSSI_MAX,parseInt(v('Exit').value)||DEF_EXIT))
   };
-  if(v('IsUid').checked){p.uid=p.bind;p.bind='';}
+  if(v('IsUid').checked){p.uid=uidAscii(p.bind);p.bind='';}
   else p.uidClear=true;   // a phrase (or the name): not the UID any more
   return p;
 }
@@ -247,7 +253,10 @@ function validPilot(p){
   if(utf8Bytes(p.name)>31){toast('⚠️ 名前が長すぎます（日本語は 10 文字、英数字は 31 文字まで）',5000);return false;}
   if(utf8Bytes(p.yomi)>31){toast('⚠️ よみかたが長すぎます（ひらがなは 10 文字まで）',5000);return false;}
   if(utf8Bytes(p.bind)>32){toast('⚠️ バインドフレーズが長すぎます（英数字 32 文字まで）',5000);return false;}
-  if(p.uid!==undefined&&p.uid!==''&&!validUid(p.uid)){toast('⚠️ UID は 0〜255 の数字 6 つで入れてください（例 210,141,145,12,34,56）',5000);return false;}
+  if(p.uid!==undefined&&p.uid!==''&&!validUid(p.uid)){
+    var nums=p.uid.trim().split(/[\s,.]+/).filter(x=>x);
+    var why=nums.every(x=>/^\d+$/.test(x))?(nums.length!==6?'（今 '+nums.length+' つです）':'（255 より大きい数字があります）'):'';
+    toast('⚠️ UID は 0〜255 の数字 6 つで入れてください'+why+'。例 210,141,145,12,34,56',6000);return false;}
   if(p.uid===''){toast('⚠️ UID を入れてください');return false;}
   if(p.enter<=p.exit){toast('⚠️ 入 > 出 にしてください');return false;}
   return true;
@@ -291,7 +300,7 @@ function checkAddUid(){
     var typed=((document.getElementById('addBind')||{}).value||'').trim();
     if(!typed){addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;}
     addCand.match=true;
-    out.textContent=addCand.uid&&typed.replace(/\s/g,'')===addCand.uid?'🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズがあれば、「UID」のチェックを外して入れてください）':'';
+    out.textContent=addCand.uid&&uidAscii(typed).replace(/\s/g,'')===addCand.uid?'🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズがあれば、「UID」のチェックを外して入れてください）':'';
     out.style.color='var(--ok)';return;
   }
   var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';

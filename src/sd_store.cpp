@@ -4,6 +4,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include "sd_store.h"
+#include "uid_text.h"
 #include "race_files.h"
 #include "utf8.h"
 #include "data_model.h"
@@ -250,9 +251,10 @@ bool sdBackupRoster(String& path) {
     {
         Guard g;
         for (int i = 0; i < rosterCount; i++) {
-            char line[220], uid[13] = "";
-            if (rosterUid[i].set)
-                for (int k = 0; k < 6; k++) snprintf(uid + 2 * k, 3, "%02x", rosterUid[i].uid[k]);
+            // The UID as six numbers with spaces (a spreadsheet keeps it as
+            // text; hex digits only, as older files had, could turn into 0).
+            char line[220], uid[24] = "";
+            if (rosterUid[i].set) uidText(rosterUid[i].uid, uid, ' ');
             snprintf(line, sizeof line, "%s,%s,%u,%d,%d,%d,%s,%d,%s\n", cell(roster[i].name).c_str(),
                      cell(roster[i].yomi).c_str(), roster[i].freqMhz, rosterCal[i].enterRssi,
                      rosterCal[i].exitRssi, activeSlotOf(i), cell(roster[i].bind).c_str(), roster[i].osd ? 1 : 0, uid);
@@ -308,16 +310,12 @@ int sdRestoreRoster(const String& path) {
         if (slot >= 0 && slot < MAX_ACTIVE) activePilots[slot] = id;
         utf8::copy(p.bind, field(line, 6).c_str(), sizeof p.bind);
         p.osd = field(line, 7).toInt() != 0;
-        // A pilot registered by the radio's UID (12 hex digits; older files: none).
+        // A pilot registered by the radio's UID: six numbers, or 12 hex
+        // digits (files from v2.2.3); older files: none.
         String u = field(line, 8);
         u.trim();
         rosterUid[id] = {};
-        bool hex = u.length() == 12;
-        for (int k = 0; hex && k < 12; k++) hex = isxdigit((unsigned char)u[k]);
-        if (hex) {
-            rosterUid[id].set = true;
-            for (int k = 0; k < 6; k++) rosterUid[id].uid[k] = (uint8_t)strtoul(u.substring(2 * k, 2 * k + 2).c_str(), nullptr, 16);
-        }
+        if (u.length() && parseUid(u.c_str(), rosterUid[id].uid)) rosterUid[id].set = true;
     }
     saveRosterAll();
     saveActive();

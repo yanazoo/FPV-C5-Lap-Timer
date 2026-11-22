@@ -358,8 +358,8 @@ numbers the ELRS configurator shows, e.g. `210,141,145,12,34,56`, or 12 hex
 digits). Links and the goggle OSD use it just like a bind phrase; untick and
 type a phrase to switch back. From an unregistered radio's "＋ 登録", the form opens with
 that radio's UID in the field and "UID" ticked (untick it to type a bind
-phrase instead). The SD roster backup
-(`pilots.csv`, column `uid`) saves and restores it.
+phrase instead). Full-width digits and commas (Japanese input) are fine. The SD roster backup
+(`pilots.csv`, column `uid`, as `210 141 145 12 34 56`) saves and restores it.
 
 **No ESP-NOW** (ELRS OSD off, no bridge, or no answer from it / an older
 bridge): automatic assignment and taking VTX settings are off and the timer
