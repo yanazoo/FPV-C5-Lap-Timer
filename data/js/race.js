@@ -118,12 +118,13 @@ function buildRaceCards(){
         +'<span class="rssi-mini-label">RSSI</span>'
         +'<div class="rssi-mini-track"><div class="rssi-mini-fill '+PCLS[p.id]+'-fill" id="rssiBar'+p.id+'"></div></div>'
         +'<span class="rssi-mini-val" id="rssiVal'+p.id+'">---</span>'
+        +'<button class="rr-btn" onclick="openRssiRec('+p.id+')" title="このレースの RSSI の記録を見て、入・出を合わせてラップを数え直します（管理者）">📈</button>'
       +'</div>'
       +'<div class="pilot-best-row">'
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
         +(p.gone?'':'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>')
-        +'<button class="lap-btn rr-btn" onclick="openRssiRec('+p.id+')" title="このレースの RSSI の記録を見て、取りこぼしたラップを追加します（管理者）">📈</button>'
+
       +'</div>'
       +'<div class="lap-table-wrap">'
         +'<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead>'
@@ -479,7 +480,7 @@ function setBtns(running){
   var btnClear=document.getElementById('btnClear');
   if(btnClear)btnClear.disabled=locked||running||waiting;
   // Lap buttons on the race cards: admins, while the race runs.
-  document.querySelectorAll('.lap-btn:not(.rr-btn)').forEach(b=>b.disabled=locked||!running);   // 📈 stays usable
+  document.querySelectorAll('.lap-btn').forEach(b=>b.disabled=locked||!running);
 }
 // Record a lap for this pilot now (a gate pass missed by the receiver).
 async function manualLap(slot,btn){

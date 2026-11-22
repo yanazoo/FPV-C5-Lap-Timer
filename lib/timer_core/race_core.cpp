@@ -167,64 +167,52 @@ uint32_t Core::passTime(int slot, int index) const {
     return 0;
 }
 
-int Core::insertPass(int slot, int rosterIdx, uint32_t atMs, int rssi, uint32_t minGapMs) {
-    if (running_ || slot < 0 || slot >= kSlots || atMs == 0 || lapCount_ >= kMaxLaps) return -1;
-    if (atMs >= elapsed(0)) return -1;   // stopped: elapsed() doesn't use now
-    // The pilot's passes in laps_ and their race times (sums of lap times:
-    // the first lap runs from the start, pauses are left out).
-    static int at[kMaxLaps];
-    int n = 0;
-    uint32_t t = 0, prevT = 0;
-    int j = -1;   // the pass the new one goes before (-1: after the last)
+int Core::replaceSlot(int slot, int rosterIdx, const uint32_t* atMs, const uint16_t* rssi, int n) {
+    if (running_ || slot < 0 || slot >= kSlots) return -1;
+    uint32_t end = elapsed(0);   // stopped: race time at the stop
+    // The other pilots' passes with their race times (sums of lap times).
+    struct Timed { Lap lap; uint32_t t; };
+    static Timed all[kMaxLaps];
+    int m = 0;
+    uint32_t sum[kSlots] = {};
     for (int i = 0; i < lapCount_; ++i) {
-        if (laps_[i].slot != slot) continue;
-        t += laps_[i].lapMs;
-        if (j < 0 && t > atMs) {
-            j = n;
-            if (t - atMs < minGapMs || (atMs - prevT < minGapMs && n > 0)) return -1;
-        }
-        if (j < 0) prevT = t;
-        at[n++] = i;
+        const Lap& l = laps_[i];
+        sum[l.slot] += l.lapMs;
+        if (l.slot != slot) all[m++] = {l, sum[l.slot]};
     }
-    if (j < 0 && n > 0 && atMs - prevT < minGapMs) return -1;
+    // This pilot's passes again, by the rules of pass().
     SlotState& s = slots_[slot];
-    uint32_t newMs = atMs - prevT;
-    uint32_t ts;   // on the S3's clock, as the recorded passes (roughly: pauses aside)
-    if (j >= 0) {
-        Lap& next = laps_[at[j]];
-        uint32_t nextT = prevT + next.lapMs;
-        next.lapMs = nextT - atMs;
-        ts = next.ts - next.lapMs;
-    } else {
-        ts = n ? laps_[at[n - 1]].ts + newMs : startMs_ + atMs;
-        s.lastLapTs = startMs_ + atMs;   // the cooldown / positions reference (moved past pauses)
+    s = SlotState();
+    uint32_t last = 0;
+    int kept = 0;
+    for (int i = 0; i < n && m < kMaxLaps; ++i) {
+        uint32_t t = atMs[i];
+        if (t == 0 || t >= end || s.finished) continue;
+        if (s.lapCount && t - last < cooldownMs) continue;
+        bool overtime = timeLimitMs && t >= timeLimitMs;
+        if (overtime && !countLastLap) break;
+        uint32_t lapMs = t - last;
+        s.lapCount++;
+        last = t;
+        s.lastLapTs = startMs_ + t;   // moved past pauses, as resume() keeps it
+        bool holeshot = lapMode == LapMode::Holeshot && s.lapCount == 1;
+        if (holeshot) s.hsTs = startMs_ + t;
+        if (!holeshot && (s.bestLapMs == 0 || lapMs < s.bestLapMs)) s.bestLapMs = lapMs;
+        s.totalMs = t - (lapMode == LapMode::Holeshot ? s.hsTs - startMs_ : 0);
+        all[m++] = {{(int8_t)slot, (int16_t)rosterIdx, lapMs, startMs_ + t, (int16_t)(rssi ? rssi[i] : 0)}, t};
+        ++kept;
+        if ((totalLaps > 0 && laps(slot) >= (int)totalLaps) || overtime) s.finished = true;
     }
-    // Where it goes in laps_: between the pilot's passes around it, after
-    // other pilots' passes made before it (laps_ stays in time order).
-    int lo = j > 0 ? at[j - 1] + 1 : (j < 0 && n ? at[n - 1] + 1 : 0);
-    int hi = j >= 0 ? at[j] : lapCount_;
-    int pos = lo;
-    while (pos < hi && (int32_t)(laps_[pos].ts - ts) <= 0) ++pos;
-    for (int i = lapCount_; i > pos; --i) laps_[i] = laps_[i - 1];
-    laps_[pos] = {(int8_t)slot, (int16_t)rosterIdx, newMs, ts, (int16_t)rssi};
-    ++lapCount_;
-    s.lapCount = (uint32_t)(n + 1);
-    // Holeshot mode: a new first pass is the holeshot now.
-    if (lapMode == LapMode::Holeshot && (j == 0 || n == 0)) s.hsTs = startMs_ + atMs;
-    s.bestLapMs = 0;
-    uint32_t total = 0;
-    int k = 0;
-    for (int i = 0; i < lapCount_; ++i) {
-        if (laps_[i].slot != slot) continue;
-        bool hs = lapMode == LapMode::Holeshot && k++ == 0;
-        if (hs) continue;
-        uint32_t ms = laps_[i].lapMs;
-        total += ms;
-        if (ms && (s.bestLapMs == 0 || ms < s.bestLapMs)) s.bestLapMs = ms;
+    // Back into laps_ in race-time order (stable: same times keep their order).
+    for (int i = 1; i < m; ++i) {
+        Timed x = all[i];
+        int j = i - 1;
+        while (j >= 0 && all[j].t > x.t) all[j + 1] = all[j], --j;
+        all[j + 1] = x;
     }
-    s.totalMs = total;
-    if (totalLaps > 0 && laps(slot) >= (int)totalLaps) s.finished = true;
-    return j >= 0 ? j : n;
+    for (int i = 0; i < m; ++i) laps_[i] = all[i].lap;
+    lapCount_ = m;
+    return kept;
 }
 
 int Core::laps(int slot) const {

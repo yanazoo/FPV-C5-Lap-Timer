@@ -1,5 +1,6 @@
 #include <ArduinoJson.h>
 #include "race.h"
+#include "gate_tracker.h"
 #include "pilot_link.h"
 #include "c5_link.h"
 #include "data_model.h"
@@ -7,6 +8,7 @@
 #include "mic.h"
 #include "sound_count.h"
 #include "sd_store.h"
+#include "nvs_store.h"
 #include "ws_handler.h"
 
 race::Core raceCore;
@@ -162,26 +164,52 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
     return true;
 }
 
-int raceInsertLap(int slot, uint32_t atMs) {
-    int positions[MAX_ACTIVE], laps[MAX_ACTIVE], idx;
+int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
+    if (slot < 0 || slot >= MAX_ACTIVE || enter <= exit || enter > 1023) return -1;
+    int n;
+    const uint16_t* rec = c5RecData(slot, &n);
+    if (!rec || !n) return -1;
+    static uint32_t at[256];
+    static uint16_t peak[256];
+    int found = gate::findPasses(rec, n, C5_REC_MS, enter, exit, at, peak, 256);
+    int positions[MAX_ACTIVE], laps[MAX_ACTIVE], kept, ri = -1;
     uint32_t best;
     bool finished;
     {
         Guard g;
-        if (slot < 0 || slot >= MAX_ACTIVE) return -1;
-        // The highest recorded reading around it, as the pass's RSSI.
-        uint8_t b[2 * 25];
-        uint32_t from = atMs > 500 ? (atMs - 500) / C5_REC_MS : 0;
-        size_t n = c5RecRead(slot, from * 2, b, sizeof b);
-        int peak = 0;
-        for (size_t i = 0; i + 1 < n; i += 2) peak = max(peak, b[i] | (b[i + 1] << 8));
-        idx = raceCore.insertPass(slot, activePilots[slot], atMs, peak);
-        if (idx < 0) return -1;
+        // The pilot of this race's laps on the channel (the one assigned now
+        // if none: a pilot may have left the channel since).
+        for (int i = 0; i < raceCore.lapCount() && ri < 0; i++)
+            if (raceCore.lap(i).slot == slot) ri = raceCore.lap(i).rosterIdx;
+        if (ri < 0) ri = activePilots[slot];
+        // A pass that was counted already keeps its own time (the receiver
+        // timed it to the reading; the record only to 40 ms): only the new
+        // ones take the record's time. Within 400 ms is the same pass.
+        uint32_t had[256];
+        int nh = 0;
+        for (int k = 0; nh < 256; k++) {
+            uint32_t t = raceCore.passTime(slot, k);
+            if (!t) break;
+            had[nh++] = t;
+        }
+        for (int i = 0, k = 0; i < found; i++) {
+            while (k < nh && had[k] + 400 < at[i]) k++;
+            if (k < nh && (had[k] > at[i] ? had[k] - at[i] : at[i] - had[k]) <= 400) at[i] = had[k];
+        }
+        kept = raceCore.replaceSlot(slot, ri, at, peak, found);
+        if (kept < 0) return -1;
+        // The thresholds go to the pilot: the next race counts with them.
+        if (rosterValid(ri)) {
+            rosterCal[ri].enterRssi = enter;
+            rosterCal[ri].exitRssi = exit;
+            saveRosterPilot(ri);
+        }
         for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = raceCore.position(s), laps[s] = raceCore.laps(s);
         best = raceCore.slot(slot).bestLapMs;
         finished = raceCore.slot(slot).finished;
     }
-    Serial.printf("[Race] slot %d: pass added at %lu ms (pass %d)\n", slot, (unsigned long)atMs, idx);
+    applyGateConfig();
+    Serial.printf("[Race] slot %d: counted again with %u / %u: %d passes\n", slot, enter, exit, kept);
     elrsLapEdit(slot, laps[slot], positions[slot], best, finished);
     for (int s = 0; s < MAX_ACTIVE; s++)
         if (s != slot && positions[s] > 0) elrsPosition(s, laps[s], positions[s]);
@@ -189,7 +217,8 @@ int raceInsertLap(int slot, uint32_t atMs) {
     d["type"] = "laps_changed";
     d["pilot"] = slot;
     wsJson(d);
-    return idx;
+    if (rosterIdx) *rosterIdx = ri;
+    return kept;
 }
 
 String raceClear() {

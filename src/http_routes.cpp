@@ -661,15 +661,22 @@ void registerHttpRoutes() {
         else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
     });
 
-    // A missed pass, added from the RSSI record (race stopped): at race
-    // time atMs. 409 while racing, past the end, or next to a pass.
-    onJson("/api/laps/insert", [](AsyncWebServerRequest* req, JsonDocument& d) {
-        int idx = raceInsertLap(d["slot"] | -1, d["atMs"] | 0u);
-        if (idx < 0) { req->send(409, "application/json", R"({"ok":false,"reason":"cannot"})"); return; }
+    // Count a pilot's passes again from the race's RSSI record with other
+    // thresholds (race stopped), and keep those thresholds for the pilot.
+    onJson("/api/laps/recount", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        int en = d["enter"] | 0, ex = d["exit"] | 0, ri = -1;
+        if (en <= ex || en > 1023 || ex < 0) { bad(req, "enter must be above exit"); return; }
+        int n = raceRecount(d["slot"] | -1, (uint16_t)en, (uint16_t)ex, &ri);
+        if (n < 0) { req->send(409, "application/json", R"({"ok":false,"reason":"cannot"})"); return; }
         JsonDocument o;
         o["ok"] = true;
-        o["index"] = idx;
+        o["passes"] = n;
         sendJson(req, o);
+        if (ri >= 0) {   // the new thresholds on every browser
+            char b[72];
+            snprintf(b, sizeof b, R"({"type":"calib","id":%d,"enter":%d,"exit":%d})", ri, en, ex);
+            wsText(b);
+        }
     });
 
     // The race's RSSI record for one channel: uint16 little-endian, one

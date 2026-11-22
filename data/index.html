@@ -122,7 +122,8 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
 .lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
-.lap-btn+.rr-btn{margin-left:4px}
+.rr-btn{font-size:16px;line-height:1;padding:3px 8px;margin-left:6px;border-radius:6px;border:1px solid var(--accent);background:transparent;cursor:pointer;flex-shrink:0}
+body.viewer .rr-btn{display:none}
 #lapDelModal{z-index:1002}
 #rrCanvas{width:100%;border-radius:8px;touch-action:none;display:block;cursor:crosshair}
 .rr-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
@@ -940,30 +941,37 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots</p></footer>
 
 <!-- ═══════════════════════════ LOGIN MODAL ═══════════════════════ -->
-<!-- The race's RSSI record of one pilot (📈 on a race card): add a missed lap -->
+<!-- The race's RSSI record of one pilot (📈 on a race card): count again -->
 <div id="rssiRec" class="cz-wrap">
   <div class="cz-top">
     <span id="rrName" class="cz-name"></span><span id="rrFreq" class="res-muted" style="font-size:13px"></span>
     <button class="btn-secondary cz-close" onclick="closeRssiRec()" title="閉じる">×</button>
   </div>
   <canvas id="rrCanvas"></canvas>
-  <input type="range" id="rrPan" min="0" max="0" step="100" value="0" oninput="rrPan()" style="width:100%;margin-top:6px">
+  <input type="range" id="rrPan" min="0" max="0" step="100" value="0" oninput="rrPan()" style="width:100%;margin-top:6px;display:none">
   <div class="rr-bar">
-    <button class="btn-secondary" onclick="rrZoom(0.5)" title="拡大">＋</button>
-    <button class="btn-secondary" onclick="rrZoom(2)" title="縮小">−</button>
-    <button class="btn-secondary" onclick="rrZoom('all')">全体</button>
-    <span id="rrSpan" class="res-muted" style="font-size:12px"></span>
-    <span style="flex:1"></span>
-    <button class="btn-secondary" onclick="rrNextCandidate(-1)">◀ 前の候補</button>
-    <button class="btn-secondary" onclick="rrNextCandidate(1)">次の候補 ▶</button>
+    <button class="btn-secondary" onclick="rrDetail()">🔍 詳細</button>
+    <button id="rrWhole" class="btn-secondary" onclick="rrWhole()">全体</button>
+    <span class="res-muted" style="font-size:11px">グラフをタップした所の近くを、詳細で 20 秒拡大します</span>
   </div>
-  <div id="rrInfo"></div>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#3fb950">Enter（入）</span><input type="number" id="rrEnter" min="0" max="1023" onchange="rrNum('en')"></div>
+    <div class="cz-btns"><button class="btn-secondary" onclick="rrStep('en',-10)">−10</button><button class="btn-secondary" onclick="rrStep('en',-1)">−1</button><button class="btn-secondary" onclick="rrStep('en',1)">+1</button><button class="btn-secondary" onclick="rrStep('en',10)">+10</button></div>
+  </div>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#f85149">Exit（出）</span><input type="number" id="rrExit" min="0" max="1023" onchange="rrNum('ex')"></div>
+    <div class="cz-btns"><button class="btn-secondary" onclick="rrStep('ex',-10)">−10</button><button class="btn-secondary" onclick="rrStep('ex',-1)">−1</button><button class="btn-secondary" onclick="rrStep('ex',1)">+1</button><button class="btn-secondary" onclick="rrStep('ex',10)">+10</button></div>
+  </div>
+  <div id="rrInfo" style="white-space:pre-line"></div>
   <div id="rrMsg" style="font-size:13px;font-weight:700;min-height:1.3em"></div>
   <div class="rr-bar">
-    <button id="rrAdd" class="btn-success" onclick="rrAddLap()" disabled style="flex:1">＋ ここにラップを追加</button>
-    <button id="rrDel" class="btn-danger-soft" onclick="rrDeleteLap()" disabled>この通過を削除</button>
+    <button id="rrRecount" class="btn-success" onclick="rrRecount()" disabled style="flex:1">この値で数え直す（パイロット情報にも保存）</button>
+    <button class="btn-secondary" onclick="rrReset()">元の値</button>
   </div>
-  <p class="section-desc" style="margin-top:8px;font-size:11px">線：緑＝Enter（入）、赤＝Exit（出）、縦線＝数えた通過（HS／○周目）、点線＝レースの終わり。グラフは左右にドラッグで動かせます。取りこぼしたラップの追加・削除は、レースをストップしてからクリアするまでの間にできます（クリアすると SD に保存され、記録は消えます）。</p>
+  <div class="rr-bar">
+    <button id="rrDel" class="btn-danger-soft" onclick="rrDeleteLap()" disabled>選んだ通過を削除</button>
+  </div>
+  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように、緑（入）・赤（出）の線を動かします（数字・ボタン・グラフ上の線のドラッグ）。▼ 黄色＝この値で増える通過、✕ 赤＝消える通過、縦線＝今数えている通過、点線＝レースの終わり。「この値で数え直す」で、記録した RSSI からこのパイロットのラップを数え直し、入・出をパイロット情報に保存します（次のレースからこの値で計測）。レースをストップしてからクリアするまでの間にできます。</p>
 </div>
 
 <!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->

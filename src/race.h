@@ -34,9 +34,11 @@ void raceDirectorSwitch(uint8_t state);
 // race::Core::deleteLap). Every browser reloads the laps; the goggles get the
 // new lap count, positions and best lap. False if there is no such pass.
 bool raceDeleteLap(int slot, int index, uint32_t lapMs);
-// A pass the receiver missed, added after the race was stopped (not
-// cleared) at race time atMs: the pilot's pass number it became, or -1.
-int  raceInsertLap(int slot, uint32_t atMs);
+// A pilot's passes counted again from the race's RSSI record with other
+// thresholds (race stopped, not cleared), which are saved to the pilot so
+// the next race counts with them. Returns the passes kept, or -1; the
+// pilot's roster index in *rosterIdx.
+int  raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx);
 // The admin's lap button: a pass for this slot now (the cooldown applies).
 // False if no race is running or nobody is in the slot.
 bool raceManualLap(int slot);

@@ -277,19 +277,26 @@ missed flips during the OSD and reacted only sometimes).
   total stays); the last lap is just dropped, and deleting the holeshot makes
   the next pass the holeshot. Every browser, the ranking, the goggles and the
   SD record follow.
-- **Adding a missed lap** (📈): during a race the timer records every
-  channel's RSSI (the highest reading of every 40 ms, up to 30 min; not while
-  paused). **📈** on a race card (logged in) shows the pilot's RSSI over the
-  race time, full screen: green line Enter, red line Exit, vertical lines the
-  passes counted (HS / laps).
-  - "次の候補 ▶" / "◀ 前の候補" jump to the next / previous peak above Exit
-    that isn't a counted pass (a pass the receiver may have missed); tapping
-    the chart picks a time too (snapped to the nearby peak).
-  - "＋ ここにラップを追加" adds a pass there: it splits that lap, the total
-    stays; every browser, the ranking, the goggles and the SD record follow.
-    On a counted pass, "この通過を削除" deletes it.
-  - Adding and deleting work between Stop and Clear. Clear saves the race as
-    corrected to SD and drops the RSSI record (the next start records anew).
+- **Counting again for a missed lap** (📈): during a race the timer records
+  every channel's RSSI (the highest reading of every 40 ms, up to 30 min; not
+  while paused). **📈** at the end of a race card's RSSI row (logged in) shows
+  the pilot's RSSI over the whole race, full screen ("🔍 詳細" zooms to 20 s
+  around the point tapped, "全体" goes back).
+  - Vertical lines are the passes counted now; green line Enter, red line Exit.
+  - Move the Enter / Exit lines (numbers, ±1 / ±10 buttons, or drag them on
+    the chart) until the missed peak counts. As you go, the passes those
+    values would give show as **▼ yellow (added)** and **✕ red (gone)**, with
+    "今の計測 n 周 → この値だと m 周".
+  - "この値で数え直す" counts the pilot's laps again from the record with
+    those values (cooldown, total laps and time limit as in the race). Passes
+    counted before keep their exact times; only the added ones take the
+    record's (40 ms). Best lap, positions, every browser, the goggles and the
+    SD record follow.
+  - **The values are saved to the pilot** (calibration): the next race counts
+    with them. "元の値" goes back to the pilot's current values.
+  - Tap a counted pass on the chart to delete it ("選んだ通過を削除").
+  - Works between Stop and Clear. Clear saves the race as corrected to SD and
+    drops the RSSI record.
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

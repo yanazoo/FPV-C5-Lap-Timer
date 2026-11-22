@@ -168,6 +168,14 @@ void c5RecStop() { recOn = false; }
 
 uint32_t c5RecMs() { return recBuf ? recEnd : 0; }
 
+const uint16_t* c5RecData(int slot, int* n) {
+    *n = 0;
+    if (!recBuf || slot < 0 || slot >= 8 || recOn) return nullptr;   // only while stopped
+    uint32_t k = recEnd / C5_REC_MS + 1;
+    *n = (int)(k < C5_REC_SAMPLES ? k : C5_REC_SAMPLES);
+    return recBuf + slot * C5_REC_SAMPLES;
+}
+
 size_t c5RecRead(int slot, size_t from, uint8_t* out, size_t maxBytes) {
     if (!recBuf || slot < 0 || slot >= 8) return 0;
     size_t total = (size_t)(recEnd / C5_REC_MS + 1) * 2;
