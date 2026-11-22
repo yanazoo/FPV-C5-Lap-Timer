@@ -518,6 +518,27 @@ void registerHttpRoutes() {
         req->send(200, "application/json", rosterJson());
     });
 
+    // The whole UID of an unregistered radio (by its tag), to put in the add
+    // form's ELRS field. The 1 Hz status every browser gets carries only the
+    // tag; the UID goes to a logged-in admin only.
+    onJson("/api/radio_uid", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!wsTokenValid(String(d["token"] | ""))) {
+            req->send(403, "application/json", R"({"ok":false,"reason":"login"})");
+            return;
+        }
+        uint8_t uid[6];
+        if (!pilotRadioByTag(d["tag"] | "", uid)) {
+            req->send(409, "application/json", R"({"ok":false,"reason":"radio"})");
+            return;
+        }
+        char u[24];
+        uidText(uid, u);
+        JsonDocument o;
+        o["ok"] = true;
+        o["uid"] = u;
+        sendJson(req, o);
+    });
+
     onJson("/api/pilots/delete", [](AsyncWebServerRequest* req, JsonDocument& doc) {
         int id = doc["id"] | -1;
         {

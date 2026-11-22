@@ -265,6 +265,11 @@ def uid_tag(phrase):
     return "%02x%02x%02x" % (h[0] & 0xFE, h[1], h[2])
 
 
+def uid_text(phrase):   # the six UID bytes as ELRS shows them
+    h = hashlib.md5(('-DMY_BINDING_PHRASE="%s"' % phrase).encode()).digest()
+    return ",".join(str(b) for b in (h[0] & 0xFE, h[1], h[2], h[3], h[4], h[5]))
+
+
 def radio(phrase):
     return RADIOS.setdefault(phrase, {"lq": 0, "seen": 0, "up": 0, "lastUp": 0, "reporting": None, "vtx": 0, "heard": 0})
 
@@ -740,7 +745,8 @@ class Handler(SimpleHTTPRequestHandler):
                 nums = [x for x in d["uid"].replace(",", " ").replace(".", " ").split() if x]
                 if len(nums) != 6 or not all(x.isdigit() and int(x) <= 255 for x in nums):
                     return self.reply({"ok": False, "error": "uid"}, 400)
-                rec.update(bind="", uid=",".join(nums), uidPhrase=None, uidTag=None)
+                ph = next((ph for ph in RADIOS if uid_text(ph) == ",".join(nums)), None)
+                rec.update(bind="", uid=",".join(nums), uidPhrase=ph, uidTag=None)
             elif d.get("bind") or d.get("uidClear"):
                 rec.update(uidPhrase=None, uidTag=None, uid=None)
             if pid == -1:
@@ -883,6 +889,13 @@ class Handler(SimpleHTTPRequestHandler):
             r["laps"].append({"slot": slot, "lapTime": lap_ms, "ts": ts})
             broadcast({"type": "lap", "pilot": slot, "lapTime": lap_ms, "lapCount": len(mine) + 1, "ts": ts})
             return self.reply({"ok": True})
+        if p == "/api/radio_uid":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            ph = next((ph for ph in RADIOS if uid_tag(ph) == d.get("tag")), None)
+            if ph is None:
+                return self.reply({"ok": False, "reason": "radio"}, 409)
+            return self.reply({"ok": True, "uid": uid_text(ph)})
         if p == "/api/net/wifi-qr":
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)

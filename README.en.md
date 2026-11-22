@@ -356,8 +356,9 @@ bind phrase two pilots share, nor outside 5180–5917 MHz). "VTX が送信機と
 "UID" next to the pilot's ELRS field and type the radio's UID there (the six
 numbers the ELRS configurator shows, e.g. `210,141,145,12,34,56`, or 12 hex
 digits). Links and the goggle OSD use it just like a bind phrase; untick and
-type a phrase to switch back. From an unregistered radio's "＋ 登録", tick
-"UID" and leave the field empty to use that radio's UID. The SD roster backup
+type a phrase to switch back. From an unregistered radio's "＋ 登録", the form opens with
+that radio's UID in the field and "UID" ticked (untick it to type a bind
+phrase instead). The SD roster backup
 (`pilots.csv`, column `uid`) saves and restores it.
 
 **No ESP-NOW** (ELRS OSD off, no bridge, or no answer from it / an older

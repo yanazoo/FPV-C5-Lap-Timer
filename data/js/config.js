@@ -159,9 +159,17 @@ function renderCandidates(){
   box.style.display=c.length?'':'none';
   if(h!==candHtml){candHtml=h;document.getElementById('candList').innerHTML=h;}
 }
-function registerCand(tag){
+// The radio's own UID goes in the ELRS field with "UID" ticked (the timer
+// hands it to a logged-in admin); a bind phrase can still be typed instead.
+async function registerCand(tag){
   var x=((c5Status&&c5Status.cand)||[]).find(function(c){return c.tag===tag;});
-  if(x)showAddForm({tag:x.tag,vtx:x.vtx||0});
+  if(!x)return;
+  var uid='';
+  try{
+    var r=await fetch('/api/radio_uid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',tag:tag})});
+    if(r.ok)uid=(await r.json()).uid||'';
+  }catch(e){}
+  showAddForm({tag:x.tag,vtx:x.vtx||0,uid:uid});
 }
 async function fixVtx(id,mhz){
   var r=rosterById[id];if(!r)return;
@@ -206,6 +214,12 @@ function bindPlaceholder(prefix,uid){
 function onBindKind(prefix){
   var u=document.getElementById(prefix+'IsUid').checked,b=document.getElementById(prefix+'Bind');
   b.placeholder=bindPlaceholder(prefix,u);
+  // From a radio in the list: unticking clears its UID (type the phrase),
+  // ticking again puts it back.
+  if(prefix==='add'&&addCand&&addCand.uid){
+    if(!u&&b.value.replace(/\s/g,'')===addCand.uid)b.value='';
+    else if(u&&!b.value.trim())b.value=addCand.uid;
+  }
   if(prefix==='add')checkAddUid();
 }
 var UID_DEC=/^\s*\d{1,3}([\s,.]+\d{1,3}){5}\s*$/, UID_HEX=/^\s*([0-9a-fA-F]{2}[:\-\s]?){5}[0-9a-fA-F]{2}\s*$/;
@@ -262,7 +276,7 @@ var addCand=null, uidCheckT=null, uidCheckSeq=0;
 function showAddForm(cand){
   addCand=cand||null;
   var f=document.getElementById('addForm');
-  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
+  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',uid:cand.uid||'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
   document.getElementById('addUidCheck').textContent='';
   f.style.display='block';document.getElementById('addName').focus();
   if(addCand){f.scrollIntoView({block:'nearest'});checkAddUid();}
@@ -276,7 +290,9 @@ function checkAddUid(){
   if((document.getElementById('addIsUid')||{}).checked){
     var typed=((document.getElementById('addBind')||{}).value||'').trim();
     if(!typed){addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;}
-    addCand.match=true;out.textContent='';return;
+    addCand.match=true;
+    out.textContent=addCand.uid&&typed.replace(/\s/g,'')===addCand.uid?'🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズがあれば、「UID」のチェックを外して入れてください）':'';
+    out.style.color='var(--ok)';return;
   }
   var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';
   var phrase=bind.trim()||name.trim();
