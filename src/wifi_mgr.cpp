@@ -87,7 +87,14 @@ static void startAp() {
     bool ok = WiFi.softAPConfig(AP_IP, AP_GATEWAY, AP_SUBNET);
     // All 10 stations: browsers are limited on the WebSocket (ws_handler),
     // and the netpack XIAO must always find a place (wsLoop frees one).
-    ok = WiFi.softAP(apSsid.c_str(), apPass.c_str(), apChannel, 0, AP_MAX_STATIONS) && ok;
+    bool up = WiFi.softAP(apSsid.c_str(), apPass.c_str(), apChannel, 0, AP_MAX_STATIONS);
+    if (!up && apChannel != AP_CHANNEL) {
+        // The channel picked was refused: the access point on the default
+        // one rather than none (the settings stay; the log says so).
+        Serial.printf("[WiFi] AP on ch %u refused, using ch %u\n", apChannel, AP_CHANNEL);
+        up = WiFi.softAP(apSsid.c_str(), apPass.c_str(), AP_CHANNEL, 0, AP_MAX_STATIONS);
+    }
+    ok = up && ok;
     if (!ok) Serial.println("[WiFi] AP start failed");
     // 20 MHz wide, said outright: 40 MHz would also cover the neighbouring
     // channels (and, from 6 up, reach towards ESP-NOW's 1 less than it

@@ -318,7 +318,7 @@ const char* netFromJson(JsonVariantConst d) {
     if (apS.length() < 1 || apS.length() > 31) return "AP SSID 1..31";
     if (apP.length() < 8 || apP.length() > 63) return "AP password 8..63";
     int apCh = d["apChannel"] | (int)apChannel;
-    if (apCh < AP_CHANNEL_MIN || apCh > AP_CHANNEL_MAX) return "AP channel 6..13";
+    if (apCh < AP_CHANNEL_MIN || apCh > AP_CHANNEL_MAX) return "AP channel 6..11";
     // Client networks: "nets" [{ssid, pass, passClear}] x STA_NETS, or (a
     // settings backup from older firmware) "staSsid" / "staPass" = the first.
     // An empty password keeps the stored one (the UI never shows it);

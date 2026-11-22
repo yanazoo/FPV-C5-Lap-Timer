@@ -402,8 +402,9 @@ To cover lost packets:
 ### WiFi modes (Settings → 📶 WiFi)
 
 - **Host** (default): the timer is an access point, `http://20.0.0.1`. Its
-  WiFi channel is picked in "チャンネル", 6–13 (default 6; ESP-NOW for the
-  goggle OSD is on channel 1, so 5 and below aren't offered).
+  WiFi channel is picked in "チャンネル", 6–11 (default 6; ESP-NOW for the
+  goggle OSD is on channel 1, so 5 and below aren't offered; 12 and 13 aren't
+  allowed everywhere, and the timer's WiFi runs in world safe mode, 1–11).
 - **Client networks**: up to **5** can be stored. "接続先の選び方" **automatic**
   joins the strongest stored network in range at boot (say, the home router
   and the field's pocket WiFi); **select** joins the one marked ●.
