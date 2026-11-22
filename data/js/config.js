@@ -447,7 +447,7 @@ function saveTotalLaps(){
 }
 
 // How long the race's RSSI is recorded (the race stops when it is full).
-var REC_MIN_LABEL={30:'30 分',60:'1 時間',120:'2 時間',180:'3 時間',240:'4 時間'};
+var REC_MIN_LABEL={5:'5 分',10:'10 分',30:'30 分',60:'1 時間',120:'2 時間',180:'3 時間',240:'4 時間'};
 function showRecMin(st){
   var s=document.getElementById('recMinSelect');if(!s)return;
   if(document.activeElement!==s&&st.recMin)s.value=String(st.recMin);

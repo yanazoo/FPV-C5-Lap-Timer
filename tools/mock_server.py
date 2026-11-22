@@ -531,12 +531,14 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/race/rssi":   # the race's RSSI record: passes (and missed ones) as peaks
             slot = int(parse_qs(u.query).get("slot", ["0"])[0])
             race_ms, vals = rssi_record(slot)
-            body = b"".join(v.to_bytes(2, "little") for v in vals)
+            frm = min(int(parse_qs(u.query).get("from", ["0"])[0]), len(vals))
+            body = b"".join(v.to_bytes(2, "little") for v in vals[frm:])
             self.send_response(200)
             self.send_header("Content-Type", "application/octet-stream")
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Rec-Ms", "40")
             self.send_header("X-Race-Ms", str(race_ms))
+            self.send_header("X-From", str(frm))
             self.end_headers()
             return self.wfile.write(body)
         if p == "/api/bind_uid":

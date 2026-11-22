@@ -138,10 +138,12 @@ extern ElrsSettings elrsCfg;
 // layout stays the same.
 extern uint8_t      elrsRdSwitch;
 extern String       adminPassword;
-// RSSI recorded for the race, minutes of race time (30/60/120/180/240): the
-// race stops when the record is full.
+// RSSI recorded for the race, minutes of race time (5/10/30/60/120/180/240):
+// the race stops when the record is full.
 extern uint16_t     recMinutes;
-inline bool recMinutesValid(int m) { return m == 30 || m == 60 || m == 120 || m == 180 || m == 240; }
+inline bool recMinutesValid(int m) {
+    return m == 5 || m == 10 || m == 30 || m == 60 || m == 120 || m == 180 || m == 240;
+}
 extern String       apSsid, apPass;     // host mode: our access point
 extern uint8_t      netMode;            // NetMode (wifi_mgr.h)
 extern String       staSsid, staPass;   // client mode: the network being joined (chosen at boot)

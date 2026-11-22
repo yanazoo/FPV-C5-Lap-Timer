@@ -172,8 +172,8 @@ uint32_t c5RecSize(uint32_t minutes) {
     recOn = false;
     if (recBuf) heap_caps_free(recBuf), recBuf = nullptr, recCap = 0;
     recEnd = 0;
-    // Shorter if PSRAM can't hold it (halving, down to 15 min).
-    for (uint32_t cap = want; cap >= 15u * 60000u / C5_REC_MS; cap /= 2) {
+    // Shorter if PSRAM can't hold it (halving, down to 5 min).
+    for (uint32_t cap = want; cap >= 5u * 60000u / C5_REC_MS; cap /= 2) {
         recBuf = (uint16_t*)heap_caps_calloc(8 * cap, sizeof(uint16_t), MALLOC_CAP_SPIRAM);
         if (recBuf) { recCap = cap; break; }
     }

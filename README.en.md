@@ -279,7 +279,7 @@ missed flips during the OSD and reacted only sometimes).
   SD record follow.
 - **Counting again for a missed lap** ("RSSI" button): during a race the timer records
   every channel's RSSI (the highest reading of every 40 ms; not while paused).
-  How long is set in Settings → "RSSI の記録時間": 30 min, 1, 2, 3 or 4 h
+  How long is set in Settings → "RSSI の記録時間": 5, 10 or 30 min, 1, 2, 3 or 4 h
   (default 30 min; 4 h uses about 5.8 MB of PSRAM). When it is full the race
   stops by itself: the laps stay and can be counted again, but that race
   can't be carried on (Start is off, so no lap past the record's end could be

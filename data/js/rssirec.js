@@ -13,7 +13,7 @@ var rr={slot:-1,data:null,recMs:40,raceMs:0,t0:0,span:0,cur:-1,drag:null,bound:f
 async function openRssiRec(slot){
   if(!isAuthed){toast('🔒 ログインが必要です');return;}
   var p=slots[slot];if(!p)return;
-  rr.slot=slot;rr.cur=-1;rr.data=null;rr.en=p.enterRssi;rr.ex=p.exitRssi;
+  rr.slot=slot;rr.cur=-1;rr.data=null;rr.en=p.enterRssi;rr.ex=p.exitRssi;   // data=null: fetch it all
   document.getElementById('rrMsg').textContent='';
   var nm=p.name==='---'?'Ch'+(slot+1):p.name;
   var n=document.getElementById('rrName');n.textContent=nm;n.className='cz-name '+PCLS[slot];
@@ -34,13 +34,18 @@ async function openRssiRec(slot){
     rrSyncPan();rrDraw();rrInfo();
   },2000);
 }
+// The record (first time whole, then only what was added: 4 h is 720 KB).
+// The last sample may still grow, so it is fetched again each time.
 async function rrFetch(){
+  var have=rr.data&&rr.data.length?rr.data.length-1:0;
   try{
-    var r=await fetch('/api/race/rssi?slot='+rr.slot,{cache:'no-store'});
+    var r=await fetch('/api/race/rssi?slot='+rr.slot+(have?'&from='+have:''),{cache:'no-store'});
     if(!r.ok)throw 0;
     rr.recMs=parseInt(r.headers.get('X-Rec-Ms'))||40;
     rr.raceMs=parseInt(r.headers.get('X-Race-Ms'))||0;
-    rr.data=new Uint16Array(await r.arrayBuffer());
+    var from=parseInt(r.headers.get('X-From'))||0,add=new Uint16Array(await r.arrayBuffer());
+    if(!from||!rr.data){rr.data=add;return;}
+    var d=new Uint16Array(from+add.length);d.set(rr.data.subarray(0,from));d.set(add,from);rr.data=d;
   }catch(e){if(!rr.data){rr.data=new Uint16Array(0);rr.raceMs=0;}}
 }
 function closeRssiRec(){rr.slot=-1;rr.data=null;clearInterval(rr.poll);document.getElementById('rssiRec').style.display='none';}

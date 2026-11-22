@@ -687,16 +687,21 @@ void registerHttpRoutes() {
 
     // The race's RSSI record for one channel: uint16 little-endian, one
     // per C5_REC_MS of race time (pauses left out), the highest reading of
-    // each. Headers: X-Rec-Ms (the interval), X-Race-Ms (race time
-    // recorded). Streamed from PSRAM in chunks.
+    // each. ?from=N: from sample N on (a browser that has the start already;
+    // 4 h is 720 KB a channel). Headers: X-Rec-Ms (the interval), X-Race-Ms
+    // (race time recorded), X-From (the first sample sent). Streamed from
+    // PSRAM in chunks.
     server.on(AsyncURIMatcher::exact("/api/race/rssi"), HTTP_GET, [](AsyncWebServerRequest* req) {
         int slot = req->hasParam("slot") ? req->getParam("slot")->value().toInt() : -1;
         if (slot < 0 || slot >= MAX_ACTIVE) { req->send(400, "text/plain", "slot"); return; }
         uint32_t ms = c5RecMs();
-        size_t len = ms ? (size_t)(ms / C5_REC_MS + 1) * 2 : 0;   // 0: nothing recorded (or no PSRAM)
-        if (len > (size_t)c5RecCapMs() / C5_REC_MS * 2) len = (size_t)c5RecCapMs() / C5_REC_MS * 2;
-        AsyncWebServerResponse* res = req->beginResponse("application/octet-stream", len,
-            [slot](uint8_t* buf, size_t maxLen, size_t index) -> size_t { return c5RecRead(slot, index, buf, maxLen); });
+        size_t total = ms ? (size_t)(ms / C5_REC_MS + 1) * 2 : 0;   // 0: nothing recorded (or no PSRAM)
+        if (total > (size_t)c5RecCapMs() / C5_REC_MS * 2) total = (size_t)c5RecCapMs() / C5_REC_MS * 2;
+        size_t from = req->hasParam("from") ? (size_t)req->getParam("from")->value().toInt() * 2 : 0;
+        if (from > total) from = total;
+        AsyncWebServerResponse* res = req->beginResponse("application/octet-stream", total - from,
+            [slot, from](uint8_t* buf, size_t maxLen, size_t index) -> size_t { return c5RecRead(slot, from + index, buf, maxLen); });
+        res->addHeader("X-From", String(from / 2));
         res->addHeader("X-Rec-Ms", String(C5_REC_MS));
         res->addHeader("X-Race-Ms", String(ms));
         res->addHeader("Cache-Control", "no-store");
