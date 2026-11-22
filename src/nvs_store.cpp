@@ -20,6 +20,7 @@ StaIpConfig  staIp;
 MicSettings  micCfg;
 ElrsSettings elrsCfg;
 uint8_t      elrsRdSwitch = 0;
+uint16_t     recMinutes = REC_MIN_DEFAULT;
 String       adminPassword = "admin";   // public default; changed from the Config tab
 String       apSsid = AP_DEFAULT_SSID, apPass = AP_DEFAULT_PASS;
 uint8_t      netMode = 0;   // NET_AP until configured
@@ -116,6 +117,7 @@ void saveSettings() {
     prefs.putBool("sdlyon", startDelayOn);
     prefs.putUChar("amode", assignMode);
     prefs.putBool("avtx", vtxAuto);
+    prefs.putUShort("recmin", recMinutes);
     prefs.end();
 }
 
@@ -259,6 +261,8 @@ void loadAll() {
     startDelaySec = sd ? sd : 10;
     assignMode = assignModeValid(prefs.getUChar("amode", ASSIGN_MANUAL));
     vtxAuto = prefs.getBool("avtx", true);
+    recMinutes = prefs.getUShort("recmin", REC_MIN_DEFAULT);
+    if (!recMinutesValid(recMinutes)) recMinutes = REC_MIN_DEFAULT;
     ConnLimits cl;
     if (prefs.getBytes("c", &cl, sizeof cl) == sizeof cl) connLimits = cl;
     loginHoldSec = prefs.getUShort("hold", LOGIN_HOLD_DEFAULT);

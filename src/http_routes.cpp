@@ -124,6 +124,8 @@ void settingsToJson(JsonObject doc) {
     doc["startDelaySec"] = startDelaySec;
     doc["assignMode"]    = assignMode;
     doc["vtxAuto"]       = vtxAuto;
+    doc["recMin"]        = recMinutes;
+    doc["recMinNow"]     = c5RecCapMs() / 60000;   // what the record holds now (less if PSRAM is short)
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).
@@ -149,7 +151,8 @@ void settingsFromJson(JsonVariantConst doc) {
     }
     if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
     if (!doc["assignMode"].isNull()) assignMode = assignModeValid(doc["assignMode"] | 0);
-    saveSettings();
+    if (!doc["recMin"].isNull() && recMinutesValid(doc["recMin"] | 0)) recMinutes = doc["recMin"] | REC_MIN_DEFAULT;
+    saveSettings();   // the record takes a new length at the next start (the cleared race may still need it)
 }
 
 // ELRS OSD (caller holds gLock).
@@ -657,8 +660,64 @@ void registerHttpRoutes() {
     onJson("/api/laps/delete", [](AsyncWebServerRequest* req, JsonDocument& d) {
         int slot = d["slot"] | -1, index = d["index"] | -1;
         uint32_t lapMs = d["lapTime"] | 0u;
+        if (d["last"] | false) {   // the race cleared last (RSSI view after Clear)
+            bool saved = false;
+            if (!raceDeleteLastLap(slot, index, lapMs, &saved)) {
+                req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
+                return;
+            }
+            req->send(200, "application/json", saved ? R"({"ok":true,"saved":true})" : R"({"ok":true,"saved":false})");
+            return;
+        }
         if (raceDeleteLap(slot, index, lapMs)) ok(req);
         else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
+    });
+
+    // Count a pilot's passes again from the race's RSSI record with other
+    // thresholds (race stopped), and keep those thresholds for the pilot.
+    onJson("/api/laps/recount", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        int en = d["enter"] | 0, ex = d["exit"] | 0, ri = -1;
+        if (en <= ex || en > 1023 || ex < 0) { bad(req, "enter must be above exit"); return; }
+        int n = raceRecount(d["slot"] | -1, (uint16_t)en, (uint16_t)ex, &ri);
+        if (n < 0) { req->send(409, "application/json", R"({"ok":false,"reason":"cannot"})"); return; }
+        JsonDocument o;
+        o["ok"] = true;
+        o["passes"] = n;
+        sendJson(req, o);
+        if (ri >= 0) {   // the new thresholds on every browser
+            char b[72];
+            snprintf(b, sizeof b, R"({"type":"calib","id":%d,"enter":%d,"exit":%d})", ri, en, ex);
+            wsText(b);
+        }
+    });
+
+    // The race cleared last, one channel's passes (the RSSI view after Clear).
+    server.on(AsyncURIMatcher::exact("/api/race/last"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        int slot = req->hasParam("slot") ? req->getParam("slot")->value().toInt() : -1;
+        req->send(200, "application/json", raceLastJson(slot));
+    });
+
+    // The race's RSSI record for one channel: uint16 little-endian, one
+    // per C5_REC_MS of race time (pauses left out), the highest reading of
+    // each. ?from=N: from sample N on (a browser that has the start already;
+    // 4 h is 720 KB a channel). Headers: X-Rec-Ms (the interval), X-Race-Ms
+    // (race time recorded), X-From (the first sample sent). Streamed from
+    // PSRAM in chunks.
+    server.on(AsyncURIMatcher::exact("/api/race/rssi"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        int slot = req->hasParam("slot") ? req->getParam("slot")->value().toInt() : -1;
+        if (slot < 0 || slot >= MAX_ACTIVE) { req->send(400, "text/plain", "slot"); return; }
+        uint32_t ms = c5RecMs();
+        size_t total = ms ? (size_t)(ms / C5_REC_MS + 1) * 2 : 0;   // 0: nothing recorded (or no PSRAM)
+        if (total > (size_t)c5RecCapMs() / C5_REC_MS * 2) total = (size_t)c5RecCapMs() / C5_REC_MS * 2;
+        size_t from = req->hasParam("from") ? (size_t)req->getParam("from")->value().toInt() * 2 : 0;
+        if (from > total) from = total;
+        AsyncWebServerResponse* res = req->beginResponse("application/octet-stream", total - from,
+            [slot, from](uint8_t* buf, size_t maxLen, size_t index) -> size_t { return c5RecRead(slot, from + index, buf, maxLen); });
+        res->addHeader("X-From", String(from / 2));
+        res->addHeader("X-Rec-Ms", String(C5_REC_MS));
+        res->addHeader("X-Race-Ms", String(ms));
+        res->addHeader("Cache-Control", "no-store");
+        req->send(res);
     });
 
     // The lap button on a race card (admins): a pass for that slot now.

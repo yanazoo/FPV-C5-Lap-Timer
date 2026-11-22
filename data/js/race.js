@@ -115,14 +115,15 @@ function buildRaceCards(){
         +'<span class="p-lapcount" id="rcLaps'+p.id+'"></span>'
       +'</div>'
       +'<div class="rssi-mini-bar">'
-        +'<span class="rssi-mini-label">RSSI</span>'
         +'<div class="rssi-mini-track"><div class="rssi-mini-fill '+PCLS[p.id]+'-fill" id="rssiBar'+p.id+'"></div></div>'
         +'<span class="rssi-mini-val" id="rssiVal'+p.id+'">---</span>'
+        +'<button class="rr-btn" onclick="openRssiRec('+p.id+')" title="このレースの RSSI の記録を見て、入・出を合わせてラップを数え直します（管理者）">RSSI</button>'
       +'</div>'
       +'<div class="pilot-best-row">'
         +'<span class="best-label">BEST</span>'
         +'<span class="pilot-best" id="rcBest'+p.id+'">--:--.---</span>'
         +(p.gone?'':'<button class="lap-btn" id="rcLapBtn'+p.id+'" onclick="manualLap('+p.id+',this)" title="この時点でラップを記録します（管理者・レース中）">+LAP</button>')
+
       +'</div>'
       +'<div class="lap-table-wrap">'
         +'<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead>'
@@ -471,7 +472,8 @@ function onRaceClear(){
 function setBtns(running){
   // Viewers (unauthed) can never operate race controls regardless of state.
   var locked=!isAuthed,waiting=!!waitH;
-  document.getElementById('btnStart').disabled=locked||running||waiting;
+  // Stopped for a full RSSI record: no carrying on, Clear first.
+  document.getElementById('btnStart').disabled=locked||running||waiting||recFull;
   // Stop also calls off a delayed start.
   document.getElementById('btnStop').disabled=locked||(!running&&!waiting);
   // Clear is only allowed while stopped (not during a running race).

@@ -17,6 +17,7 @@
 #include "msp_v2.h"
 #include "osd_engine.h"
 #include "race_core.h"
+#include "gate_tracker.h"
 #include "race_files.h"
 #include "sound_count.h"
 #include "auto_assign.h"
@@ -225,6 +226,83 @@ void testRaceDeleteLap() {
         CHECK(c.deleteLap(0, 1));
         CHECK(c.pass(0, 0, 40000, 600, &r) && r.lapMs == 20000);   // 40 - 10 - 10 s pause
         CHECK(c.slot(0).totalMs == 30000);
+    }
+}
+
+// Passes found again in a recorded RSSI trace with other thresholds.
+void testFindPasses() {
+    // 40 ms steps: a pass peaking at 500 (step 10), a weak one at 290
+    // (step 40), noise at 120, nothing heard (0) at the end.
+    uint16_t v[60];
+    for (int i = 0; i < 60; i++) v[i] = 120;
+    v[8] = 320, v[9] = 450, v[10] = 500, v[11] = 400, v[12] = 250;
+    v[39] = 270, v[40] = 290, v[41] = 260;
+    v[55] = 0, v[56] = 0;
+    uint32_t t[8];
+    uint16_t pk[8];
+    // Enter 300 / exit 280: only the strong one.
+    CHECK(gate::findPasses(v, 60, 40, 300, 280, t, pk, 8) == 1 && t[0] == 420 && pk[0] == 500);
+    // Enter 285 / exit 265: the weak one too, timed at its peak.
+    CHECK(gate::findPasses(v, 60, 40, 285, 265, t, pk, 8) == 2 && t[1] == 1620 && pk[1] == 290);
+    // A pass still open at the end isn't one; maxOut is kept.
+    v[58] = 600, v[59] = 600;
+    CHECK(gate::findPasses(v, 60, 40, 285, 265, t, pk, 8) == 2);
+    CHECK(gate::findPasses(v, 60, 40, 285, 265, t, pk, 1) == 1);
+}
+
+// A pilot's passes replaced by those found again (race stopped).
+void testRaceReplaceSlot() {
+    race::PassResult r;
+    {   // holeshot mode: HS 2 s, a 40 s lap (one pass missed at 22 s), 20 s
+        race::Core c;
+        c.cooldownMs = 3000;
+        c.start(0);
+        for (uint32_t t : {2000u, 42000u, 62000u}) CHECK(c.pass(0, 0, t, 600, &r));
+        CHECK(c.pass(1, 1, 30000, 600, &r));
+        uint32_t again[] = {2000, 22000, 42000, 62000};
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 4, 50000) == 3);   // racing: up to race time 50 s
+        CHECK(c.laps(0) == 2 && c.slot(0).lastLapTs == 42000);
+        CHECK(!c.pass(0, 0, 43000, 600, &r));   // the cooldown counts from the pass found
+        c.stop(70000);
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 4, 0) == 4);
+        CHECK(c.laps(0) == 3 && c.slot(0).bestLapMs == 20000 && c.slot(0).totalMs == 60000);
+        CHECK(c.slot(0).lastLapTs == 62000 && c.slot(0).hsTs == 2000);
+        // laps_ in race-time order, the other pilot's pass where it was.
+        CHECK(c.lapCount() == 5 && c.lap(1).slot == 0 && c.lap(2).slot == 1 && c.lap(2).lapMs == 30000 && c.lap(3).slot == 0);
+        CHECK(c.passTime(0, 1) == 22000 && c.passTime(1, 0) == 30000);
+        // Cooldown, and times at / past the end, as pass() would.
+        uint32_t noisy[] = {2000, 3000, 22000, 69000, 75000};
+        CHECK(c.replaceSlot(0, 0, noisy, nullptr, 5, 0) == 3 && c.laps(0) == 2);
+        // Racing on after it: the next lap counts from the last pass found.
+        CHECK(c.resume(80000) && c.pass(0, 0, 91000, 600, &r) && r.lapMs == 12000);   // race time 81 s - 69 s
+    }
+    {   // a pause: race times leave it out
+        race::Core c;
+        c.lapMode = race::LapMode::Immediate;
+        c.start(0);
+        CHECK(c.pass(0, 0, 10000, 600, &r));
+        c.stop(20000);
+        c.resume(30000);   // 10 s pause
+        CHECK(c.pass(0, 0, 40000, 600, &r) && r.lapMs == 20000);
+        c.stop(50000);     // race time 40 s
+        uint32_t again[] = {10000, 20000, 30000};
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 3, 0) == 3 && c.laps(0) == 3);
+        CHECK(c.lap(1).lapMs == 10000 && c.slot(0).totalMs == 30000 && c.slot(0).lastLapTs == 40000);
+    }
+    {   // no race: nothing to replace
+        race::Core c;
+        uint32_t t[] = {1000};
+        CHECK(c.replaceSlot(0, 0, t, nullptr, 1, 0) == -1);
+    }
+    {   // total laps: the passes after the finish are dropped
+        race::Core c;
+        c.totalLaps = 2;
+        c.lapMode = race::LapMode::Immediate;
+        c.start(0);
+        CHECK(c.pass(0, 0, 10000, 600, &r));
+        c.stop(40000);
+        uint32_t again[] = {10000, 20000, 30000};
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 3, 0) == 2 && c.slot(0).finished && c.laps(0) == 2);
     }
 }
 
@@ -1074,6 +1152,8 @@ int runTests() {
     testUid();
     testRaceHoleshot();
     testRaceDeleteLap();
+    testFindPasses();
+    testRaceReplaceSlot();
     testRaceImmediatePauseFinish();
     testRaceTimed();
     testPositions();

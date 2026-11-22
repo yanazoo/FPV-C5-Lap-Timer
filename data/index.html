@@ -111,7 +111,6 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .crossing-badge{position:absolute;right:6px;top:50%;transform:translateY(-50%);font-size:9px;font-weight:700;letter-spacing:.5px;padding:3px 7px;border-radius:3px;background:#333;color:var(--muted);display:none;box-shadow:0 0 0 2px var(--sf)}
 .crossing-badge.active{display:inline-block;background:currentColor;color:#000}
 .rssi-mini-bar{display:flex;align-items:center;gap:5px;padding:3px 8px;background:var(--sf2)}
-.rssi-mini-label{font-size:9px;color:var(--muted);width:26px}
 .rssi-mini-track{flex:1;height:5px;background:var(--bd);border-radius:3px;overflow:hidden}
 .rssi-mini-fill{height:100%;width:0%;border-radius:3px;transition:width .05s}
 .p0 .rssi-mini-fill,.p0-fill{background:var(--p0)}.p1 .rssi-mini-fill,.p1-fill{background:var(--p1)}
@@ -122,6 +121,26 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
 .lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.rr-btn{margin-left:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap}
+.lap-btn,.rr-btn{font-size:12px;line-height:1.1;padding:0;border-radius:6px;min-height:20px;width:56px;text-align:center}
+.rr-list .lapTable{width:100%}
+.rr-list td{font-size:15px;font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace;padding:5px 4px}
+.rr-list td:first-child{font-size:13px;font-family:inherit;font-weight:600}
+.rr-list th{font-size:11px}
+.rr-list tr.rr-new td{color:#e3b341}
+/* The RSSI view: the adjusting controls smaller than the calibration close-up's. */
+#rssiRec>*{flex-shrink:0}
+#rssiRec .cz-row{padding:6px 8px;margin-top:6px}
+#rssiRec .cz-lbl{font-size:13px;margin-bottom:4px}
+#rssiRec .cz-row input[type=number]{width:72px;font-size:15px;padding:2px}
+#rssiRec .cz-btns{margin-top:4px;gap:5px}
+#rssiRec .cz-btns button{font-size:13px;padding:4px 0}
+body.viewer .rr-btn{display:none}
+#lapDelModal{z-index:1002}
+#rrCanvas{width:100%;border-radius:8px;touch-action:none;display:block;cursor:crosshair}
+.rr-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.rr-bar button{font-size:13px;padding:6px 10px}
+#rrInfo{font-size:13px;margin-top:8px;min-height:2.6em}
 .lap-btn:disabled{opacity:.3;cursor:default}
 .lap-btn.hit{background:var(--accent);color:#fff}
 body.viewer .lap-btn{display:none}
@@ -438,7 +457,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 
   <div class="global-config-card">
     <h3 class="global-title">🏁 レース内容</h3>
-    <p class="section-desc">レースの周回数と、レース画面の順位表の並べ方です。順位表にはどの決め方でも、最速ラップ・周回数・トータルタイムを全部表示します。</p>
+    <p class="section-desc">周回数と、順位表の並べ方です（どの決め方でも、最速ラップ・周回数・トータルタイムは全部出ます）。</p>
     <div class="config-row">
       <label>総周回数</label>
       <div class="slider-num">
@@ -478,7 +497,14 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <input type="number" id="startDelayCustom" min="1" max="600" value="20" onchange="saveStartDelay()" style="width:80px"><span class="unit">秒（1〜600）</span>
       </div>
     </div>
-    <p class="section-desc" style="margin-top:-2px">ON にすると、スタートボタン・ディレクターのスイッチで始めたとき、待ち時間だけ待ってから「レディ → 3-2-1」に入ります。待っている間はタイマーに残り時間を表示し、最初と 10 秒ごとに「ポーン」の後で「レーススタートまで残り○秒です。」と読み上げます。待っている間にストップを押す（スイッチを戻す）と、スタートを取りやめます。</p>
+    <p class="section-desc" style="margin-top:-2px">ON：スタートしてから待ち時間のあと「レディ → 3-2-1」。待っている間は残り時間を 10 秒ごとに読み上げ、ストップで取りやめます。</p>
+    <div class="config-row"><label>RSSI の記録時間</label>
+      <select id="recMinSelect" onchange="saveRecMin()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="5">5 分</option><option value="10">10 分</option>
+        <option value="30">30 分</option><option value="60">1 時間</option><option value="120">2 時間</option>
+        <option value="180">3 時間</option><option value="240">4 時間</option>
+      </select></div>
+    <p class="section-desc" style="margin-top:-2px" id="recMinNote">あとから入・出を合わせてラップを数え直すための記録です（レースカードの「RSSI」）。この時間に達するとレースを自動でストップし、そのレースは再開できません（クリアして新しくスタート）。変更は次のスタートから。</p>
     <div class="config-row rank-timed">
       <label>制限時間</label>
       <div class="slider-num">
@@ -493,12 +519,12 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="0">カウントしない（時間切れ後の通過は数えない）</option>
       </select>
     </div>
-    <p class="section-desc rank-timed" style="margin-top:6px">時間切れになると、「カウントする」ではゲートを通過した人から順に完走（ゴーグルに FINISHED!）になり、「カウントしない」では全員がその時点で完走になります。残り 30 秒・20 秒で「残り○秒」、残り 10 秒からは 1 秒ごとに数を読み上げ、0 秒でファンファーレが鳴ります（音声オフのときは 10 秒からビープ）。時間切れ後もレースは止まらず、ストップを押すまでマイナス表示で時間を計り続けます。制限時間は 30 秒〜30 分、次のスタートから反映されます。</p>
+    <p class="section-desc rank-timed" style="margin-top:6px">時間切れのとき、「カウントする」はゲートを通過した人から完走、「カウントしない」は全員その場で完走です。残り 30・20 秒と 10 秒からのカウントダウンを読み上げ、ストップまでマイナス表示で計り続けます。変更は次のスタートから。</p>
   </div>
 
   <div class="global-config-card">
     <h3 class="global-title">📡 C5 受信機（FPVGate C5MK）</h3>
-    <p class="section-desc">XIAO ESP32-C5 が各パイロットの VTX 周波数を約1kHzで測定します。パイロットに VTX チャンネルを設定し、Ch1〜8 に割り当ててください。</p>
+    <p class="section-desc">XIAO ESP32-C5 が各パイロットの VTX 周波数を測ります。パイロットに VTX を設定し、Ch1〜8 に割り当ててください。</p>
     <div id="c5StatusBody"><span style="color:var(--muted)">受信待ち…</span></div>
     <div class="config-row" style="margin-top:8px">
       <label>受信ゲイン</label>
@@ -532,15 +558,15 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       </select>
     </div>
     <div id="assignNote" class="assign-note" style="display:none">
-      機体の電源を入れて送信機とリンクすると、空いているチャンネルに入ります（2 秒）。リンクが切れて 10 秒たつと外れます。<br>
-      ・<b>レースの合間だけ</b>：レース中・ラップが残っている間は変えません（クリア後に反映）。<br>
-      ・<b>レース中も</b>：レース中もリンクで入れたり外したりします。外れたパイロットのレースカードと順位は「📴 離脱」として残り、ラップも残ります。そのチャンネルはそのパイロットのものとして空けておき、同じレース中にリンクが戻ればそこに戻ります。新しく入る人は、このレースでまだ使っていないチャンネルに入ります（ラップが混ざらないように）。<br>
-      必要なもの：ELRS 3.4 以降の送信機の Backpack ＞ <b>Telemetry を ESPNOW</b>（3.4.x は On）、ELRS OSD を ON、ESP-NOW ブリッジ v2.11 以降。パイロットのバインドフレーズ（空欄ならパイロット名）と VTX の周波数を登録してください。バックパックの無いパイロットは、手動で選んだチャンネルのままです。
+      送信機と機体がリンクすると空きチャンネルに入り（2 秒）、リンクが切れて 10 秒で外れます。<br>
+      ・<b>レースの合間だけ</b>：レース中・ラップが残っている間は変えません。<br>
+      ・<b>レース中も</b>：外れた人はカード・ラップを「📴 離脱」で残し、戻れば同じチャンネルに戻ります。<br>
+      必要：ELRS 3.4 以降の Backpack ＞ <b>Telemetry = ESPNOW</b>、ELRS OSD ON、ブリッジ v2.11 以降。バックパックの無い人は手動のままです。
     </div>
     <div id="candBox" class="cand-box" style="display:none">
       <div class="cand-title">📡 未登録の送信機</div>
       <div id="candList"></div>
-      <div class="assign-note" style="margin:4px 0 0">パイロット情報に無い送信機（ELRS バックパック）です。「＋ 登録」で、送信機の VTX を入れた登録フォームが開きます。バインドフレーズはその場で確かめます。</div>
+      <div class="assign-note" style="margin:4px 0 0">パイロット情報に無い送信機です。「＋ 登録」で、その送信機の VTX と UID が入った登録フォームが開きます。</div>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <button onclick="clearChannelAssignments()" class="btn-secondary" style="flex:1;font-size:12px;padding:5px 0">✖ 全チャンネル解除</button>
@@ -578,9 +604,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div style="display:flex;gap:8px">
       <button onclick="sdSaveQrImage()" class="btn-secondary" style="flex:1">📥 保存</button>
     </div>
-    <p class="section-desc" style="margin:10px 0 0">保存ファイルの名前には保存した日時が入り、復元のときに選べます。WiFi の設定は、復元後の再起動で切り替わります。設定情報と QR 画像には WiFi のパスワードが入るため、ダウンロードは管理者のみです。</p>
+    <p class="section-desc" style="margin:10px 0 0">ファイル名に保存日時が入り、復元のときに選べます。WiFi の設定は復元後の再起動で切り替わります。パスワードを含むため、ダウンロードは管理者だけです。</p>
   </div>
-    <p class="section-desc" style="margin:8px 0 0">WiFi の設定は、復元後にタイマーを再起動すると切り替わります。settings.json と QR 画像には WiFi のパスワードが入るため、SD タブからのダウンロードはログイン中の管理者だけができます。</p>
+    <p class="section-desc" style="margin:8px 0 0">WiFi の設定は復元後の再起動で切り替わります。パスワードを含むファイル（settings.json・QR 画像）のダウンロードは管理者だけです。</p>
   </div>
 
   <div class="global-config-card">
@@ -648,7 +674,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── ELRS OSD (vrxc_elrs) ── -->
   <div class="global-config-card">
     <h3 class="global-title">🥽 ELRS OSD（ゴーグル表示）</h3>
-    <p class="section-desc">RotorHazard の vrxc_elrs と同じ表示を、elrs-netpack 経由で各パイロットの ELRS バックパックへ送ります。パイロット情報の「ELRS バインドフレーズ」（空欄ならパイロット名）宛てに送信されます。</p>
+    <p class="section-desc">RotorHazard の vrxc_elrs と同じ表示を、各パイロットのゴーグル（ELRS バックパック）へ送ります。宛先は各パイロットのバインドフレーズ（空欄ならパイロット名）です。</p>
     <label class="chk"><input type="checkbox" id="elrs_enabled"> ELRS OSD を有効にする</label>
     <div class="elrs-grid">
       <label>接続方式
@@ -708,7 +734,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── WiFi ── -->
   <div class="global-config-card">
     <h3 class="global-title">📶 WiFi</h3>
-    <p class="section-desc">ホスト＝タイマー自身がアクセスポイントになります（初期設定）。クライアント＝既存の WiFi ルーターに接続します（<code>http://fpv-c5-lt.local</code> または表示される IP で開く。<code>.local</code> は IP に自動で切り替わります）。クライアントで設定した時間（15 / 30 / 60 秒）接続できない場合は、自動でホストとして起動します。保存すると再起動します。</p>
+    <p class="section-desc">ホスト＝タイマーがアクセスポイント（初期設定）。クライアント＝ルーターに接続（<code>http://fpv-c5-lt.local</code> か表示される IP で開く）。つながらないときは設定した秒数でホストに切り替わります。保存すると再起動します。</p>
     <div id="netStatus" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">動作モード</label>
       <select id="netMode" onchange="onNetMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
@@ -722,7 +748,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="0">選択（● を付けたもの）</option>
         </select></div>
       <div id="netStaList"></div>
-      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">接続先を 5 つまで登録できます。自動は、起動したときに周りの WiFi を探して、登録した中で一番電波の強いものに接続します。パスワードは表示しません（変更しない場合は空欄のまま）。SSID を消すと、その接続先は削除されます。</p>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">5 つまで登録できます。自動は、起動時に一番電波の強い接続先を選びます。パスワードは表示しません（変えないときは空欄）。SSID を消すと削除されます。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">ホストに切替</label>
         <select id="netFallback" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="15">15 秒接続できなければ</option>
@@ -738,7 +764,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
           <option value="300">5 分待ってホストに切替</option>
           <option value="0">ルーターが戻るまで待ち続ける</option>
         </select></div>
-      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">レース中（ストップ後、クリアするまでを含む）にルーターとの接続が切れたときの待ち時間です。待っている間も計測は続き、ルーターが戻れば全員の画面が自動でつながり直します。ホストに切り替えたあとは、レースをクリアするまでルーターには戻りません。</p>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">レース中（クリアまで）にルーターが切れたときの待ち時間です。待つ間も計測は続き、戻れば全員の画面がつながり直します。ホストに切り替えたら、クリアするまでルーターに戻りません。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">IP アドレス</label>
         <select id="netIpMode" onchange="onNetIpMode()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="0">自動（DHCP）</option>
@@ -767,7 +793,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="8">8 ch（2447 MHz）</option><option value="9">9 ch（2452 MHz）</option>
         <option value="10">10 ch（2457 MHz）</option><option value="11">11 ch（2462 MHz）</option>
       </select></div>
-    <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">ホストのアクセスポイントの WiFi チャンネルです。ゴーグルの OSD（ESP-NOW）は 1 ch を使うので 6 ch 以上、また海外でも使えるよう 11 ch までから選べます。周りの WiFi と重なって画面がつながりにくいときに変えてください。</p>
+    <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">ホストの WiFi チャンネルです（ゴーグル OSD が 1 ch を使うので 6〜11 ch）。周りの WiFi と重なってつながりにくいときに変えます。</p>
     <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>
@@ -775,7 +801,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 接続用 QR コード ── -->
   <div class="global-config-card">
     <h3 class="global-title">📱 接続用 QR コード</h3>
-    <p class="section-desc">スマホのカメラで読み取ると、WiFi に接続して（ホストモードはタイマーの WiFi、クライアントモードはルーターの WiFi）、タイマーの画面を開けます。WiFi のパスワードが入っているので、見せる相手に注意してください。</p>
+    <p class="section-desc">スマホのカメラで読み取ると、WiFi に接続して画面を開けます。WiFi のパスワードが入っているので、見せる相手に注意してください。</p>
     <div id="qrWrap" class="qr-wrap"><span class="res-muted">読み込み中…</span></div>
     <div style="display:flex;justify-content:flex-end;margin-top:8px">
       <button onclick="showQrBig()" class="btn-secondary">🔍 大きく表示</button></div>
@@ -784,7 +810,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 接続台数 ── -->
   <div class="global-config-card">
     <h3 class="global-title">👥 接続台数</h3>
-    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログインした端末）は接続が切られず、上限を超えるログインはお断りします。<b>観戦</b>（ログインしていない端末）は計測時間・ラップ・順位だけの軽い画面で、上限を超えると古い接続から切断します。上限は、計測に影響しないよう余裕を持たせています。netpack（WiFi 接続）は台数に含まず、切断もしません。</p>
+    <p class="section-desc">同時に接続できるブラウザーの数です。<b>管理者</b>（ログイン）は切られず、上限を超えるログインは断ります。<b>観戦</b>は軽い画面で、上限を超えると古い接続から切ります。netpack は数えません。</p>
     <div id="connNow" class="kv" style="margin-bottom:6px"><span>現在</span><b>—</b></div>
     <div class="config-row" style="gap:8px"><label style="width:150px">管理者（ログイン）</label>
       <select id="connAdmin" onchange="onConnAdmin()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></select></div>
@@ -798,13 +824,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="15">15 秒</option><option value="30">30 秒</option><option value="60">1 分</option><option value="180">3 分</option><option value="300">5 分</option>
         <option value="600">10 分</option><option value="1800">30 分</option>
       </select></div>
-    <p class="section-desc" style="margin-top:4px">ログインの保持：ブラウザーを閉じたり、スマホの画面が消えて接続が切れたりしてから、この時間がたつとログアウトと同じ扱いになり、管理者の枠が空きます（その間に戻ればログインのまま）。「ログアウト」を押せばすぐ空きます。</p>
+    <p class="section-desc" style="margin-top:4px">ログインの保持：接続が切れてからこの時間で管理者の枠が空きます（その間に戻ればログインのまま）。「ログアウト」ですぐ空きます。</p>
   </div>
 
   <!-- ── 再起動 ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔄 再起動</h3>
-    <p class="section-desc">タイマー（XIAO ESP32-S3）を再起動します。C5 受信機と ESP-NOW ブリッジはそのまま動き続け、タイマーの起動後に自動でつながり直します。設定はそのまま残ります。再起動するとログインし直しになります。「全員の画面を再読み込み」は、つながっているすべての画面（観戦者も含む）を開き直します（タイマーは再起動しません）。</p>
+    <p class="section-desc">タイマー（S3）だけを再起動します（受信機・ブリッジはそのまま。設定も残り、ログインし直しになります）。「全員の画面を再読み込み」はタイマーを止めずに、全員の画面を開き直します。</p>
     <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">
       <button onclick="reloadAllPages()" class="btn-secondary">🔁 全員の画面を再読み込み</button>
       <button onclick="restartAll()" class="btn-secondary">🔄 タイマーを再起動</button></div>
@@ -814,7 +840,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── ファーム更新 ── -->
   <div class="global-config-card">
     <h3 class="global-title">⬆️ ファーム更新</h3>
-    <p class="section-desc">タイマー（XIAO ESP32-S3）のファームと Web 画面を更新します。設定とパイロット情報はそのまま残ります。レース中・ラップが残っている間は更新できません。書き込み中は電源を切らないでください（終わると自動で再起動します）。受信機（C5）とブリッジは、<a href="https://yanazoo.github.io/FPV-C5-Lap-Timer/" target="_blank" rel="noopener" style="color:var(--accent)">Web 書き込みページ</a>（PC の Chrome / Edge と USB）で更新します。</p>
+    <p class="section-desc">タイマーのファームと Web 画面を更新します（設定・パイロット情報は残ります。レース中・ラップが残っている間は不可。書き込み中は電源を切らないでください）。受信機とブリッジは <a href="https://yanazoo.github.io/FPV-C5-Lap-Timer/" target="_blank" rel="noopener" style="color:var(--accent)">Web 書き込みページ</a>で更新します。</p>
     <div id="fwVer" class="section-desc" style="margin:0 0 8px"></div>
     <div style="font-size:13px;font-weight:600;margin:6px 0 4px">ネットから（クライアントモードでインターネットにつながっているとき）</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -831,7 +857,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <!-- ── 管理者パスワード ── -->
   <div class="global-config-card">
     <h3 class="global-title">🔒 管理者パスワード</h3>
-    <p class="section-desc">レース以外のタブ（設定・キャリブ・SD）とレース制御ボタンは、このパスワードでログインした端末からのみ操作できます。変更するときは新しいパスワードを入力して保存してください（現在のパスワードは表示されません）。</p>
+    <p class="section-desc">設定・キャリブ・SD とレースの操作は、このパスワードでログインした端末だけができます（今のパスワードは表示しません）。</p>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
       <input type="text" class="pw-mask" id="pwField" maxlength="32" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="新しいパスワード" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
       <button onclick="savePassword()" class="btn-success">保存</button></div>
@@ -841,7 +867,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <!-- ═══════════════════════════ CALIB ════════════════════════ -->
 <section id="pane-calib" class="tab-pane">
   <h2 class="section-title">キャリブレーション</h2>
-  <p class="section-desc">アクティブパイロットの RSSI（C5 スケール 0〜1023、16 = 1dB）のリアルタイム波形と検知閾値。機体を置いた時の値（フロア）と通過時のピークを見て、Enter をその間、Exit を Enter より少し下に設定します。</p>
+  <p class="section-desc">RSSI（0〜1023、16 = 1dB）の波形と閾値です。フロア（機体を置いたとき）とピーク（通過時）の間に Enter、その少し下に Exit を合わせます。名前をタップすると拡大します。</p>
   <div class="calib-grid" id="calibGrid"></div>
 
   <!-- The Sense board's microphone: start on a loud sound, false start in
@@ -849,7 +875,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
        thresholds as dashed lines. -->
   <div id="micSection" style="display:none">
   <h2 class="section-title" style="margin-top:18px">🎤 マイク</h2>
-  <p class="section-desc">拡張ボード（XIAO ESP32-S3 Sense）のマイクの音量（0〜100）です。会場で手を叩いたり笛を吹いたりして、グラフを見ながら閾値を決めます。</p>
+  <p class="section-desc">XIAO ESP32-S3 Sense のマイクの音量（0〜100）です。手を叩く・笛を吹くなどして、グラフを見ながら閾値を決めます。</p>
   <div class="calib-card mic-card">
     <div class="calib-header mic-header"><span>🎤 音量</span><span class="rssi-live-badge">今: <strong id="micNow">---</strong></span></div>
     <canvas id="micCanvas"></canvas>
@@ -888,11 +914,10 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <label class="toggle-sw" style="flex:1"><input type="checkbox" id="micClapClear" onchange="saveMicSoon(0)"><span class="toggle-track"></span><span id="micClapClearState">OFF</span></label></div>
     </div>
     <p class="section-desc" style="margin:4px 12px 10px">
-      <b>マイクでスタート</b>：レースをしていないとき（クリアした後）、緑の線を「スタートの検知時間」以上越える音が「閾値越えカウント回数」だけ続くと（音と音の間は 0.8 秒以内）、スタートボタンと同じようにスタートします（スタートの待ち時間 → レディ → 3-2-1）。回数がちょうど同じときだけ反応します。ストップ・クリアの後 5 秒は反応しません。<br>
-      例：手を 2 回叩いてスタート ＝ 2 回・0.02 秒、笛やエアホーン 1 回でスタート ＝ 1 回・0.2 秒。<br>
-      <b>即スタート</b>：ON にすると、スタートの待ち時間・レディ・3-2-1 を飛ばし、合図の音そのものを GO として計測を始めます（時計は、最後の音が鳴り始めた瞬間から）。決めた回数に届いた時点ですぐ始まります。<br>
-      <b>閾値越え 3 回でクリア</b>：ストップした後に、同じ条件の音が 3 回で、クリアボタンと同じようにクリアします（SD への保存も同じ）。<br>
-      <b>フライング検知</b>：ARM NOW から GO までの間に、赤の線を超える音が「フライングの検知時間」だけ続くと、レースを止めて「フライング」と読み上げ、カウントをクリアします（ゴーグルには FALSE START）。3-2-1 の音やスマホの読み上げで反応しないよう、赤の線はそれより上にしてください。
+      <b>マイクでスタート</b>：クリア後、緑の線を「検知時間」以上越える音が「カウント回数」ちょうど続くと（間は 0.8 秒以内）スタートします。ストップ・クリア後 5 秒は反応しません。例：拍手 2 回＝2 回・0.02 秒、笛 1 回＝1 回・0.2 秒。<br>
+      <b>即スタート</b>：待ち時間・レディ・3-2-1 を飛ばし、合図の音を GO にします。<br>
+      <b>3 回でクリア</b>：ストップ後、同じ音 3 回でクリア（SD 保存も同じ）。<br>
+      <b>フライング検知</b>：ARM NOW〜GO の間に赤の線を越える音でレースを止めます。読み上げや 3-2-1 の音に反応しない高さにしてください。
     </p>
   </div>
   </div>
@@ -934,6 +959,41 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots</p></footer>
 
 <!-- ═══════════════════════════ LOGIN MODAL ═══════════════════════ -->
+<!-- The race's RSSI record of one pilot ("RSSI" on a race card): count again -->
+<div id="rssiRec" class="cz-wrap">
+  <div class="cz-top">
+    <span id="rrName" class="cz-name"></span><span id="rrFreq" class="res-muted" style="font-size:13px"></span>
+    <button class="btn-secondary cz-close" onclick="closeRssiRec()" title="閉じる">×</button>
+  </div>
+  <canvas id="rrCanvas"></canvas>
+  <input type="range" id="rrPan" min="0" max="0" step="100" value="0" oninput="rrPan()" style="width:100%;margin-top:6px;display:none">
+  <div class="rr-bar">
+    <button class="btn-secondary" onclick="rrDetail()">🔍 詳細</button>
+    <button id="rrWhole" class="btn-secondary" onclick="rrWhole()">全体</button>
+    <span class="res-muted" style="font-size:11px">グラフをタップした所の近くを、詳細で 20 秒拡大します</span>
+  </div>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#3fb950">Enter（入）</span><input type="number" id="rrEnter" min="0" max="1023" onchange="rrNum('en')"></div>
+    <div class="cz-btns"><button class="btn-secondary" onclick="rrStep('en',-10)">−10</button><button class="btn-secondary" onclick="rrStep('en',-1)">−1</button><button class="btn-secondary" onclick="rrStep('en',1)">+1</button><button class="btn-secondary" onclick="rrStep('en',10)">+10</button></div>
+  </div>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#f85149">Exit（出）</span><input type="number" id="rrExit" min="0" max="1023" onchange="rrNum('ex')"></div>
+    <div class="cz-btns"><button class="btn-secondary" onclick="rrStep('ex',-10)">−10</button><button class="btn-secondary" onclick="rrStep('ex',-1)">−1</button><button class="btn-secondary" onclick="rrStep('ex',1)">+1</button><button class="btn-secondary" onclick="rrStep('ex',10)">+10</button></div>
+  </div>
+  <div id="rrInfo" style="white-space:pre-line"></div>
+  <div id="rrMsg" style="font-size:13px;font-weight:700;min-height:1.3em"></div>
+  <div class="rr-bar">
+    <button id="rrRecount" class="btn-success" onclick="rrRecount()" disabled style="flex:1">この値で数え直す・保存</button>
+    <button class="btn-secondary" onclick="rrReset()">元の値</button>
+  </div>
+  <div class="rr-bar">
+    <button id="rrDel" class="btn-danger-soft" onclick="rrDeleteLap()" disabled>選んだ通過を削除</button>
+  </div>
+  <div style="font-size:13px;font-weight:700;margin-top:10px">この値で数えたラップ（<span style="color:#e3b341">▼</span>＝増える周）</div>
+  <div id="rrList" class="rr-list"></div>
+  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように入・出の線を動かします（数字・ボタン・ドラッグ）。白い縦線＝今の通過、▼＝増える通過、✕＝消える通過、オレンジの点線＝選んだ時刻。「数え直す」でラップを直し、入・出をパイロットに保存します。レース中もクリア前もできます。</p>
+</div>
+
 <!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->
 <div id="calibZoom" class="cz-wrap">
   <div class="cz-top">
@@ -946,7 +1006,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="cz-stat"><span>フロア（約 20 秒）</span><b id="czFloor">---</b></div>
   </div>
   <canvas id="czCanvas"></canvas>
-  <p class="section-desc" style="margin:4px 0 0;font-size:11px">緑（入）・赤（出）の線は、グラフの上で指でドラッグしても動かせます。入は出より大きくしてください。変えた値は自動で保存します。</p>
+  <p class="section-desc" style="margin:4px 0 0;font-size:11px">緑（入）・赤（出）の線はドラッグでも動かせます。入は出より上に。変えた値は自動で保存します。</p>
   <div class="cz-row">
     <div class="cz-lbl"><span style="color:#3fb950">Enter（入）</span><input type="number" id="czEnterN" min="0" max="1023" onchange="zoomNumber('enter')"></div>
     <input type="range" id="czEnter" min="0" max="1023" step="1" oninput="zoomSlider('enter')">
@@ -1058,7 +1118,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 // The timer's own page is built with these scripts inline instead
 // (tools/webui_build.py): one request for the whole page.
 (function(){
-  var files=['globals','audio','auth','race','config','calib','sd','results','ws'];
+  var files=['globals','audio','auth','race','config','calib','sd','results','rssirec','ws'];
   function load(i,tries){
     if(i>=files.length)return;
     var s=document.createElement('script');

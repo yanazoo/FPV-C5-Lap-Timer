@@ -38,4 +38,13 @@ private:
     uint32_t peakUs_ = 0;
 };
 
+// The passes in a recorded RSSI trace (the highest filtered reading of
+// each stepMs, 0 = nothing heard), with the tracker's rule: enter at
+// v >= enter, leave at v <= exit, the pass timed at its highest sample
+// (the middle of that step). For working a race's laps out again with
+// other thresholds. Fills up to maxOut race times (ms) and peaks; returns
+// how many were found (a pass still open at the end isn't one).
+int findPasses(const uint16_t* v, int n, uint32_t stepMs, uint16_t enter, uint16_t exit,
+               uint32_t* outMs, uint16_t* outPeak, int maxOut);
+
 }  // namespace gate

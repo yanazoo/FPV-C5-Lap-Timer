@@ -89,7 +89,7 @@ state = {
     "active": [0, 1, 2, 3, -1, -1, -1, -1],
     "settings": {"lapMode": 0, "cooldownMs": 3000, "sdLogMode": 0, "totalLaps": 0, "gain": 15,
                  "rankMode": 0, "timeLimitSec": 120, "countLastLap": True, "startDelayOn": False, "startDelaySec": 10,
-                 "assignMode": 0, "vtxAuto": True},
+                 "assignMode": 0, "vtxAuto": True, "recMin": 30, "recMinNow": 30},
     "elrs": {
         "enabled": False, "transport": 1, "host": "auto", "port": 8080, "rdBind": "", "rdSwitch": 0, "eventName": "",
         "showRaceClock": True, "showBestLap": True, "positionMode": True, "showTotalTime": False,
@@ -232,8 +232,15 @@ def seed():
             ts += t
             laps.append({"slot": slot, "lapTime": t, "ts": ts})
     laps.sort(key=lambda l: l["ts"])
+    # The receiver "missed" Taro's 3rd pass (its peak stayed under Enter):
+    # one long lap in the list, the peak in the RSSI record (GET /api/race/rssi).
+    mine = [l for l in laps if l["slot"] == 0]
+    missed = sum(l["lapTime"] for l in mine[:3])
+    mine[3]["lapTime"] += mine[2]["lapTime"]
+    laps.remove(mine[2])
     r = state["race"]
-    r.update(running=False, paused=True, t0=time.monotonic() - 96.4, elapsed=96.4, laps=laps, epoch=r["epoch"] + 1)
+    r.update(running=False, paused=True, t0=time.monotonic() - 96.4, elapsed=96.4, laps=laps, epoch=r["epoch"] + 1,
+             missed={0: [missed]})
     broadcast({"type": "active_update", "pilots": active_json()})
 
 
@@ -268,6 +275,35 @@ def uid_tag(phrase):
 def uid_text(phrase):   # the six UID bytes as ELRS shows them
     h = hashlib.md5(('-DMY_BINDING_PHRASE="%s"' % phrase).encode()).digest()
     return ",".join(str(b) for b in (h[0] & 0xFE, h[1], h[2], h[3], h[4], h[5]))
+
+
+def rssi_record(slot):
+    """The race's RSSI record of a slot, as the timer keeps it (40 ms steps):
+    noise, a peak at every pass counted and at the missed ones. Fixed per
+    race (the peaks of the passes as first counted), so counting again
+    doesn't move them."""
+    r = state["race"]
+    race_ms = int(race_elapsed() * 1000) if (r["laps"] or r["running"]) else 0
+    last = r.get("last")
+    if not race_ms and last:   # cleared: the record is still the last race's
+        race_ms = int(last["elapsed"] * 1000)
+    n = race_ms // 40 + 1 if race_ms else 0
+    rnd = random.Random(slot)
+    vals = [110 + rnd.randint(0, 25) for _ in range(n)]
+    peaks = r.setdefault("peaks", {})
+    if slot not in peaks:
+        t, pk = 0, []
+        for l in (r["laps"] or (last or {}).get("laps", [])):
+            if l["slot"] == slot:
+                t += l["lapTime"]
+                pk.append((t, 480 + rnd.randint(0, 80)))
+        pk += [(m, 295) for m in r.get("missed", {}).get(slot, [])]
+        peaks[slot] = pk
+    for (pt, h) in peaks[slot]:
+        for k in range(max(0, (pt - 600) // 40), min(n, (pt + 600) // 40)):
+            x = (k * 40 + 20 - pt) / 250.0
+            vals[k] = max(vals[k], int(110 + (h - 110) * __import__("math").exp(-x * x)))
+    return race_ms, vals
 
 
 def radio(phrase):
@@ -495,6 +531,26 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/mock/bridge":
             BRIDGE["watch"] = parse_qs(u.query).get("watch", ["1"])[0] == "1"
             return self.reply({"ok": True})
+        if p == "/api/race/rssi":   # the race's RSSI record: passes (and missed ones) as peaks
+            slot = int(parse_qs(u.query).get("slot", ["0"])[0])
+            race_ms, vals = rssi_record(slot)
+            frm = min(int(parse_qs(u.query).get("from", ["0"])[0]), len(vals))
+            body = b"".join(v.to_bytes(2, "little") for v in vals[frm:])
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Rec-Ms", "40")
+            self.send_header("X-Race-Ms", str(race_ms))
+            self.send_header("X-From", str(frm))
+            self.end_headers()
+            return self.wfile.write(body)
+        if p == "/api/race/last":
+            slot = int(parse_qs(u.query).get("slot", ["0"])[0])
+            last = state["race"].get("last")
+            if not last:
+                return self.reply({"ok": False})
+            return self.reply({"ok": True, "file": last["file"], "mode": "immediate" if state["settings"].get("lapMode") == 1 else "holeshot",
+                               "laps": [l["lapTime"] for l in last["laps"] if l["slot"] == slot]})
         if p == "/api/bind_uid":
             return self.reply({"tag": uid_tag(parse_qs(u.query).get("p", [""])[0])})
         if p == "/mock/seed":
@@ -774,6 +830,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": True})
         if p == "/api/settings":
             state["settings"].update(d)
+            if "recMin" in d:
+                state["settings"]["recMinNow"] = d["recMin"]
             broadcast(dict(state["settings"], type="settings"))
             return self.reply({"ok": True})
         r = state["race"]
@@ -806,6 +864,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if r.get("seq") is not token: return
                 r["seq"] = None
                 r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                r["last"] = None
                 broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
             threading.Thread(target=seq, daemon=True).start()
             return self.reply({"ok": True})
@@ -861,23 +920,76 @@ class Handler(SimpleHTTPRequestHandler):
             CONN["viewHost"] = max(1, min(CONN["viewHost"], 9 - CONN["adminMax"], 8))
             return self.reply({"ok": True})
         if p == "/api/laps/delete":   # the timer's race::Core::deleteLap
-            mine = [l for l in r["laps"] if l["slot"] == d.get("slot")]
+            src = r["last"]["laps"] if d.get("last") and r.get("last") else r["laps"]
+            mine = [l for l in src if l["slot"] == d.get("slot")]
             i = d.get("index", -1)
             if not 0 <= i < len(mine) or (d.get("lapTime") and mine[i]["lapTime"] != d["lapTime"]):
                 return self.reply({"ok": False, "reason": "no such lap"}, 409)
             if i + 1 < len(mine):
                 mine[i + 1]["lapTime"] += mine[i]["lapTime"]
-            r["laps"].remove(mine[i])
-            broadcast({"type": "laps_changed", "pilot": d["slot"]})
+            src.remove(mine[i])
+            broadcast({"type": "last_race_changed" if d.get("last") else "laps_changed", "pilot": d["slot"]})
             return self.reply({"ok": True})
         if p == "/api/race/save":
             had = bool(r["laps"])
+            # Kept until the next start, as the timer does (the RSSI view after Clear).
+            r["last"] = {"laps": [dict(l) for l in r["laps"]], "elapsed": race_elapsed(),
+                         "file": "race_001.csv" if had else ""} if had else None
             r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
         if p == "/api/sd/files/delete":
             gone = SD_FILES.pop(d.get("path", "").lstrip("/"), None)
             return self.reply({"ok": gone is not None})
+        if p == "/api/laps/recount":   # race::Core::replaceSlot on gate::findPasses
+            slot, en, ex = int(d.get("slot", -1)), int(d.get("enter", 0)), int(d.get("exit", 0))
+            on_last = not (r["running"] or r["paused"] or r["laps"])
+            if (on_last and not r.get("last")) or not 0 <= slot < 8 or en <= ex:
+                return self.reply({"ok": False, "reason": "cannot"}, 409)
+            src = r["last"]["laps"] if on_last else r["laps"]
+            race_ms, vals = rssi_record(slot)
+            found, inside, peak, at = [], False, 0, 0
+            for i, x in enumerate(vals):
+                if not inside:
+                    if x >= en:
+                        inside, peak, at = True, x, i
+                    continue
+                if x > peak:
+                    peak, at = x, i
+                if x > ex:
+                    continue
+                inside = False
+                found.append(at * 40 + 20)
+            had, t = [], 0   # passes counted already keep their own time
+            for l in src:
+                if l["slot"] == slot:
+                    t += l["lapTime"]
+                    had.append(t)
+            found = [next((h for h in had if abs(h - f) <= 400), f) for f in found]
+            cd = state["settings"].get("cooldownMs", 3000)
+            kept, last = [], None
+            for t in found:
+                if t >= race_ms or (last is not None and t - last < cd):
+                    continue
+                kept.append(t)
+                last = t
+            others = [l for l in src if l["slot"] != slot]
+            t0 = now_ms() - race_ms
+            mine, prev = [], 0
+            for t in kept:
+                mine.append({"slot": slot, "lapTime": t - prev, "ts": t0 + t})
+                prev = t
+            merged = sorted(others + mine, key=lambda l: l["ts"])
+            if on_last:
+                r["last"]["laps"] = merged
+            else:
+                r["laps"] = merged
+            pid = state["active"][slot]
+            if 0 <= pid < len(state["pilots"]):
+                state["pilots"][pid].update(enter=en, exit=ex)
+                broadcast({"type": "calib", "id": pid, "enter": en, "exit": ex})
+            broadcast({"type": "last_race_changed" if on_last else "laps_changed", "pilot": slot, "saved": on_last})
+            return self.reply({"ok": True, "passes": len(kept)})
         if p == "/api/laps/manual":   # the admin's lap button: a pass now
             r = state["race"]
             slot = int(d.get("slot", -1))

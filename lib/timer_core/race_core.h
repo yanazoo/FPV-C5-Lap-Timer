@@ -97,6 +97,17 @@ public:
     // Returns false if there is no such pass.
     bool deleteLap(int slot, int index, uint32_t expectLapMs = 0);
 
+    // A pilot's passes worked out again (racing, or stopped and not yet
+    // cleared): the recorded RSSI run through other thresholds
+    // (gate::findPasses). The slot's passes are replaced by these race times
+    // (pauses excluded, in order), with the rules of pass(): cooldown,
+    // holeshot, total laps and the time limit; times at or past the race
+    // time at `now` are dropped. Returns the passes kept, or -1 (no race,
+    // no such slot).
+    int replaceSlot(int slot, int rosterIdx, const uint32_t* atMs, const uint16_t* rssi, int n, uint32_t now);
+    // Race time (pauses excluded) of a pilot's pass number `index`.
+    uint32_t passTime(int slot, int index) const;
+
     // Completed laps (holeshot excluded).
     int laps(int slot) const;
     // 1-based race position by laps then time of the last pass; 0 if the

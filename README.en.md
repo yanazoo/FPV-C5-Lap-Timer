@@ -277,6 +277,37 @@ missed flips during the OSD and reacted only sometimes).
   total stays); the last lap is just dropped, and deleting the holeshot makes
   the next pass the holeshot. Every browser, the ranking, the goggles and the
   SD record follow.
+- **Counting again for a missed lap** ("RSSI" button): during a race the timer records
+  every channel's RSSI (the highest reading of every 40 ms; not while paused).
+  How long is set in Settings → "RSSI の記録時間": 5, 10 or 30 min, 1, 2, 3 or 4 h
+  (default 30 min; 4 h uses about 5.8 MB of PSRAM; a new length applies from the next start). When it is full the race
+  stops by itself: the laps stay and can be counted again, but that race
+  can't be carried on (Start is off, so no lap past the record's end could be
+  lost to a count); Clear and start a new race. The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
+  the pilot's RSSI over the whole race, full screen ("🔍 詳細" zooms to 20 s
+  around the point tapped, "全体" goes back).
+  - White vertical lines are the passes counted now; green line Enter, red line Exit.
+  - Move the Enter / Exit lines (numbers, ±1 / ±10 buttons, or drag them on
+    the chart) until the missed peak counts. As you go, the passes those
+    values would give show as **▼ yellow (added)** and **✕ red (gone)**, with
+    "今の計測 n 周 → この値だと m 周".
+  - "この値で数え直す" counts the pilot's laps again from the record with
+    those values (cooldown, total laps and time limit as in the race). Passes
+    counted before keep their exact times; only the added ones take the
+    record's (40 ms). Best lap, positions, every browser, the goggles and the
+    SD record follow.
+  - **The values are saved to the pilot** (calibration): the next race counts
+    with them. "元の値" goes back to the pilot's current values.
+  - Under the chart, the laps those values give (lap, time, total); **▼
+    yellow** marks the laps that come in.
+  - Tap a counted pass on the chart to delete it ("選んだ通過を削除").
+  - Works **during a race** too, and between Stop and Clear. While racing,
+    the record is fetched again every 2 s and the count uses the record up
+    to that moment (a pass still in the gate is left to the race). Clear
+    saves the race as corrected to SD.
+  - **After Clear, until the next start**, the RSSI view still shows that race
+    and can correct it; counting again or deleting rewrites the race's file on
+    SD. (The RSSI record goes at the next start.)
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

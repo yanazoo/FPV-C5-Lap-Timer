@@ -1,5 +1,6 @@
 #include <ArduinoJson.h>
 #include "race.h"
+#include "gate_tracker.h"
 #include "pilot_link.h"
 #include "c5_link.h"
 #include "data_model.h"
@@ -7,6 +8,7 @@
 #include "mic.h"
 #include "sound_count.h"
 #include "sd_store.h"
+#include "nvs_store.h"
 #include "ws_handler.h"
 
 race::Core raceCore;
@@ -83,6 +85,16 @@ void raceStage() {
 
 static bool timeUpHandled = false;   // timed race: the time-up step has run
 
+static bool recFullStopped = false;   // the race was stopped for a full RSSI record
+
+// The race just cleared, kept until the next start: its RSSI record is
+// still there, so its laps can be counted again (or a pass deleted) and
+// its SD file written again.
+static race::Core lastRace;
+static bool       lastValid = false;
+static uint32_t   lastElapsed = 0;
+static String     lastFile;   // its file on the card ("" if it wasn't saved)
+
 void raceStart() { raceStartAt(millis()); }
 
 void raceStartAt(uint32_t now) {
@@ -91,7 +103,11 @@ void raceStartAt(uint32_t now) {
         applyRaceRules();
         raceCore.start(now);
         sdNoteRaceStart();
+        lastValid = false;
     }
+    c5RecSize(recMinutes);   // the length set (no-op if unchanged)
+    c5RecStart(now, true);
+    recFullStopped = false;
     raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
@@ -103,12 +119,23 @@ void raceStartAt(uint32_t now) {
 }
 
 bool raceResume() {
+    // Stopped because the RSSI record was full: no carrying on (counting
+    // again would lose the laps past the record). Clear, then a new race.
+    if (recFullStopped) {
+        JsonDocument d;
+        d["type"] = "rec_full";
+        d["min"] = c5RecCapMs() / 60000;
+        d["refused"] = true;
+        wsJson(d);
+        return false;
+    }
     uint32_t elapsed, at = millis();
     {
         Guard g;
         if (!raceCore.resume(at)) return false;
         elapsed = raceCore.elapsed(at);
     }
+    c5RecStart(raceCore.startMs(), false);
     elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000, true, at);
     JsonDocument d;
     d["type"] = "race_resume";
@@ -130,6 +157,7 @@ void raceStop() {
         raceCore.stop(millis());
         elapsed = raceCore.elapsed(millis());
     }
+    c5RecStop();
     elrsRaceStop(elapsed);   // the goggles' clock stops on the same time
     JsonDocument d;
     d["type"] = "race_stop";
@@ -159,6 +187,112 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
     return true;
 }
 
+int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
+    if (slot < 0 || slot >= MAX_ACTIVE || enter <= exit || enter > 1023) return -1;
+    int n;
+    const uint16_t* rec = c5RecData(slot, &n);
+    if (!rec || !n) return -1;
+    static uint32_t at[256];
+    static uint16_t peak[256];
+    int found = gate::findPasses(rec, n, C5_REC_MS, enter, exit, at, peak, 256);
+    int positions[MAX_ACTIVE], laps[MAX_ACTIVE], kept, ri = -1;
+    uint32_t best;
+    bool finished, onLast;
+    bool rewrote = false;
+    {
+        Guard g;
+        // The race on now, or (none since Clear) the one just cleared.
+        onLast = !raceCore.running() && !raceCore.paused() && raceCore.lapCount() == 0;
+        if (onLast && !lastValid) return -1;
+        race::Core& rc = onLast ? lastRace : raceCore;
+        // The pilot of this race's laps on the channel (the one assigned now
+        // if none: a pilot may have left the channel since).
+        for (int i = 0; i < rc.lapCount() && ri < 0; i++)
+            if (rc.lap(i).slot == slot) ri = rc.lap(i).rosterIdx;
+        if (ri < 0) ri = activePilots[slot];
+        // A pass that was counted already keeps its own time (the receiver
+        // timed it to the reading; the record only to 40 ms): only the new
+        // ones take the record's time. Within 400 ms is the same pass.
+        uint32_t had[256];
+        int nh = 0;
+        for (int k = 0; nh < 256; k++) {
+            uint32_t t = rc.passTime(slot, k);
+            if (!t) break;
+            had[nh++] = t;
+        }
+        for (int i = 0, k = 0; i < found; i++) {
+            while (k < nh && had[k] + 400 < at[i]) k++;
+            if (k < nh && (had[k] > at[i] ? had[k] - at[i] : at[i] - had[k]) <= 400) at[i] = had[k];
+        }
+        kept = rc.replaceSlot(slot, ri, at, peak, found, onLast ? 0 : millis());
+        if (kept < 0) return -1;
+        if (onLast && lastFile.length()) rewrote = sdRewriteRace(lastFile, lastRace, lastElapsed);
+        // The thresholds go to the pilot: the next race counts with them.
+        if (rosterValid(ri)) {
+            rosterCal[ri].enterRssi = enter;
+            rosterCal[ri].exitRssi = exit;
+            saveRosterPilot(ri);
+        }
+        for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = rc.position(s), laps[s] = rc.laps(s);
+        best = rc.slot(slot).bestLapMs;
+        finished = rc.slot(slot).finished;
+    }
+    applyGateConfig();
+    Serial.printf("[Race] slot %d: counted again with %u / %u: %d passes%s\n", slot, enter, exit, kept,
+                  onLast ? (rewrote ? " (cleared race, SD file written again)" : " (cleared race)") : "");
+    if (onLast) {   // the goggles and the race cards are past it: only the browsers' views
+        JsonDocument d;
+        d["type"] = "last_race_changed";
+        d["pilot"] = slot;
+        d["saved"] = rewrote;
+        wsJson(d);
+        if (rosterIdx) *rosterIdx = ri;
+        return kept;
+    }
+    elrsLapEdit(slot, laps[slot], positions[slot], best, finished);
+    for (int s = 0; s < MAX_ACTIVE; s++)
+        if (s != slot && positions[s] > 0) elrsPosition(s, laps[s], positions[s]);
+    JsonDocument d;
+    d["type"] = "laps_changed";
+    d["pilot"] = slot;
+    wsJson(d);
+    if (rosterIdx) *rosterIdx = ri;
+    return kept;
+}
+
+bool raceDeleteLastLap(int slot, int index, uint32_t lapMs, bool* saved) {
+    bool rewrote = false;
+    {
+        Guard g;
+        if (!lastValid || !lastRace.deleteLap(slot, index, lapMs)) return false;
+        if (lastFile.length()) rewrote = sdRewriteRace(lastFile, lastRace, lastElapsed);
+    }
+    Serial.printf("[Race] cleared race, slot %d: pass %d deleted%s\n", slot, index, rewrote ? " (SD file written again)" : "");
+    JsonDocument d;
+    d["type"] = "last_race_changed";
+    d["pilot"] = slot;
+    d["saved"] = rewrote;
+    wsJson(d);
+    if (saved) *saved = rewrote;
+    return true;
+}
+
+String raceLastJson(int slot) {
+    JsonDocument d;
+    Guard g;
+    d["ok"] = lastValid;
+    if (lastValid) {
+        d["file"] = lastFile.length() ? lastFile.substring(1) : String();
+        d["mode"] = lastRace.lapMode == race::LapMode::Holeshot ? "holeshot" : "immediate";
+        JsonArray a = d["laps"].to<JsonArray>();
+        for (int i = 0; i < lastRace.lapCount(); i++)
+            if (lastRace.lap(i).slot == slot) a.add(lastRace.lap(i).lapMs);
+    }
+    String s;
+    serializeJson(d, s);
+    return s;
+}
+
 String raceClear() {
     micQuietUntil = millis() + MIC_QUIET_MS;
     bool hadLaps, saved = false;
@@ -169,10 +303,20 @@ String raceClear() {
         if (!hadLaps) reason = "empty";
         else if (settings.sdLogMode == 2) reason = "off";
         else if (!sdPresent) reason = "nosd";
-        else saved = sdSaveRace();
+        else saved = sdSaveRace(&lastFile);
         if (hadLaps && !saved && !reason[0]) reason = "error";
+        lastValid = hadLaps;
+        if (hadLaps) {
+            uint32_t now = millis();
+            lastRace = raceCore;
+            lastRace.stop(now);   // cleared while racing: stopped there (its end, for a count)
+            lastElapsed = lastRace.elapsed(now);
+            if (!saved) lastFile = "";
+        }
         raceCore.clear();
     }
+    c5RecStop();
+    recFullStopped = false;
     raceEpoch++;
     elrsLapsClear();
     // Clear on one browser clears every browser.
@@ -292,6 +436,7 @@ void sendC5Status() {
         uint32_t now = millis();
         rs["run"]    = raceCore.running();
         rs["paused"] = raceCore.paused();
+        rs["recFull"] = recFullStopped;   // stopped for a full RSSI record: Start is refused until Clear
         rs["el"]     = raceCore.elapsed(now);
         rs["now"]    = now;
         rs["laps"]   = raceCore.lapCount();
@@ -306,6 +451,27 @@ void sendC5Status() {
 // ends their race (race::Core marks it, FINISHED! on the goggles); without,
 // every pilot who had started is done at once. The race keeps running (the
 // clock counts on below zero) until Stop is pressed.
+
+// The RSSI record is full: stop the race. Start is refused until Clear
+// (carrying on unrecorded, a count from the record would lose the laps
+// past its end).
+static void serviceRecordFull(uint32_t now) {
+    uint32_t cap = c5RecCapMs();
+    if (!cap || recFullStopped) return;
+    bool full;
+    {
+        Guard g;
+        full = raceCore.running() && raceCore.elapsed(now) >= cap;
+    }
+    if (!full) return;
+    recFullStopped = true;
+    Serial.printf("[Race] RSSI record full (%lu min): stopping\n", (unsigned long)(cap / 60000));
+    raceStop();
+    JsonDocument d;
+    d["type"] = "rec_full";
+    d["min"] = cap / 60000;
+    wsJson(d);
+}
 
 static void serviceTimedRace(uint32_t now) {
     if (raceRules.rankMode != 2 && !timeUpHandled) return;   // not a timed race: nothing to do
@@ -596,6 +762,7 @@ void raceLoop() {
     }
     uint32_t now = millis();
     serviceTimedRace(now);
+    serviceRecordFull(now);
     pilotLinkLoop(now);
     if (now - lastRssiSend >= RSSI_INTERVAL_MS) {
         lastRssiSend = now;
