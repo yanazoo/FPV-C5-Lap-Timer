@@ -286,7 +286,7 @@ missed flips during the OSD and reacted only sometimes).
   lost to a count); Clear and start a new race. The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
   the pilot's RSSI over the whole race, full screen ("🔍 詳細" zooms to 20 s
   around the point tapped, "全体" goes back).
-  - Vertical lines are the passes counted now; green line Enter, red line Exit.
+  - White vertical lines are the passes counted now; green line Enter, red line Exit.
   - Move the Enter / Exit lines (numbers, ±1 / ±10 buttons, or drag them on
     the chart) until the missed peak counts. As you go, the passes those
     values would give show as **▼ yellow (added)** and **✕ red (gone)**, with

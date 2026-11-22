@@ -124,12 +124,21 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .rr-btn{margin-left:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap}
 .lap-btn,.rr-btn{font-size:12px;line-height:1.1;padding:0;border-radius:6px;min-height:20px;width:56px;text-align:center}
 .rr-list .lapTable{width:100%}
-.rr-list tr.rr-new td{color:#e3b341;font-weight:700}
+.rr-list td{font-size:15px;font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace;padding:5px 4px}
+.rr-list td:first-child{font-size:13px;font-family:inherit;font-weight:600}
+.rr-list th{font-size:11px}
+.rr-list tr.rr-new td{color:#e3b341}
+/* The RSSI view: the adjusting controls smaller than the calibration close-up's. */
+#rssiRec .cz-row{padding:6px 8px;margin-top:6px}
+#rssiRec .cz-lbl{font-size:13px;margin-bottom:4px}
+#rssiRec .cz-row input[type=number]{width:72px;font-size:15px;padding:2px}
+#rssiRec .cz-btns{margin-top:4px;gap:5px}
+#rssiRec .cz-btns button{font-size:13px;padding:4px 0}
 body.viewer .rr-btn{display:none}
 #lapDelModal{z-index:1002}
 #rrCanvas{width:100%;border-radius:8px;touch-action:none;display:block;cursor:crosshair}
 .rr-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
-.rr-bar button{font-size:14px;padding:7px 10px}
+.rr-bar button{font-size:13px;padding:6px 10px}
 #rrInfo{font-size:13px;margin-top:8px;min-height:2.6em}
 .lap-btn:disabled{opacity:.3;cursor:default}
 .lap-btn.hit{background:var(--accent);color:#fff}
@@ -973,7 +982,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div id="rrInfo" style="white-space:pre-line"></div>
   <div id="rrMsg" style="font-size:13px;font-weight:700;min-height:1.3em"></div>
   <div class="rr-bar">
-    <button id="rrRecount" class="btn-success" onclick="rrRecount()" disabled style="flex:1">この値で数え直す（パイロット情報にも保存）</button>
+    <button id="rrRecount" class="btn-success" onclick="rrRecount()" disabled style="flex:1">この値で数え直す・保存</button>
     <button class="btn-secondary" onclick="rrReset()">元の値</button>
   </div>
   <div class="rr-bar">
@@ -981,7 +990,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   </div>
   <div style="font-size:13px;font-weight:700;margin-top:10px">この値で数えたラップ（<span style="color:#e3b341">▼</span>＝増える周）</div>
   <div id="rrList" class="rr-list"></div>
-  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように入・出の線を動かします（数字・ボタン・ドラッグ）。▼＝増える通過、✕＝消える通過、縦線＝今の通過。「数え直す」でラップを直し、入・出をパイロットに保存します。レース中もクリア前もできます。</p>
+  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように入・出の線を動かします（数字・ボタン・ドラッグ）。白い縦線＝今の通過、▼＝増える通過、✕＝消える通過、オレンジの点線＝選んだ時刻。「数え直す」でラップを直し、入・出をパイロットに保存します。レース中もクリア前もできます。</p>
 </div>
 
 <!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->

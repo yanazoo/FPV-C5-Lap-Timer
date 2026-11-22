@@ -84,7 +84,7 @@ function rrFmt(ms){
 function rrSize(){
   var cv=document.getElementById('rrCanvas');
   cv.width=cv.offsetWidth||window.innerWidth-32;
-  cv.height=Math.max(220,Math.min(420,Math.round(window.innerHeight*0.38)));
+  cv.height=Math.max(180,Math.min(340,Math.round(window.innerHeight*0.30)));
 }
 function rrVal(t){var i=Math.floor(t/rr.recMs);return rr.data&&i>=0&&i<rr.data.length?rr.data[i]:0;}
 
@@ -135,8 +135,9 @@ function rrDraw(){
   ctx.font='bold 12px sans-serif';
   now.forEach(function(t,i){
     if(t<t0||t>t1)return;var x=toX(t),gone=!near(t,pre);
-    ctx.strokeStyle=gone?'#f85149':col;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,16);ctx.lineTo(x,h);ctx.stroke();
-    ctx.fillStyle=gone?'#f85149':col;ctx.fillText(gone?'✕':(rr.span<=120000?rrLabel(i):''),x+3,13);
+    // White: the pilot's colour is the trace's, and the lines got lost in it.
+    ctx.strokeStyle=gone?'#f85149':'#ffffff';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,16);ctx.lineTo(x,h);ctx.stroke();
+    ctx.fillStyle=gone?'#f85149':'#ffffff';ctx.fillText(gone?'✕':(rr.span<=120000?rrLabel(i):''),x+3,13);
   });
   pre.forEach(function(t){
     if(t<t0||t>t1||near(t,now))return;var x=toX(t);
@@ -147,7 +148,7 @@ function rrDraw(){
   if(rr.raceMs>=t0&&rr.raceMs<=t1){var ex=toX(rr.raceMs);ctx.strokeStyle='#888';ctx.setLineDash([2,3]);ctx.beginPath();ctx.moveTo(ex,0);ctx.lineTo(ex,h);ctx.stroke();ctx.setLineDash([]);}
   // The time picked.
   if(rr.cur>=0&&rr.cur>=t0&&rr.cur<=t1){
-    var cx=toX(rr.cur);ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
+    var cx=toX(rr.cur);ctx.strokeStyle='#ff9f43';ctx.lineWidth=1.5;ctx.setLineDash([4,3]);
     ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();ctx.setLineDash([]);
   }
 }
