@@ -268,6 +268,24 @@ body.viewer .rssi-mini-bar,body.viewer .crossing-badge,body.viewer .race-buttons
 body.viewer .race-buttons{display:flex!important;justify-content:center}
 body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:none;align-items:center;justify-content:center;padding:16px}
+.calib-zoom-hint{font-size:11px;opacity:.7}
+.cz-wrap{position:fixed;inset:0;z-index:1001;background:var(--bg);display:none;flex-direction:column;padding:10px 16px 16px;overflow-y:auto}
+.cz-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cz-name{font-size:20px;font-weight:700;padding:2px 10px;border-radius:6px;background:none!important;border:none!important}
+.cz-name.p0{color:var(--p0)}.cz-name.p1{color:var(--p1)}.cz-name.p2{color:var(--p2)}.cz-name.p3{color:var(--p3)}
+.cz-name.p4{color:var(--p4)}.cz-name.p5{color:var(--p5)}.cz-name.p6{color:var(--p6)}.cz-name.p7{color:var(--p7)}
+.cz-close{margin-left:auto;font-size:22px;line-height:1;padding:6px 14px}
+.cz-stats{display:flex;gap:8px;margin-bottom:8px}
+.cz-stat{flex:1;background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:6px 4px;text-align:center}
+.cz-stat span{display:block;font-size:11px;color:var(--muted)}
+.cz-stat b{font-size:24px;font-family:monospace}
+#czCanvas{width:100%;border-radius:8px;touch-action:none;display:block}
+.cz-row{background:var(--sf);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-top:8px}
+.cz-row .cz-lbl{font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.cz-row input[type=range]{width:100%;height:28px}
+.cz-btns{display:flex;gap:6px;margin-top:6px}
+.cz-btns button{flex:1;font-size:15px;padding:8px 0}
+.cz-row input[type=number]{width:90px;font-size:18px;text-align:center;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:4px}
 .modal-box{background:var(--sf);border:1px solid var(--accent);border-radius:10px;padding:18px;width:100%;max-width:320px}
 .modal-box h3{color:var(--accent);margin-bottom:6px;font-size:15px}
 .modal-box p{color:var(--muted);font-size:12px;margin-bottom:10px;line-height:1.5}
@@ -485,7 +503,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div class="config-row" style="margin-top:8px">
       <label>受信ゲイン</label>
       <div class="slider-num">
-        <input type="number" id="gainInput" min="0" max="89" step="1" value="30" style="width:70px">
+        <input type="number" id="gainInput" min="0" max="89" step="1" value="15" style="width:70px">
         <button onclick="saveGain()" class="btn-secondary" style="font-size:12px">適用</button>
         <span class="unit" style="font-size:11px">既定30。近距離で頭打ちなら下げる</span>
       </div>
@@ -533,7 +551,6 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
     <div id="addForm" style="display:none;background:var(--sf2);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;margin-bottom:10px">
       <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px">新規パイロット追加</div>
       <div id="addFormBody"></div>
-      <label id="addByUidRow" class="uid-check" style="display:none;cursor:pointer"><input type="checkbox" id="addByUid" onchange="onAddByUid()"> バインドフレーズが無い（送信機の UID で登録）</label>
       <div id="addUidCheck" class="uid-check"></div>
       <div style="display:flex;gap:8px;margin-top:4px">
         <button onclick="submitAdd()" class="btn-success" style="flex:1;font-size:12px">登録</button>
@@ -699,10 +716,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
         <option value="1">クライアント（WiFi に接続）</option>
       </select></div>
     <div class="net-sta">
-      <div class="config-row" style="gap:8px"><label style="width:110px">接続先 SSID</label>
-        <input type="text" id="netStaSsid" maxlength="32" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
-      <div class="config-row" style="gap:8px"><label style="width:110px">接続先パスワード</label>
-        <input type="text" class="pw-mask" id="netStaPass" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="変更しない場合は空欄" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+      <div class="config-row" style="gap:8px"><label style="width:110px">接続先の選び方</label>
+        <select id="netStaAuto" onchange="onNetStaAuto()" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+          <option value="1">自動（登録した中で電波が一番強いもの）</option>
+          <option value="0">選択（● を付けたもの）</option>
+        </select></div>
+      <div id="netStaList"></div>
+      <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">接続先を 5 つまで登録できます。自動は、起動したときに周りの WiFi を探して、登録した中で一番電波の強いものに接続します。パスワードは表示しません（変更しない場合は空欄のまま）。SSID を消すと、その接続先は削除されます。</p>
       <div class="config-row" style="gap:8px"><label style="width:110px">ホストに切替</label>
         <select id="netFallback" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
           <option value="15">15 秒接続できなければ</option>
@@ -741,6 +761,13 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
       <input type="text" id="netSsid" maxlength="31" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
     <div class="config-row" style="gap:8px"><label style="width:110px">パスワード</label>
       <input type="text" id="netPass" maxlength="63" autocomplete="off" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px"></div>
+    <div class="config-row" style="gap:8px"><label style="width:110px">チャンネル</label>
+      <select id="netApCh" style="flex:1;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">
+        <option value="6">6 ch（2437 MHz・初期値）</option><option value="7">7 ch（2442 MHz）</option>
+        <option value="8">8 ch（2447 MHz）</option><option value="9">9 ch（2452 MHz）</option>
+        <option value="10">10 ch（2457 MHz）</option><option value="11">11 ch（2462 MHz）</option>
+      </select></div>
+    <p class="section-desc" style="margin:-2px 0 8px;font-size:11px">ホストのアクセスポイントの WiFi チャンネルです。ゴーグルの OSD（ESP-NOW）は 1 ch を使うので 6 ch 以上、また海外でも使えるよう 11 ch までから選べます。周りの WiFi と重なって画面がつながりにくいときに変えてください。</p>
     <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button onclick="saveNetSettings()" class="btn-success">保存して再起動</button></div>
   </div>
@@ -907,6 +934,31 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots</p></footer>
 
 <!-- ═══════════════════════════ LOGIN MODAL ═══════════════════════ -->
+<!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->
+<div id="calibZoom" class="cz-wrap">
+  <div class="cz-top">
+    <span id="czName" class="cz-name"></span><span id="czFreq" class="res-muted" style="font-size:13px"></span>
+    <button class="btn-secondary cz-close" onclick="closeCalibZoom()" title="閉じる">×</button>
+  </div>
+  <div class="cz-stats">
+    <div class="cz-stat"><span>今の RSSI</span><b id="czRssi">---</b></div>
+    <div class="cz-stat"><span>ピーク（約 20 秒）</span><b id="czPeak">---</b></div>
+    <div class="cz-stat"><span>フロア（約 20 秒）</span><b id="czFloor">---</b></div>
+  </div>
+  <canvas id="czCanvas"></canvas>
+  <p class="section-desc" style="margin:4px 0 0;font-size:11px">緑（入）・赤（出）の線は、グラフの上で指でドラッグしても動かせます。入は出より大きくしてください。変えた値は自動で保存します。</p>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#3fb950">Enter（入）</span><input type="number" id="czEnterN" min="0" max="1023" onchange="zoomNumber('enter')"></div>
+    <input type="range" id="czEnter" min="0" max="1023" step="1" oninput="zoomSlider('enter')">
+    <div class="cz-btns"><button class="btn-secondary" onclick="zoomStep('enter',-10)">−10</button><button class="btn-secondary" onclick="zoomStep('enter',-1)">−1</button><button class="btn-secondary" onclick="zoomStep('enter',1)">+1</button><button class="btn-secondary" onclick="zoomStep('enter',10)">+10</button></div>
+  </div>
+  <div class="cz-row">
+    <div class="cz-lbl"><span style="color:#f85149">Exit（出）</span><input type="number" id="czExitN" min="0" max="1023" onchange="zoomNumber('exit')"></div>
+    <input type="range" id="czExit" min="0" max="1023" step="1" oninput="zoomSlider('exit')">
+    <div class="cz-btns"><button class="btn-secondary" onclick="zoomStep('exit',-10)">−10</button><button class="btn-secondary" onclick="zoomStep('exit',-1)">−1</button><button class="btn-secondary" onclick="zoomStep('exit',1)">+1</button><button class="btn-secondary" onclick="zoomStep('exit',10)">+10</button></div>
+  </div>
+</div>
+
 <div id="loginModal" class="modal-overlay" onclick="if(event.target===this)cancelLogin()">
   <div class="modal-box">
     <h3>🔒 管理者ログイン</h3>

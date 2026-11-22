@@ -8,7 +8,7 @@
 #define C5_TX_PIN        4
 #define C5_RX_PIN        5
 #define C5_RX_BUFFER  4096    // ~95 ms of data at 8 pilots
-#define C5_DEFAULT_GAIN 30
+#define C5_DEFAULT_GAIN 15
 
 // ── elrs-netpack, direct UART mode (optional) ──────────────────────────────
 // Replaces the netpack's XIAO: the S3 talks to the ESP-NOW bridge itself
@@ -31,9 +31,9 @@
 // ── Pilots and timing ──────────────────────────────────────────────────────
 #define MAX_REGISTERED  20
 #define MAX_ACTIVE       8
-// Thresholds on the C5's 0..1023 scale (16 counts per dB; floor ~116 at
-// gain 30). Calibrate per venue in the Calib tab.
-#define DEFAULT_ENTER  350
+// Thresholds on the C5's 0..1023 scale (16 counts per dB), for the default
+// gain 15. Calibrate per venue in the Calib tab.
+#define DEFAULT_ENTER  300
 #define DEFAULT_EXIT   280
 #define RSSI_INTERVAL_MS  100UL   // UI telemetry rate; detection runs on every reading
 #define SIGNAL_LOST_MS    300UL
@@ -43,7 +43,14 @@
 // they are stored in NVS, never in this repository.
 #define AP_DEFAULT_SSID "FPV-C5-LT"
 #define AP_DEFAULT_PASS "fpv-c5-lt"
-#define AP_CHANNEL       6
+#define AP_CHANNEL       6     // default; the Config tab picks 6..11
+#define AP_CHANNEL_MIN   6     // ESP-NOW (the goggles' backpacks) is on 1: stay clear of it
+// The WiFi driver runs in world safe mode (no country set: the timer is used
+// in more than one country), which allows channels 1-11 only. An access
+// point on 12 or 13 doesn't start (seen on hardware: the timer restarted
+// over and over).
+#define AP_CHANNEL_MAX   11
+#define STA_NETS         5     // client mode: networks to choose from / join automatically
 #define MDNS_NAME       "fpv-c5-lt"
 static const IPAddress AP_IP      (20, 0, 0, 1);
 static const IPAddress AP_GATEWAY (20, 0, 0, 1);

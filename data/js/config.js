@@ -53,7 +53,6 @@ function renderRoster(){
     var item=document.createElement('div');item.className='roster-item'+(editingRosterId===r.id?'':' rv');item.id='ri-'+r.id;
     if(editingRosterId===r.id){
       item.innerHTML=pilotFormHtml('edit',r)
-        +(r.uidTag?'<div class="uid-check" style="color:var(--accent)">🔑 送信機 '+esc(r.uidTag)+' の UID で登録しています。バインドフレーズを入れると、そちらに変わります。</div>':'')
         +'<div class="roster-actions">'
           +'<button onclick="submitEdit('+r.id+')" class="btn-success" style="font-size:11px;padding:3px 9px">保存</button>'
           +'<button onclick="cancelEdit()" class="btn-secondary" style="font-size:11px;padding:3px 9px">×</button>'
@@ -69,7 +68,6 @@ function renderRoster(){
           +(r.yomi?'<span class="roster-yomi">'+esc(r.yomi)+'</span>':'')+'</span></div>'
         +'<span class="roster-mac">'+(r.freq?esc(freqLabel(r.freq)):'<span style="color:var(--err)">VTX未設定</span>')+'</span>'
         +'<div class="rv-badges">'+activeBadge+osd
-          +(r.uidTag?'<span class="osd-badge" title="バインドフレーズではなく、送信機の UID で登録しています">🔑 UID '+esc(r.uidTag)+'</span>':'')
           +'<span class="link-badge" id="lk-'+r.id+'"></span>'+warn
           +'<span class="warn-badge vtx-fix" id="vx-'+r.id+'" style="display:none"></span></div>'
         +'<div class="roster-actions">'
@@ -161,9 +159,17 @@ function renderCandidates(){
   box.style.display=c.length?'':'none';
   if(h!==candHtml){candHtml=h;document.getElementById('candList').innerHTML=h;}
 }
-function registerCand(tag){
+// The radio's own UID goes in the ELRS field with "UID" ticked (the timer
+// hands it to a logged-in admin); a bind phrase can still be typed instead.
+async function registerCand(tag){
   var x=((c5Status&&c5Status.cand)||[]).find(function(c){return c.tag===tag;});
-  if(x)showAddForm({tag:x.tag,vtx:x.vtx||0});
+  if(!x)return;
+  var uid='';
+  try{
+    var r=await fetch('/api/radio_uid',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken||'',tag:tag})});
+    if(r.ok)uid=(await r.json()).uid||'';
+  }catch(e){}
+  showAddForm({tag:x.tag,vtx:x.vtx||0,uid:uid});
 }
 async function fixVtx(id,mhz){
   var r=rosterById[id];if(!r)return;
@@ -189,7 +195,8 @@ function pilotFormHtml(prefix,r){
     +'<input type="text" id="'+prefix+'Name" value="'+esc(r.name)+'" maxlength="20" placeholder="パイロット名（OSD送信先の既定バインドフレーズ）" autocomplete="off" style="'+inp+'">'
     +'<input type="text" id="'+prefix+'Yomi" value="'+esc(r.yomi||'')+'" maxlength="20" placeholder="よみかた（TTS読み上げ用）" autocomplete="off" style="'+inp+'">'
     +'<label class="pf-row"><span>VTX</span>'+freqSelectHtml(prefix+'Freq',r.freq||0)+'</label>'
-    +'<label class="pf-row"><span>ELRS</span><input type="text" id="'+prefix+'Bind" value="'+esc(r.bind||'')+'" maxlength="32" placeholder="バインドフレーズ（空欄=パイロット名）" autocomplete="off" style="flex:1;'+inp+'"></label>'
+    +'<div class="pf-row"><span>ELRS</span><input type="text" id="'+prefix+'Bind" value="'+esc(r.uid||r.bind||'')+'" maxlength="40" placeholder="'+bindPlaceholder(prefix,!!r.uid)+'" autocomplete="off" autocapitalize="off" spellcheck="false" style="flex:1;min-width:0;'+inp+'">'
+      +'<label style="white-space:nowrap;cursor:pointer;font-size:12px" title="バインドフレーズの代わりに、送信機の UID（6 つの数字）を入れます"><input type="checkbox" id="'+prefix+'IsUid"'+(r.uid?' checked':'')+' onchange="onBindKind(\''+prefix+'\')"> UID</label></div>'
     +'<label class="pf-row"><span>OSD</span><input type="checkbox" id="'+prefix+'Osd"'+(r.osd!==false?' checked':'')+'> ゴーグルにラップを表示</label>'
     +'<div class="pf-row"><span>入/出</span>'
       +'<input type="number" id="'+prefix+'Enter" value="'+r.enter+'" min="0" max="1023" style="width:64px;'+inp+'">'
@@ -198,14 +205,45 @@ function pilotFormHtml(prefix,r){
     +'</div>';
 }
 
+// The ELRS field holds a bind phrase, or with "UID" ticked the radio's UID
+// (six numbers as the ELRS configurator shows them, or 12 hex digits).
+function bindPlaceholder(prefix,uid){
+  if(!uid)return 'バインドフレーズ（空欄=パイロット名）';
+  return prefix==='add'&&addCand?'UID（空欄なら送信機 '+addCand.tag+' の UID）':'UID（例 210,141,145,12,34,56）';
+}
+function onBindKind(prefix){
+  var u=document.getElementById(prefix+'IsUid').checked,b=document.getElementById(prefix+'Bind');
+  b.placeholder=bindPlaceholder(prefix,u);
+  // From a radio in the list: unticking clears its UID (type the phrase),
+  // ticking again puts it back.
+  if(prefix==='add'&&addCand&&addCand.uid){
+    if(!u&&b.value.replace(/\s/g,'')===addCand.uid)b.value='';
+    else if(u&&!b.value.trim())b.value=addCand.uid;
+  }
+  if(prefix==='add')checkAddUid();
+}
+var UID_DEC=/^\s*\d{1,3}([\s,.]+\d{1,3}){5}\s*$/, UID_HEX=/^\s*([0-9a-fA-F]{2}[:\-\s]?){5}[0-9a-fA-F]{2}\s*$/;
+// Typed with a Japanese IME: full-width digits, commas (，、), dots and
+// spaces become plain ones.
+function uidAscii(s){
+  return s.replace(/[０-９ａ-ｆＡ-Ｆ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[，、]/g,',').replace(/[．。]/g,'.').replace(/[：]/g,':').replace(/[－ー]/g,'-').replace(/\u3000/g,' ');
+}
+function validUid(s){
+  if(UID_HEX.test(s)&&!UID_DEC.test(s))return true;
+  return UID_DEC.test(s)&&s.trim().split(/[\s,.]+/).every(x=>parseInt(x,10)<=255);
+}
 function readPilotForm(prefix){
   var v=function(k){return document.getElementById(prefix+k);};
-  return {
+  var p={
     name:v('Name').value.trim(), yomi:v('Yomi').value.trim(),
     freq:parseInt(v('Freq').value)||0, bind:v('Bind').value.trim(), osd:v('Osd').checked,
     enter:Math.max(0,Math.min(RSSI_MAX,parseInt(v('Enter').value)||DEF_ENTER)),
     exit:Math.max(0,Math.min(RSSI_MAX,parseInt(v('Exit').value)||DEF_EXIT))
   };
+  if(v('IsUid').checked){p.uid=uidAscii(p.bind);p.bind='';}
+  else p.uidClear=true;   // a phrase (or the name): not the UID any more
+  return p;
 }
 
 // The timer keeps a name in 31 bytes: 31 letters, or 10 Japanese characters.
@@ -215,6 +253,11 @@ function validPilot(p){
   if(utf8Bytes(p.name)>31){toast('⚠️ 名前が長すぎます（日本語は 10 文字、英数字は 31 文字まで）',5000);return false;}
   if(utf8Bytes(p.yomi)>31){toast('⚠️ よみかたが長すぎます（ひらがなは 10 文字まで）',5000);return false;}
   if(utf8Bytes(p.bind)>32){toast('⚠️ バインドフレーズが長すぎます（英数字 32 文字まで）',5000);return false;}
+  if(p.uid!==undefined&&p.uid!==''&&!validUid(p.uid)){
+    var nums=p.uid.trim().split(/[\s,.]+/).filter(x=>x);
+    var why=nums.every(x=>/^\d+$/.test(x))?(nums.length!==6?'（今 '+nums.length+' つです）':'（255 より大きい数字があります）'):'';
+    toast('⚠️ UID は 0〜255 の数字 6 つで入れてください'+why+'。例 210,141,145,12,34,56',6000);return false;}
+  if(p.uid===''){toast('⚠️ UID を入れてください');return false;}
   if(p.enter<=p.exit){toast('⚠️ 入 > 出 にしてください');return false;}
   return true;
 }
@@ -242,27 +285,23 @@ var addCand=null, uidCheckT=null, uidCheckSeq=0;
 function showAddForm(cand){
   addCand=cand||null;
   var f=document.getElementById('addForm');
-  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
+  document.getElementById('addFormBody').innerHTML=pilotFormHtml('add',cand?{name:'',yomi:'',freq:cand.vtx||0,bind:'',uid:cand.uid||'',osd:true,enter:DEF_ENTER,exit:DEF_EXIT}:null);
   document.getElementById('addUidCheck').textContent='';
-  var opt=document.getElementById('addByUidRow');
-  if(opt)opt.style.display=addCand?'':'none';
-  var cb=document.getElementById('addByUid');if(cb)cb.checked=false;
   f.style.display='block';document.getElementById('addName').focus();
   if(addCand){f.scrollIntoView({block:'nearest'});checkAddUid();}
 }
 function hideAddForm(){document.getElementById('addForm').style.display='none';addCand=null;}
 // The phrase (or the name, with the phrase empty) against the radio picked.
-function onAddByUid(){
-  var on=document.getElementById('addByUid').checked,b=document.getElementById('addBind');
-  if(b){b.disabled=on;if(on)b.value='';}
-  checkAddUid();
-}
 function checkAddUid(){
   clearTimeout(uidCheckT);
   var out=document.getElementById('addUidCheck');
   if(!addCand){out.textContent='';return;}
-  if((document.getElementById('addByUid')||{}).checked){
-    addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;
+  if((document.getElementById('addIsUid')||{}).checked){
+    var typed=((document.getElementById('addBind')||{}).value||'').trim();
+    if(!typed){addCand.match=true;out.textContent='🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズは使いません）';out.style.color='var(--ok)';return;}
+    addCand.match=true;
+    out.textContent=addCand.uid&&uidAscii(typed).replace(/\s/g,'')===addCand.uid?'🔑 送信機 '+addCand.tag+' の UID で登録します（バインドフレーズがあれば、「UID」のチェックを外して入れてください）':'';
+    out.style.color='var(--ok)';return;
   }
   var bind=(document.getElementById('addBind')||{}).value||'',name=(document.getElementById('addName')||{}).value||'';
   var phrase=bind.trim()||name.trim();
@@ -280,9 +319,11 @@ function checkAddUid(){
 document.addEventListener('input',function(e){if(addCand&&e.target&&(e.target.id==='addName'||e.target.id==='addBind'))checkAddUid();});
 
 async function submitAdd(){
-  var p=readPilotForm('add');if(!validPilot(p))return;
-  var byUid=addCand&&(document.getElementById('addByUid')||{}).checked;
-  if(byUid){p.uidTag=addCand.tag;p.bind='';}
+  var p=readPilotForm('add');
+  // A radio from the list, "UID" ticked and nothing typed: its own UID.
+  var byUid=addCand&&p.uid==='';
+  if(byUid){delete p.uid;p.uidTag=addCand.tag;}
+  if(!validPilot(p))return;
   else if(addCand&&!addCand.match&&!confirm('バインドフレーズが送信機 '+addCand.tag+' と一致しません。このまま登録しますか？'))return;
   try{
     var r=await fetch('/api/pilots',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
@@ -368,7 +409,7 @@ function saveGlobalConfig(){
 }
 
 function saveGain(){
-  var g=Math.max(0,Math.min(89,parseInt(document.getElementById('gainInput').value)||30));
+  var g=Math.max(0,Math.min(89,parseInt(document.getElementById('gainInput').value)||15));
   document.getElementById('gainInput').value=g;
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({gain:g})})
     .then(r=>toast(r.ok?'✓ ゲインを '+g+' に設定しました（閾値の再調整を推奨）':'⚠️ 保存エラー',3000)).catch(()=>toast('⚠️ 接続エラー'));
@@ -459,6 +500,24 @@ function onNetMode(){
   document.querySelectorAll('.net-sta').forEach(e=>e.style.display=sta?'':'none');
   onNetIpMode();
 }
+var netNets=[];   // [{ssid, passSet}] from the timer
+function renderNetStaList(sel){
+  var auto=document.getElementById('netStaAuto').value==='1',h='';
+  for(var i=0;i<5;i++){
+    var n=netNets[i]||{};
+    h+='<div class="config-row" style="gap:6px">'
+      +'<input type="radio" name="netStaSel" value="'+i+'"'+(i===sel?' checked':'')+(auto?' disabled':'')+' title="この接続先を使う" style="width:18px;height:18px;flex:none">'
+      +'<input type="text" id="netStaSsid'+i+'" maxlength="32" autocomplete="off" placeholder="SSID '+(i+1)+'" value="'+esc(n.ssid||'')+'" style="flex:1;min-width:0;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">'
+      +'<input type="text" class="pw-mask" id="netStaPass'+i+'" maxlength="63" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" data-lpignore="true" data-1p-ignore placeholder="'+(n.passSet?'設定済み':'パスワード')+'" style="flex:1;min-width:0;background:var(--sf2);border:1px solid var(--bd);color:var(--tx);border-radius:6px;padding:6px 8px;font-size:13px">'
+      +'</div>';
+  }
+  document.getElementById('netStaList').innerHTML=h;
+}
+function netStaSel(){var r=document.querySelector('input[name=netStaSel]:checked');return r?parseInt(r.value):0;}
+function onNetStaAuto(){
+  var auto=document.getElementById('netStaAuto').value==='1';
+  document.querySelectorAll('input[name=netStaSel]').forEach(e=>e.disabled=auto);
+}
 function onNetIpMode(){
   var fixed=document.getElementById('netIpMode').value==='1';
   document.querySelectorAll('.net-ip-fixed').forEach(e=>e.style.display=fixed?'':'none');
@@ -480,7 +539,10 @@ async function loadNetSettings(){
     var d=await r.json();
     document.getElementById('netMode').value=String(d.mode);
     document.getElementById('netSsid').value=d.apSsid;document.getElementById('netPass').value=d.apPass;
-    document.getElementById('netStaSsid').value=d.staSsid||'';
+    netNets=d.nets||[{ssid:d.staSsid||'',passSet:!!d.staPassSet}];
+    document.getElementById('netStaAuto').value=d.staAuto?'1':'0';
+    renderNetStaList(d.staSel||0);
+    document.getElementById('netApCh').value=String(d.apChannel||6);
     document.getElementById('netFallback').value=String(d.fallbackSec||30);
     document.getElementById('netRaceHold').value=String(d.raceHoldSec!==undefined?d.raceHoldSec:60);
     document.getElementById('netIpMode').value=d.ipFixed?'1':'0';
@@ -488,10 +550,8 @@ async function loadNetSettings(){
     document.getElementById('netMask').value=d.mask||'255.255.255.0';
     document.getElementById('netGw').value=d.gw||'';
     document.getElementById('netDns').value=d.dns||'';
-    var sp=document.getElementById('netStaPass');sp.value='';
-    sp.placeholder=d.staPassSet?'設定済み（変更しない場合は空欄）':'パスワード';
     var st=d.status||{},txt;
-    if(st.connected)txt='クライアント接続中 '+esc(st.ip)+'（'+st.rssi+' dBm）';
+    if(st.connected)txt='クライアント接続中「'+esc(d.staSsid||'')+'」 '+esc(st.ip)+'（'+st.rssi+' dBm）';
     else if(st.fallback){
       txt='⚠ クライアント接続失敗 → ホストで起動中 '+esc(st.ip);
       var why=netReasonText(st.reason);
@@ -509,7 +569,9 @@ async function loadNetSettings(){
 async function saveNetSettings(){
   var d={mode:parseInt(document.getElementById('netMode').value)||0,
     apSsid:document.getElementById('netSsid').value.trim(),apPass:document.getElementById('netPass').value,
-    staSsid:document.getElementById('netStaSsid').value.trim(),staPass:document.getElementById('netStaPass').value,
+    nets:[0,1,2,3,4].map(i=>({ssid:document.getElementById('netStaSsid'+i).value.trim(),pass:document.getElementById('netStaPass'+i).value})),
+    staSel:netStaSel(),staAuto:document.getElementById('netStaAuto').value==='1',
+    apChannel:parseInt(document.getElementById('netApCh').value)||6,
     fallbackSec:parseInt(document.getElementById('netFallback').value)||30,
     raceHoldSec:(v=>isNaN(v)?60:v)(parseInt(document.getElementById('netRaceHold').value)),
     ipFixed:document.getElementById('netIpMode').value==='1',
@@ -522,10 +584,12 @@ async function saveNetSettings(){
     if(d.dns&&!IPV4.test(d.dns)){toast('⚠️ DNS を正しく入力してください');return;}
   }
   if(d.apPass.length<8){toast('⚠️ アクセスポイントのパスワードは8文字以上');return;}
-  if(d.mode===1&&!d.staSsid){toast('⚠️ 接続先 SSID を入力してください');return;}
-  if(d.staPass&&d.staPass.length<8){toast('⚠️ 接続先パスワードは8文字以上');return;}
+  var named=d.nets.filter(n=>n.ssid);
+  if(d.mode===1&&(d.staAuto?!named.length:!d.nets[d.staSel].ssid)){toast(d.staAuto?'⚠️ 接続先 SSID を入力してください':'⚠️ ● を付けた接続先に SSID を入力してください');return;}
+  if(d.nets.some(n=>n.pass&&n.pass.length<8)){toast('⚠️ 接続先パスワードは8文字以上');return;}
+  var target=d.staAuto?'登録した接続先のうち電波が一番強いもの（'+named.map(n=>'「'+n.ssid+'」').join('')+'）':'「'+d.nets[d.staSel].ssid+'」';
   var msg=d.mode===1
-    ?'クライアントとして「'+d.staSsid+'」に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
+    ?'クライアントとして'+target+'に接続します。再起動後は '+(d.ipFixed?'http://'+d.ip+'/':'http://fpv-c5-lt.local（またはルーターが割り当てた IP）')+' で開いてください。'+d.fallbackSec+'秒接続できない場合は「'+d.apSsid+'」のアクセスポイントで起動します。よろしいですか？'
     :'ホスト（アクセスポイント「'+d.apSsid+'」）で再起動します。よろしいですか？';
   if(!confirm(msg))return;
   try{
