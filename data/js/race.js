@@ -115,7 +115,6 @@ function buildRaceCards(){
         +'<span class="p-lapcount" id="rcLaps'+p.id+'"></span>'
       +'</div>'
       +'<div class="rssi-mini-bar">'
-        +'<span class="rssi-mini-label">RSSI</span>'
         +'<div class="rssi-mini-track"><div class="rssi-mini-fill '+PCLS[p.id]+'-fill" id="rssiBar'+p.id+'"></div></div>'
         +'<span class="rssi-mini-val" id="rssiVal'+p.id+'">---</span>'
         +'<button class="rr-btn" onclick="openRssiRec('+p.id+')" title="このレースの RSSI の記録を見て、入・出を合わせてラップを数え直します（管理者）">RSSI</button>'
