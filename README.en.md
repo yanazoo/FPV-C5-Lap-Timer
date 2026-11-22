@@ -277,9 +277,9 @@ missed flips during the OSD and reacted only sometimes).
   total stays); the last lap is just dropped, and deleting the holeshot makes
   the next pass the holeshot. Every browser, the ranking, the goggles and the
   SD record follow.
-- **Counting again for a missed lap** (📈): during a race the timer records
+- **Counting again for a missed lap** ("RSSI" button): during a race the timer records
   every channel's RSSI (the highest reading of every 40 ms, up to 30 min; not
-  while paused). **📈** at the end of a race card's RSSI row (logged in) shows
+  while paused). The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
   the pilot's RSSI over the whole race, full screen ("🔍 詳細" zooms to 20 s
   around the point tapped, "全体" goes back).
   - Vertical lines are the passes counted now; green line Enter, red line Exit.

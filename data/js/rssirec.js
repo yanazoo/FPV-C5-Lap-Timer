@@ -1,6 +1,6 @@
 'use strict';
 
-// ── The race's RSSI record (race tab, "📈" on a pilot's card) ─────────────
+// ── The race's RSSI record (race tab, "RSSI" on a pilot's card) ─────────────
 // The timer keeps every channel's RSSI for the race (the highest reading of
 // every 40 ms, race time: pauses left out). Here it is drawn for the whole
 // race with the pilot's passes. To get a pass the receiver missed, move the
