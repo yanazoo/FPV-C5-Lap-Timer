@@ -354,6 +354,7 @@ async function syncLaps(){
   }
   q.forEach(d=>applyLap(d,false));
   if(!list)setTimeout(syncLaps,2000);
+  else if(typeof rrLapsChanged==='function')rrLapsChanged();
 }
 
 function setField(id,v){var e=document.getElementById(id);if(e&&document.activeElement!==e)e.value=v;}

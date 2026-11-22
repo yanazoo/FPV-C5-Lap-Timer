@@ -97,6 +97,17 @@ public:
     // Returns false if there is no such pass.
     bool deleteLap(int slot, int index, uint32_t expectLapMs = 0);
 
+    // A pass the receiver missed, added afterwards (race stopped, not
+    // cleared): at race time atMs (pauses excluded, as the laps' times).
+    // It splits the lap it falls in, so the total race time stays; after
+    // the pilot's last pass it adds a lap. Best lap, total, finish, the
+    // cooldown reference and positions follow. Returns the pilot's pass
+    // number it became (0 = first), or -1 (racing, no such slot, at or
+    // past the race's end, or less than minGapMs from a pass of theirs).
+    int insertPass(int slot, int rosterIdx, uint32_t atMs, int rssi, uint32_t minGapMs = 300);
+    // Race time (pauses excluded) of a pilot's pass number `index`.
+    uint32_t passTime(int slot, int index) const;
+
     // Completed laps (holeshot excluded).
     int laps(int slot) const;
     // 1-based race position by laps then time of the last pass; 0 if the

@@ -122,6 +122,12 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
 .lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.lap-btn+.rr-btn{margin-left:4px}
+#lapDelModal{z-index:1002}
+#rrCanvas{width:100%;border-radius:8px;touch-action:none;display:block;cursor:crosshair}
+.rr-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.rr-bar button{font-size:14px;padding:7px 10px}
+#rrInfo{font-size:13px;margin-top:8px;min-height:2.6em}
 .lap-btn:disabled{opacity:.3;cursor:default}
 .lap-btn.hit{background:var(--accent);color:#fff}
 body.viewer .lap-btn{display:none}
@@ -934,6 +940,32 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 <footer><p>FPV C5 Lap Timer — FPVGate C5MK + ELRS OSD — MAX 20 pilots</p></footer>
 
 <!-- ═══════════════════════════ LOGIN MODAL ═══════════════════════ -->
+<!-- The race's RSSI record of one pilot (📈 on a race card): add a missed lap -->
+<div id="rssiRec" class="cz-wrap">
+  <div class="cz-top">
+    <span id="rrName" class="cz-name"></span><span id="rrFreq" class="res-muted" style="font-size:13px"></span>
+    <button class="btn-secondary cz-close" onclick="closeRssiRec()" title="閉じる">×</button>
+  </div>
+  <canvas id="rrCanvas"></canvas>
+  <input type="range" id="rrPan" min="0" max="0" step="100" value="0" oninput="rrPan()" style="width:100%;margin-top:6px">
+  <div class="rr-bar">
+    <button class="btn-secondary" onclick="rrZoom(0.5)" title="拡大">＋</button>
+    <button class="btn-secondary" onclick="rrZoom(2)" title="縮小">−</button>
+    <button class="btn-secondary" onclick="rrZoom('all')">全体</button>
+    <span id="rrSpan" class="res-muted" style="font-size:12px"></span>
+    <span style="flex:1"></span>
+    <button class="btn-secondary" onclick="rrNextCandidate(-1)">◀ 前の候補</button>
+    <button class="btn-secondary" onclick="rrNextCandidate(1)">次の候補 ▶</button>
+  </div>
+  <div id="rrInfo"></div>
+  <div id="rrMsg" style="font-size:13px;font-weight:700;min-height:1.3em"></div>
+  <div class="rr-bar">
+    <button id="rrAdd" class="btn-success" onclick="rrAddLap()" disabled style="flex:1">＋ ここにラップを追加</button>
+    <button id="rrDel" class="btn-danger-soft" onclick="rrDeleteLap()" disabled>この通過を削除</button>
+  </div>
+  <p class="section-desc" style="margin-top:8px;font-size:11px">線：緑＝Enter（入）、赤＝Exit（出）、縦線＝数えた通過（HS／○周目）、点線＝レースの終わり。グラフは左右にドラッグで動かせます。取りこぼしたラップの追加・削除は、レースをストップしてからクリアするまでの間にできます（クリアすると SD に保存され、記録は消えます）。</p>
+</div>
+
 <!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->
 <div id="calibZoom" class="cz-wrap">
   <div class="cz-top">
@@ -1058,7 +1090,7 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
 // The timer's own page is built with these scripts inline instead
 // (tools/webui_build.py): one request for the whole page.
 (function(){
-  var files=['globals','audio','auth','race','config','calib','sd','results','ws'];
+  var files=['globals','audio','auth','race','config','calib','sd','results','rssirec','ws'];
   function load(i,tries){
     if(i>=files.length)return;
     var s=document.createElement('script');

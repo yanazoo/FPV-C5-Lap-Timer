@@ -232,8 +232,15 @@ def seed():
             ts += t
             laps.append({"slot": slot, "lapTime": t, "ts": ts})
     laps.sort(key=lambda l: l["ts"])
+    # The receiver "missed" Taro's 3rd pass (its peak stayed under Enter):
+    # one long lap in the list, the peak in the RSSI record (GET /api/race/rssi).
+    mine = [l for l in laps if l["slot"] == 0]
+    missed = sum(l["lapTime"] for l in mine[:3])
+    mine[3]["lapTime"] += mine[2]["lapTime"]
+    laps.remove(mine[2])
     r = state["race"]
-    r.update(running=False, paused=True, t0=time.monotonic() - 96.4, elapsed=96.4, laps=laps, epoch=r["epoch"] + 1)
+    r.update(running=False, paused=True, t0=time.monotonic() - 96.4, elapsed=96.4, laps=laps, epoch=r["epoch"] + 1,
+             missed={0: [missed]})
     broadcast({"type": "active_update", "pilots": active_json()})
 
 
@@ -495,6 +502,32 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/mock/bridge":
             BRIDGE["watch"] = parse_qs(u.query).get("watch", ["1"])[0] == "1"
             return self.reply({"ok": True})
+        if p == "/api/race/rssi":   # the race's RSSI record: passes (and missed ones) as peaks
+            slot = int(parse_qs(u.query).get("slot", ["0"])[0])
+            r = state["race"]
+            race_ms = int(race_elapsed() * 1000) if (r["laps"] or r["running"]) else 0
+            n = race_ms // 40 + 1 if race_ms else 0
+            rnd = random.Random(slot)
+            vals = [110 + rnd.randint(0, 25) for _ in range(n)]
+            t = 0
+            peaks = []
+            for l in r["laps"]:
+                if l["slot"] == slot:
+                    t += l["lapTime"]
+                    peaks.append((t, 480 + rnd.randint(0, 80)))
+            peaks += [(m, 295) for m in r.get("missed", {}).get(slot, [])]
+            for (pt, h) in peaks:
+                for k in range(max(0, (pt - 600) // 40), min(n, (pt + 600) // 40)):
+                    x = (k * 40 + 20 - pt) / 250.0
+                    vals[k] = max(vals[k], int(110 + (h - 110) * __import__("math").exp(-x * x)))
+            body = b"".join(v.to_bytes(2, "little") for v in vals)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/octet-stream")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("X-Rec-Ms", "40")
+            self.send_header("X-Race-Ms", str(race_ms))
+            self.end_headers()
+            return self.wfile.write(body)
         if p == "/api/bind_uid":
             return self.reply({"tag": uid_tag(parse_qs(u.query).get("p", [""])[0])})
         if p == "/mock/seed":
@@ -878,6 +911,32 @@ class Handler(SimpleHTTPRequestHandler):
         if p == "/api/sd/files/delete":
             gone = SD_FILES.pop(d.get("path", "").lstrip("/"), None)
             return self.reply({"ok": gone is not None})
+        if p == "/api/laps/insert":   # the timer's race::Core::insertPass
+            slot, at = int(d.get("slot", -1)), int(d.get("atMs", 0))
+            if r["running"] or not 0 <= slot < 8 or not 0 < at < int(race_elapsed() * 1000):
+                return self.reply({"ok": False, "reason": "cannot"}, 409)
+            mine = [l for l in r["laps"] if l["slot"] == slot]
+            t, prev, j = 0, 0, None
+            for k, l in enumerate(mine):
+                t += l["lapTime"]
+                if t > at:
+                    j = k
+                    break
+                prev = t
+            if (j is not None and (t - at < 300 or (k and at - prev < 300))) or (j is None and mine and at - prev < 300):
+                return self.reply({"ok": False, "reason": "cannot"}, 409)
+            new = {"slot": slot, "lapTime": at - prev}
+            if j is not None:
+                nxt = mine[j]
+                nxt["lapTime"] = t - at
+                new["ts"] = nxt["ts"] - nxt["lapTime"]
+                r["laps"].insert(r["laps"].index(nxt), new)
+            else:
+                new["ts"] = (mine[-1]["ts"] if mine else now_ms()) + new["lapTime"]
+                r["laps"].append(new)
+            r["laps"].sort(key=lambda l: l["ts"])
+            broadcast({"type": "laps_changed", "pilot": slot})
+            return self.reply({"ok": True, "index": j if j is not None else len(mine)})
         if p == "/api/laps/manual":   # the admin's lap button: a pass now
             r = state["race"]
             slot = int(d.get("slot", -1))

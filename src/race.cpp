@@ -92,6 +92,7 @@ void raceStartAt(uint32_t now) {
         raceCore.start(now);
         sdNoteRaceStart();
     }
+    c5RecStart(now, true);
     raceEpoch++;
     timeUpHandled = false;
     c5ResetDetectors();
@@ -109,6 +110,7 @@ bool raceResume() {
         if (!raceCore.resume(at)) return false;
         elapsed = raceCore.elapsed(at);
     }
+    c5RecStart(raceCore.startMs(), false);
     elrsRaceStart(elapsed, raceCore.timeLimitMs / 1000, true, at);
     JsonDocument d;
     d["type"] = "race_resume";
@@ -130,6 +132,7 @@ void raceStop() {
         raceCore.stop(millis());
         elapsed = raceCore.elapsed(millis());
     }
+    c5RecStop();
     elrsRaceStop(elapsed);   // the goggles' clock stops on the same time
     JsonDocument d;
     d["type"] = "race_stop";
@@ -159,6 +162,36 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs) {
     return true;
 }
 
+int raceInsertLap(int slot, uint32_t atMs) {
+    int positions[MAX_ACTIVE], laps[MAX_ACTIVE], idx;
+    uint32_t best;
+    bool finished;
+    {
+        Guard g;
+        if (slot < 0 || slot >= MAX_ACTIVE) return -1;
+        // The highest recorded reading around it, as the pass's RSSI.
+        uint8_t b[2 * 25];
+        uint32_t from = atMs > 500 ? (atMs - 500) / C5_REC_MS : 0;
+        size_t n = c5RecRead(slot, from * 2, b, sizeof b);
+        int peak = 0;
+        for (size_t i = 0; i + 1 < n; i += 2) peak = max(peak, b[i] | (b[i + 1] << 8));
+        idx = raceCore.insertPass(slot, activePilots[slot], atMs, peak);
+        if (idx < 0) return -1;
+        for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = raceCore.position(s), laps[s] = raceCore.laps(s);
+        best = raceCore.slot(slot).bestLapMs;
+        finished = raceCore.slot(slot).finished;
+    }
+    Serial.printf("[Race] slot %d: pass added at %lu ms (pass %d)\n", slot, (unsigned long)atMs, idx);
+    elrsLapEdit(slot, laps[slot], positions[slot], best, finished);
+    for (int s = 0; s < MAX_ACTIVE; s++)
+        if (s != slot && positions[s] > 0) elrsPosition(s, laps[s], positions[s]);
+    JsonDocument d;
+    d["type"] = "laps_changed";
+    d["pilot"] = slot;
+    wsJson(d);
+    return idx;
+}
+
 String raceClear() {
     micQuietUntil = millis() + MIC_QUIET_MS;
     bool hadLaps, saved = false;
@@ -173,6 +206,7 @@ String raceClear() {
         if (hadLaps && !saved && !reason[0]) reason = "error";
         raceCore.clear();
     }
+    c5RecStop();
     raceEpoch++;
     elrsLapsClear();
     // Clear on one browser clears every browser.

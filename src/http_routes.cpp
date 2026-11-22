@@ -661,6 +661,35 @@ void registerHttpRoutes() {
         else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
     });
 
+    // A missed pass, added from the RSSI record (race stopped): at race
+    // time atMs. 409 while racing, past the end, or next to a pass.
+    onJson("/api/laps/insert", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        int idx = raceInsertLap(d["slot"] | -1, d["atMs"] | 0u);
+        if (idx < 0) { req->send(409, "application/json", R"({"ok":false,"reason":"cannot"})"); return; }
+        JsonDocument o;
+        o["ok"] = true;
+        o["index"] = idx;
+        sendJson(req, o);
+    });
+
+    // The race's RSSI record for one channel: uint16 little-endian, one
+    // per C5_REC_MS of race time (pauses left out), the highest reading of
+    // each. Headers: X-Rec-Ms (the interval), X-Race-Ms (race time
+    // recorded). Streamed from PSRAM in chunks.
+    server.on(AsyncURIMatcher::exact("/api/race/rssi"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        int slot = req->hasParam("slot") ? req->getParam("slot")->value().toInt() : -1;
+        if (slot < 0 || slot >= MAX_ACTIVE) { req->send(400, "text/plain", "slot"); return; }
+        uint32_t ms = c5RecMs();
+        size_t len = ms ? (size_t)(ms / C5_REC_MS + 1) * 2 : 0;   // 0: nothing recorded (or no PSRAM)
+        if (len > (size_t)C5_REC_SAMPLES * 2) len = (size_t)C5_REC_SAMPLES * 2;
+        AsyncWebServerResponse* res = req->beginResponse("application/octet-stream", len,
+            [slot](uint8_t* buf, size_t maxLen, size_t index) -> size_t { return c5RecRead(slot, index, buf, maxLen); });
+        res->addHeader("X-Rec-Ms", String(C5_REC_MS));
+        res->addHeader("X-Race-Ms", String(ms));
+        res->addHeader("Cache-Control", "no-store");
+        req->send(res);
+    });
+
     // The lap button on a race card (admins): a pass for that slot now.
     onJson("/api/laps/manual", [](AsyncWebServerRequest* req, JsonDocument& d) {
         if (raceManualLap(d["slot"] | -1)) ok(req);

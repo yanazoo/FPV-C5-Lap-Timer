@@ -228,6 +228,63 @@ void testRaceDeleteLap() {
     }
 }
 
+// A missed pass added afterwards: it splits the lap it falls in.
+void testRaceInsertPass() {
+    race::PassResult r;
+    {   // holeshot mode: HS 2 s, then 40 s (a lap of 20 + 20 s missed at 22 s), 20 s
+        race::Core c;
+        c.start(0);
+        for (uint32_t t : {2000u, 42000u, 62000u}) CHECK(c.pass(0, 0, t, 600, &r));
+        CHECK(c.insertPass(0, 0, 20000, 0) == -1);   // racing: not yet
+        c.stop(70000);
+        CHECK(c.laps(0) == 2 && c.slot(0).bestLapMs == 20000);
+        CHECK(c.insertPass(0, 0, 22000, 500) == 1);
+        CHECK(c.laps(0) == 3 && c.lapCount() == 4);
+        CHECK(c.lap(1).lapMs == 20000 && c.lap(2).lapMs == 20000 && c.lap(3).lapMs == 20000);
+        CHECK(c.slot(0).totalMs == 60000 && c.slot(0).bestLapMs == 20000);
+        CHECK(c.passTime(0, 1) == 22000 && c.passTime(0, 3) == 62000);
+        // Too close to a pass, at / past the end, other slots: refused.
+        CHECK(c.insertPass(0, 0, 22100, 0) == -1 && c.insertPass(0, 0, 61900, 0) == -1);
+        CHECK(c.insertPass(0, 0, 70000, 0) == -1 && c.insertPass(9, 0, 5000, 0) == -1);
+        // After the last pass: a new lap, and the cooldown counts from it.
+        CHECK(c.insertPass(0, 0, 68000, 0) == 4);
+        CHECK(c.laps(0) == 4 && c.lap(4).lapMs == 6000 && c.slot(0).bestLapMs == 6000);
+        CHECK(c.slot(0).lastLapTs == 68000 && c.slot(0).totalMs == 66000);
+        // Before the holeshot: the new pass is the holeshot, the old one lap 1.
+        CHECK(c.insertPass(0, 0, 1000, 0) == 0);
+        CHECK(c.laps(0) == 5 && c.lap(0).lapMs == 1000 && c.lap(1).lapMs == 1000 && c.slot(0).hsTs == 1000);
+        CHECK(c.slot(0).totalMs == 67000);
+        // Deleting it again gives the race back as it was.
+        CHECK(c.deleteLap(0, 0) && c.lap(0).lapMs == 2000 && c.slot(0).totalMs == 66000);
+    }
+    {   // a pause: race times leave it out; another pilot's passes stay in time order
+        race::Core c;
+        c.lapMode = race::LapMode::Immediate;
+        c.start(0);
+        CHECK(c.pass(0, 0, 10000, 600, &r));
+        CHECK(c.pass(1, 1, 15000, 600, &r));
+        c.stop(20000);
+        c.resume(30000);   // 10 s pause
+        CHECK(c.pass(0, 0, 40000, 600, &r) && r.lapMs == 20000);   // race time 30 s
+        CHECK(c.pass(1, 1, 45000, 600, &r));
+        c.stop(50000);     // race time 40 s
+        CHECK(c.insertPass(0, 0, 20000, 0) == 1);   // race time 20 s: between 10 and 30
+        CHECK(c.laps(0) == 3 && c.passTime(0, 1) == 20000 && c.passTime(0, 2) == 30000);
+        CHECK(c.lap(0).slot == 0 && c.lap(1).slot == 1 && c.lap(2).slot == 0 && c.lap(3).slot == 0);
+        CHECK(c.resume(60000));   // racing again after an edit: the cooldown reference is right
+        CHECK(c.pass(0, 0, 65000, 600, &r) && r.lapMs == 15000);   // 30 s -> 45 s race time
+    }
+    {   // total laps: a missed lap can finish the pilot
+        race::Core c;
+        c.totalLaps = 3;
+        c.lapMode = race::LapMode::Immediate;
+        c.start(0);
+        for (uint32_t t : {10000u, 30000u}) CHECK(c.pass(0, 0, t, 600, &r));
+        c.stop(35000);
+        CHECK(!c.slot(0).finished && c.insertPass(0, 0, 20000, 0) == 1 && c.slot(0).finished);
+    }
+}
+
 void testRaceHoleshot() {
     race::Core c;
     c.cooldownMs = 3000;
@@ -1074,6 +1131,7 @@ int runTests() {
     testUid();
     testRaceHoleshot();
     testRaceDeleteLap();
+    testRaceInsertPass();
     testRaceImmediatePauseFinish();
     testRaceTimed();
     testPositions();

@@ -277,6 +277,19 @@ missed flips during the OSD and reacted only sometimes).
   total stays); the last lap is just dropped, and deleting the holeshot makes
   the next pass the holeshot. Every browser, the ranking, the goggles and the
   SD record follow.
+- **Adding a missed lap** (📈): during a race the timer records every
+  channel's RSSI (the highest reading of every 40 ms, up to 30 min; not while
+  paused). **📈** on a race card (logged in) shows the pilot's RSSI over the
+  race time, full screen: green line Enter, red line Exit, vertical lines the
+  passes counted (HS / laps).
+  - "次の候補 ▶" / "◀ 前の候補" jump to the next / previous peak above Exit
+    that isn't a counted pass (a pass the receiver may have missed); tapping
+    the chart picks a time too (snapped to the nearby peak).
+  - "＋ ここにラップを追加" adds a pass there: it splits that lap, the total
+    stays; every browser, the ranking, the goggles and the SD record follow.
+    On a counted pass, "この通過を削除" deletes it.
+  - Adding and deleting work between Stop and Clear. Clear saves the race as
+    corrected to SD and drops the RSSI record (the next start records anew).
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

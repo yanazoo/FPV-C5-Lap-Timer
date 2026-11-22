@@ -39,5 +39,13 @@ void c5Configure(const uint16_t mhz[8], const uint16_t enter[8], const uint16_t 
 void c5SetGain(int gain);
 void c5ResetDetectors();             // race start
 bool c5PopPass(C5Pass* out);
+// RSSI recorded during the race (see c5_link.cpp): start (fresh: a new race,
+// else a resume) with the millis() of race time 0, stop on a pause. Read:
+// the race time recorded (ms), and a slot's samples as bytes (uint16 LE,
+// one per C5_REC_MS) from byte `from`; returns the bytes copied.
+void     c5RecStart(uint32_t raceStartMs, bool fresh);
+void     c5RecStop();
+uint32_t c5RecMs();
+size_t   c5RecRead(int slot, size_t from, uint8_t* out, size_t maxBytes);
 C5SlotLive c5Live(int slot);
 C5Status c5Status();
