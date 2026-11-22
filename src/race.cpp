@@ -196,7 +196,7 @@ int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
             while (k < nh && had[k] + 400 < at[i]) k++;
             if (k < nh && (had[k] > at[i] ? had[k] - at[i] : at[i] - had[k]) <= 400) at[i] = had[k];
         }
-        kept = raceCore.replaceSlot(slot, ri, at, peak, found);
+        kept = raceCore.replaceSlot(slot, ri, at, peak, found, millis());
         if (kept < 0) return -1;
         // The thresholds go to the pilot: the next race counts with them.
         if (rosterValid(ri)) {

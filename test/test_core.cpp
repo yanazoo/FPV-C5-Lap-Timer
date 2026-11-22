@@ -260,9 +260,11 @@ void testRaceReplaceSlot() {
         for (uint32_t t : {2000u, 42000u, 62000u}) CHECK(c.pass(0, 0, t, 600, &r));
         CHECK(c.pass(1, 1, 30000, 600, &r));
         uint32_t again[] = {2000, 22000, 42000, 62000};
-        CHECK(c.replaceSlot(0, 0, again, nullptr, 4) == -1);   // racing: not yet
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 4, 50000) == 3);   // racing: up to race time 50 s
+        CHECK(c.laps(0) == 2 && c.slot(0).lastLapTs == 42000);
+        CHECK(!c.pass(0, 0, 43000, 600, &r));   // the cooldown counts from the pass found
         c.stop(70000);
-        CHECK(c.replaceSlot(0, 0, again, nullptr, 4) == 4);
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 4, 0) == 4);
         CHECK(c.laps(0) == 3 && c.slot(0).bestLapMs == 20000 && c.slot(0).totalMs == 60000);
         CHECK(c.slot(0).lastLapTs == 62000 && c.slot(0).hsTs == 2000);
         // laps_ in race-time order, the other pilot's pass where it was.
@@ -270,7 +272,7 @@ void testRaceReplaceSlot() {
         CHECK(c.passTime(0, 1) == 22000 && c.passTime(1, 0) == 30000);
         // Cooldown, and times at / past the end, as pass() would.
         uint32_t noisy[] = {2000, 3000, 22000, 69000, 75000};
-        CHECK(c.replaceSlot(0, 0, noisy, nullptr, 5) == 3 && c.laps(0) == 2);
+        CHECK(c.replaceSlot(0, 0, noisy, nullptr, 5, 0) == 3 && c.laps(0) == 2);
         // Racing on after it: the next lap counts from the last pass found.
         CHECK(c.resume(80000) && c.pass(0, 0, 91000, 600, &r) && r.lapMs == 12000);   // race time 81 s - 69 s
     }
@@ -284,8 +286,13 @@ void testRaceReplaceSlot() {
         CHECK(c.pass(0, 0, 40000, 600, &r) && r.lapMs == 20000);
         c.stop(50000);     // race time 40 s
         uint32_t again[] = {10000, 20000, 30000};
-        CHECK(c.replaceSlot(0, 0, again, nullptr, 3) == 3 && c.laps(0) == 3);
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 3, 0) == 3 && c.laps(0) == 3);
         CHECK(c.lap(1).lapMs == 10000 && c.slot(0).totalMs == 30000 && c.slot(0).lastLapTs == 40000);
+    }
+    {   // no race: nothing to replace
+        race::Core c;
+        uint32_t t[] = {1000};
+        CHECK(c.replaceSlot(0, 0, t, nullptr, 1, 0) == -1);
     }
     {   // total laps: the passes after the finish are dropped
         race::Core c;
@@ -295,7 +302,7 @@ void testRaceReplaceSlot() {
         CHECK(c.pass(0, 0, 10000, 600, &r));
         c.stop(40000);
         uint32_t again[] = {10000, 20000, 30000};
-        CHECK(c.replaceSlot(0, 0, again, nullptr, 3) == 2 && c.slot(0).finished && c.laps(0) == 2);
+        CHECK(c.replaceSlot(0, 0, again, nullptr, 3, 0) == 2 && c.slot(0).finished && c.laps(0) == 2);
     }
 }
 

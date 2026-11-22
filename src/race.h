@@ -35,7 +35,7 @@ void raceDirectorSwitch(uint8_t state);
 // new lap count, positions and best lap. False if there is no such pass.
 bool raceDeleteLap(int slot, int index, uint32_t lapMs);
 // A pilot's passes counted again from the race's RSSI record with other
-// thresholds (race stopped, not cleared), which are saved to the pilot so
+// thresholds (racing, or stopped and not cleared), which are saved to the pilot so
 // the next race counts with them. Returns the passes kept, or -1; the
 // pilot's roster index in *rosterIdx.
 int  raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx);

@@ -924,7 +924,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": gone is not None})
         if p == "/api/laps/recount":   # race::Core::replaceSlot on gate::findPasses
             slot, en, ex = int(d.get("slot", -1)), int(d.get("enter", 0)), int(d.get("exit", 0))
-            if r["running"] or not 0 <= slot < 8 or en <= ex:
+            if not (r["running"] or r["paused"]) or not 0 <= slot < 8 or en <= ex:
                 return self.reply({"ok": False, "reason": "cannot"}, 409)
             race_ms, vals = rssi_record(slot)
             found, inside, peak, at = [], False, 0, 0

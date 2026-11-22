@@ -20,17 +20,30 @@ async function openRssiRec(slot){
   document.getElementById('rrFreq').textContent=p.freq?freqLabel(p.freq):'';
   document.getElementById('rssiRec').style.display='flex';
   rrBind();rrSize();rrShowValues();rrInfo('読み込み中…');
+  await rrFetch();
+  if(!rr.raceMs){rrInfo('このレースの RSSI の記録がありません（レース中に記録します。クリアすると消えます）');rrDraw();}
+  else{rrWhole();rrInfo();}
+  // Racing: the record grows; fetch it again every 2 s (the view keeps
+  // its place; the whole-race view keeps showing the whole race).
+  clearInterval(rr.poll);
+  rr.poll=setInterval(async function(){
+    if(rr.slot<0||!raceRunning||rr.lineDrag)return;
+    var whole=rr.span>=rr.raceMs;
+    await rrFetch();
+    if(whole){rr.span=rr.raceMs;rr.t0=0;}
+    rrSyncPan();rrDraw();rrInfo();
+  },2000);
+}
+async function rrFetch(){
   try{
-    var r=await fetch('/api/race/rssi?slot='+slot,{cache:'no-store'});
+    var r=await fetch('/api/race/rssi?slot='+rr.slot,{cache:'no-store'});
     if(!r.ok)throw 0;
     rr.recMs=parseInt(r.headers.get('X-Rec-Ms'))||40;
     rr.raceMs=parseInt(r.headers.get('X-Race-Ms'))||0;
     rr.data=new Uint16Array(await r.arrayBuffer());
-  }catch(e){rr.data=new Uint16Array(0);rr.raceMs=0;}
-  if(!rr.raceMs){rrInfo('このレースの RSSI の記録がありません（レース中に記録します。クリアすると消えます）');rrDraw();return;}
-  rrWhole();rrInfo();
+  }catch(e){if(!rr.data){rr.data=new Uint16Array(0);rr.raceMs=0;}}
 }
-function closeRssiRec(){rr.slot=-1;rr.data=null;document.getElementById('rssiRec').style.display='none';}
+function closeRssiRec(){rr.slot=-1;rr.data=null;clearInterval(rr.poll);document.getElementById('rssiRec').style.display='none';}
 // syncLaps() calls this: redraw the passes after an edit (any browser).
 function rrLapsChanged(){if(rr.slot>=0){rrDraw();rrInfo();}}
 
@@ -42,14 +55,16 @@ function rrPasses(){
 // The passes the Enter / Exit being tried would give: the timer's rule
 // (gate::findPasses on the record, then the cooldown and the race's end).
 function rrPreview(){
-  var out=[],inside=false,peak=0,at=0,last=-1e9,d=rr.data,n=d?d.length:0,cd=cooldownMs||0;
+  // A pass counted already keeps its own time (as the timer does).
+  var out=[],inside=false,peak=0,at=0,last=-1e9,d=rr.data,n=d?d.length:0,cd=cooldownMs||0,had=rrPasses();
   for(var i=0;i<n;i++){
     var x=d[i];
     if(!inside){if(x>=rr.en){inside=true;peak=x;at=i;}continue;}
     if(x>peak){peak=x;at=i;}
     if(x>rr.ex)continue;
     inside=false;
-    var t=at*rr.recMs+rr.recMs/2;
+    var t=at*rr.recMs+rr.recMs/2,h=had.find(x=>Math.abs(x-t)<=400);
+    if(h!==undefined)t=h;
     if(t>=rr.raceMs||(out.length&&t-last<cd))continue;
     out.push(t);last=t;
   }
@@ -143,14 +158,30 @@ function rrInfo(msg){
   if(add||gone)s+='（▼ 増える通過 '+add+'・✕ 消える通過 '+gone+'）';
   var same=rr.en===p.enterRssi&&rr.ex===p.exitRssi&&!add&&!gone;
   if(rr.en<=rr.ex)s+='　⚠ 入は出より大きくしてください';
-  else if(raceRunning)s+='　（レースをストップすると数え直せます）';
   else if(!same)go.disabled=false;
+  if(raceRunning)s+='\nレース中：記録を 2 秒ごとに読み直しています。数え直しは今の時点までの記録で行い、ゲートを通過中の分はそのままレースが数えます';
   if(rr.cur>=0){
     var i=rrNearPass();
     s+='\n選んだ時刻 '+rrFmt(rr.cur)+'　RSSI '+rrVal(rr.cur)+(i>=0?'　← '+rrLabel(i)+'の通過':'');
-    if(i>=0&&!raceRunning)del.disabled=false;
+    if(i>=0)del.disabled=false;
   }
   el.textContent=s;
+  rrList(now,pre);
+}
+// The laps these values give, under the chart: lap, lap time, total;
+// ▼ = a lap that comes in with them.
+function rrList(now,pre){
+  var box=document.getElementById('rrList');if(!box)return;
+  if(!pre.length){box.innerHTML='<span class="res-muted">この値では通過がありません</span>';return;}
+  var near=t=>now.some(x=>Math.abs(x-t)<=400),h='',prev=0;
+  // 累計 as on the race card: from the holeshot in holeshot mode.
+  var hs=lapMode==='immediate'?0:pre[0];
+  var rows=pre.map(function(t,i){var r={i:i,t:(i===0||!hs)?t:t-hs,lap:t-prev,isNew:!near(t)};prev=t;return r;});
+  for(var k=rows.length-1;k>=0;k--){   // newest first, as the race card
+    var r=rows[k];
+    h+='<tr'+(r.isNew?' class="rr-new"':'')+'><td>'+(r.isNew?'▼ ':'')+rrLabel(r.i)+'</td><td>'+fmt(r.lap)+'</td><td>'+fmt(r.t)+'</td></tr>';
+  }
+  box.innerHTML='<table class="lapTable"><thead><tr><th>周</th><th>タイム</th><th>累計</th></tr></thead><tbody>'+h+'</tbody></table>';
 }
 function rrNearPass(){
   var pt=rrPasses(),best=-1,d=1e9;
@@ -172,14 +203,14 @@ function rrStep(k,d){rrSet(k,rr[k]+d);}
 function rrNum(k){var v=parseInt(document.getElementById('rr'+(k==='en'?'Enter':'Exit')).value,10);if(!isNaN(v))rrSet(k,v);else rrShowValues();}
 function rrReset(){var p=slots[rr.slot];if(p){rr.en=p.enterRssi;rr.ex=p.exitRssi;rrShowValues();rrDraw();rrInfo();}}
 async function rrRecount(){
-  var p=slots[rr.slot];if(!p||raceRunning||rr.en<=rr.ex)return;
+  var p=slots[rr.slot];if(!p||rr.en<=rr.ex)return;
   var nm=p.name==='---'?'Ch'+(rr.slot+1):p.name;
   if(!confirm(nm+' のラップを、入 '+rr.en+' / 出 '+rr.ex+' で数え直します（今の '+rrLaps(rrPasses().length)+' 周 → '+rrLaps(rrPreview().length)+' 周）。この値は '+nm+' のパイロット情報にも保存し、次のレースからこの値で計測します。全ブラウザ・順位表・ゴーグルに反映します。'))return;
   try{
     var r=await fetch('/api/laps/recount',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:rr.slot,enter:rr.en,exit:rr.ex})});
     var j={};try{j=await r.json();}catch(e){}
     if(r.ok){p.enterRssi=rr.en;p.exitRssi=rr.ex;rrMsg('✓ 数え直しました（'+rrLaps(j.passes||0)+' 周）。入・出をパイロット情報に保存しました','var(--ok)');}
-    else rrMsg('⚠ 数え直せません（レース中・記録なし）','var(--err)');
+    else rrMsg('⚠ 数え直せません（記録がありません）','var(--err)');
   }catch(e){rrMsg('⚠ 接続エラー','var(--err)');}
 }
 function rrDeleteLap(){

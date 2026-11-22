@@ -46,7 +46,8 @@ bool c5PopPass(C5Pass* out);
 void     c5RecStart(uint32_t raceStartMs, bool fresh);
 void     c5RecStop();
 uint32_t c5RecMs();
-// A slot's record, while the race is stopped (nullptr while racing).
+// A slot's record (racing: still being written; samples are single 16-bit
+// stores, so reading it is safe).
 const uint16_t* c5RecData(int slot, int* n);
 size_t   c5RecRead(int slot, size_t from, uint8_t* out, size_t maxBytes);
 C5SlotLive c5Live(int slot);

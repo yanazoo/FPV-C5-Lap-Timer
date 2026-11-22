@@ -122,7 +122,10 @@ button:not(:disabled):hover{filter:brightness(1.15)}
 .pilot-best-row{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sf2);border-top:1px solid var(--bd)}
 .best-label{font-size:9px;color:var(--muted);width:26px}
 .lap-btn{font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;margin-left:auto;white-space:nowrap;flex-shrink:0}
-.rr-btn{font-size:16px;line-height:1;padding:3px 8px;margin-left:6px;border-radius:6px;border:1px solid var(--accent);background:transparent;cursor:pointer;flex-shrink:0}
+.rr-btn{margin-left:6px;border:1px solid var(--accent);background:transparent;cursor:pointer;flex-shrink:0}
+.lap-btn,.rr-btn{font-size:13px;line-height:1.2;padding:3px 0;border-radius:6px;min-height:26px;width:56px;text-align:center}
+.rr-list .lapTable{width:100%}
+.rr-list tr.rr-new td{color:#e3b341;font-weight:700}
 body.viewer .rr-btn{display:none}
 #lapDelModal{z-index:1002}
 #rrCanvas{width:100%;border-radius:8px;touch-action:none;display:block;cursor:crosshair}
@@ -971,7 +974,9 @@ details.adv summary{cursor:pointer;font-size:12px;color:var(--accent);margin-top
   <div class="rr-bar">
     <button id="rrDel" class="btn-danger-soft" onclick="rrDeleteLap()" disabled>選んだ通過を削除</button>
   </div>
-  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように、緑（入）・赤（出）の線を動かします（数字・ボタン・グラフ上の線のドラッグ）。▼ 黄色＝この値で増える通過、✕ 赤＝消える通過、縦線＝今数えている通過、点線＝レースの終わり。「この値で数え直す」で、記録した RSSI からこのパイロットのラップを数え直し、入・出をパイロット情報に保存します（次のレースからこの値で計測）。レースをストップしてからクリアするまでの間にできます。</p>
+  <div style="font-size:13px;font-weight:700;margin-top:10px">この値で数えたラップ（<span style="color:#e3b341">▼</span>＝増える周）</div>
+  <div id="rrList" class="rr-list"></div>
+  <p class="section-desc" style="margin-top:8px;font-size:11px">取りこぼした山が数えられるように、緑（入）・赤（出）の線を動かします（数字・ボタン・グラフ上の線のドラッグ）。▼ 黄色＝この値で増える通過、✕ 赤＝消える通過、縦線＝今数えている通過、点線＝レースの終わり。「この値で数え直す」で、記録した RSSI からこのパイロットのラップを数え直し、入・出をパイロット情報に保存します（次のレースからこの値で計測）。レース中でも、ストップしてからクリアするまでの間でもできます。</p>
 </div>
 
 <!-- Close-up of one pilot's calibration (tap the name on a キャリブ card) -->

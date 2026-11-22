@@ -294,9 +294,13 @@ missed flips during the OSD and reacted only sometimes).
     SD record follow.
   - **The values are saved to the pilot** (calibration): the next race counts
     with them. "元の値" goes back to the pilot's current values.
+  - Under the chart, the laps those values give (lap, time, total); **▼
+    yellow** marks the laps that come in.
   - Tap a counted pass on the chart to delete it ("選んだ通過を削除").
-  - Works between Stop and Clear. Clear saves the race as corrected to SD and
-    drops the RSSI record.
+  - Works **during a race** too, and between Stop and Clear. While racing,
+    the record is fetched again every 2 s and the count uses the record up
+    to that moment (a pass still in the gate is left to the race). Clear
+    saves the race as corrected to SD and drops the RSSI record.
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

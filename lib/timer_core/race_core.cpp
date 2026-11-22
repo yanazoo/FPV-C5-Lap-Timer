@@ -167,9 +167,9 @@ uint32_t Core::passTime(int slot, int index) const {
     return 0;
 }
 
-int Core::replaceSlot(int slot, int rosterIdx, const uint32_t* atMs, const uint16_t* rssi, int n) {
-    if (running_ || slot < 0 || slot >= kSlots) return -1;
-    uint32_t end = elapsed(0);   // stopped: race time at the stop
+int Core::replaceSlot(int slot, int rosterIdx, const uint32_t* atMs, const uint16_t* rssi, int n, uint32_t now) {
+    if ((!running_ && pauseStart_ == 0) || slot < 0 || slot >= kSlots) return -1;
+    uint32_t end = elapsed(now);
     // The other pilots' passes with their race times (sums of lap times).
     struct Timed { Lap lap; uint32_t t; };
     static Timed all[kMaxLaps];

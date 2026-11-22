@@ -170,7 +170,7 @@ uint32_t c5RecMs() { return recBuf ? recEnd : 0; }
 
 const uint16_t* c5RecData(int slot, int* n) {
     *n = 0;
-    if (!recBuf || slot < 0 || slot >= 8 || recOn) return nullptr;   // only while stopped
+    if (!recBuf || slot < 0 || slot >= 8) return nullptr;
     uint32_t k = recEnd / C5_REC_MS + 1;
     *n = (int)(k < C5_REC_SAMPLES ? k : C5_REC_SAMPLES);
     return recBuf + slot * C5_REC_SAMPLES;
