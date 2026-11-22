@@ -159,17 +159,60 @@ static String cell(const char* s) {
     return o;
 }
 
-bool sdSaveRace() {
-    SdGuard g;
-    if (!sdPresent) return false;
-    if (settings.sdLogMode == 1) pruneRaceFiles(SD_MAX_RACE_FILES);
-    // The race's local start time, when the timer knew the date: in the
-    // file name (race_012_20261108_1432.csv) and on the #FPVC5 line.
+// The local time of the race's start (zeros if the timer didn't know it).
+static struct tm raceStartLocal() {
     struct tm lt = {};
     if (raceStartUtc) {
         time_t local = raceStartUtc + (time_t)raceStartTz * 60;
         gmtime_r(&local, &lt);
     }
+    return lt;
+}
+
+// One race's CSV (SD lock held by the caller): the #FPVC5 line, then a row
+// per pass. Over any file of that name.
+static bool writeRace(const char* path, const race::Core& c, uint32_t elapsedMs) {
+    struct tm lt = raceStartLocal();
+    File f = SD.open(path, FILE_WRITE);
+    if (!f) return false;
+    f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names
+    // One "#FPVC5" line with when the race started and its rules, for the
+    // results viewer (older files have none; readers skip lines with "#").
+    char when[40] = "";
+    if (raceStartUtc) {
+        const struct tm& t = lt;
+        int tz = raceStartTz < 0 ? -raceStartTz : raceStartTz;
+        snprintf(when, sizeof when, "%04d-%02d-%02dT%02d:%02d:%02d%c%02d:%02d", t.tm_year + 1900, t.tm_mon + 1,
+                 t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, raceStartTz < 0 ? '-' : '+', tz / 60, tz % 60);
+    }
+    f.printf("#FPVC5,v=1,start=%s,mode=%s,laps=%u,rank=%u,limit_s=%lu,lastlap=%u,elapsed_ms=%lu,event=%s\n", when,
+             c.lapMode == race::LapMode::Holeshot ? "holeshot" : "immediate", c.totalLaps,
+             raceStartRank, (unsigned long)(c.timeLimitMs / 1000), raceStartLastLap,
+             (unsigned long)elapsedMs, cell(elrsCfg.eventName).c_str());
+    f.println("Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms");
+    int perSlot[MAX_ACTIVE] = {0};
+    // Holeshot mode: the first pass is the holeshot, lap 0 (as on the race tab).
+    int first = c.lapMode == race::LapMode::Holeshot ? 0 : 1;
+    for (int i = 0; i < c.lapCount(); i++) {
+        const race::Lap& l = c.lap(i);
+        int lapNo = (l.slot >= 0 && l.slot < MAX_ACTIVE) ? first + perSlot[l.slot]++ : 0;
+        bool known = rosterValid(l.rosterIdx);
+        f.printf("%d,%s,%u,%d,%lu,%d,%lu\n", l.slot, known ? cell(roster[l.rosterIdx].name).c_str() : "---",
+                 known ? roster[l.rosterIdx].freqMhz : 0, lapNo, (unsigned long)l.lapMs, l.rssi,
+                 (unsigned long)l.ts);
+    }
+    f.close();
+    Serial.printf("[SD] saved %s\n", path);
+    return true;
+}
+
+bool sdSaveRace(String* savedPath) {
+    SdGuard g;
+    if (!sdPresent) return false;
+    if (settings.sdLogMode == 1) pruneRaceFiles(SD_MAX_RACE_FILES);
+    // The race's local start time, when the timer knew the date: in the
+    // file name (race_012_20261108_1432.csv) and on the #FPVC5 line.
+    struct tm lt = raceStartLocal();
     char path[48];
     int no = findNextRaceNum();
     if (raceStartUtc)
@@ -187,37 +230,15 @@ bool sdSaveRace() {
         else
             snprintf(path, sizeof path, "/race_%03d.csv", no);
     }
-    File f = SD.open(path, FILE_WRITE);
-    if (!f) return false;
-    f.print("\xEF\xBB\xBF");   // UTF-8 BOM so Excel shows Japanese names
-    // One "#FPVC5" line with when the race started and its rules, for the
-    // results viewer (older files have none; readers skip lines with "#").
-    char when[40] = "";
-    if (raceStartUtc) {
-        const struct tm& t = lt;
-        int tz = raceStartTz < 0 ? -raceStartTz : raceStartTz;
-        snprintf(when, sizeof when, "%04d-%02d-%02dT%02d:%02d:%02d%c%02d:%02d", t.tm_year + 1900, t.tm_mon + 1,
-                 t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec, raceStartTz < 0 ? '-' : '+', tz / 60, tz % 60);
-    }
-    f.printf("#FPVC5,v=1,start=%s,mode=%s,laps=%u,rank=%u,limit_s=%lu,lastlap=%u,elapsed_ms=%lu,event=%s\n", when,
-             raceCore.lapMode == race::LapMode::Holeshot ? "holeshot" : "immediate", raceCore.totalLaps,
-             raceStartRank, (unsigned long)(raceCore.timeLimitMs / 1000), raceStartLastLap,
-             (unsigned long)raceCore.elapsed(millis()), cell(elrsCfg.eventName).c_str());
-    f.println("Slot,Name,FreqMHz,Lap,LapTime_ms,PeakRSSI,Timestamp_ms");
-    int perSlot[MAX_ACTIVE] = {0};
-    // Holeshot mode: the first pass is the holeshot, lap 0 (as on the race tab).
-    int first = raceCore.lapMode == race::LapMode::Holeshot ? 0 : 1;
-    for (int i = 0; i < raceCore.lapCount(); i++) {
-        const race::Lap& l = raceCore.lap(i);
-        int lapNo = (l.slot >= 0 && l.slot < MAX_ACTIVE) ? first + perSlot[l.slot]++ : 0;
-        bool known = rosterValid(l.rosterIdx);
-        f.printf("%d,%s,%u,%d,%lu,%d,%lu\n", l.slot, known ? cell(roster[l.rosterIdx].name).c_str() : "---",
-                 known ? roster[l.rosterIdx].freqMhz : 0, lapNo, (unsigned long)l.lapMs, l.rssi,
-                 (unsigned long)l.ts);
-    }
-    f.close();
-    Serial.printf("[SD] saved %s\n", path);
+    if (!writeRace(path, raceCore, raceCore.elapsed(millis()))) return false;
+    if (savedPath) *savedPath = path;
     return true;
+}
+
+bool sdRewriteRace(const String& path, const race::Core& c, uint32_t elapsedMs) {
+    SdGuard g;
+    if (!sdPresent || !path.length() || !SD.exists(path)) return false;
+    return writeRace(path.c_str(), c, elapsedMs);
 }
 
 String sdStampedName(const char* base, const char* ext) {

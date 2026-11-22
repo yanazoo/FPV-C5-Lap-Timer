@@ -87,6 +87,14 @@ static bool timeUpHandled = false;   // timed race: the time-up step has run
 
 static bool recFullStopped = false;   // the race was stopped for a full RSSI record
 
+// The race just cleared, kept until the next start: its RSSI record is
+// still there, so its laps can be counted again (or a pass deleted) and
+// its SD file written again.
+static race::Core lastRace;
+static bool       lastValid = false;
+static uint32_t   lastElapsed = 0;
+static String     lastFile;   // its file on the card ("" if it wasn't saved)
+
 void raceStart() { raceStartAt(millis()); }
 
 void raceStartAt(uint32_t now) {
@@ -95,6 +103,7 @@ void raceStartAt(uint32_t now) {
         applyRaceRules();
         raceCore.start(now);
         sdNoteRaceStart();
+        lastValid = false;
     }
     c5RecSize(recMinutes);   // the length set (no-op if unchanged)
     c5RecStart(now, true);
@@ -188,13 +197,18 @@ int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
     int found = gate::findPasses(rec, n, C5_REC_MS, enter, exit, at, peak, 256);
     int positions[MAX_ACTIVE], laps[MAX_ACTIVE], kept, ri = -1;
     uint32_t best;
-    bool finished;
+    bool finished, onLast;
+    bool rewrote = false;
     {
         Guard g;
+        // The race on now, or (none since Clear) the one just cleared.
+        onLast = !raceCore.running() && !raceCore.paused() && raceCore.lapCount() == 0;
+        if (onLast && !lastValid) return -1;
+        race::Core& rc = onLast ? lastRace : raceCore;
         // The pilot of this race's laps on the channel (the one assigned now
         // if none: a pilot may have left the channel since).
-        for (int i = 0; i < raceCore.lapCount() && ri < 0; i++)
-            if (raceCore.lap(i).slot == slot) ri = raceCore.lap(i).rosterIdx;
+        for (int i = 0; i < rc.lapCount() && ri < 0; i++)
+            if (rc.lap(i).slot == slot) ri = rc.lap(i).rosterIdx;
         if (ri < 0) ri = activePilots[slot];
         // A pass that was counted already keeps its own time (the receiver
         // timed it to the reading; the record only to 40 ms): only the new
@@ -202,7 +216,7 @@ int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
         uint32_t had[256];
         int nh = 0;
         for (int k = 0; nh < 256; k++) {
-            uint32_t t = raceCore.passTime(slot, k);
+            uint32_t t = rc.passTime(slot, k);
             if (!t) break;
             had[nh++] = t;
         }
@@ -210,20 +224,31 @@ int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
             while (k < nh && had[k] + 400 < at[i]) k++;
             if (k < nh && (had[k] > at[i] ? had[k] - at[i] : at[i] - had[k]) <= 400) at[i] = had[k];
         }
-        kept = raceCore.replaceSlot(slot, ri, at, peak, found, millis());
+        kept = rc.replaceSlot(slot, ri, at, peak, found, onLast ? 0 : millis());
         if (kept < 0) return -1;
+        if (onLast && lastFile.length()) rewrote = sdRewriteRace(lastFile, lastRace, lastElapsed);
         // The thresholds go to the pilot: the next race counts with them.
         if (rosterValid(ri)) {
             rosterCal[ri].enterRssi = enter;
             rosterCal[ri].exitRssi = exit;
             saveRosterPilot(ri);
         }
-        for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = raceCore.position(s), laps[s] = raceCore.laps(s);
-        best = raceCore.slot(slot).bestLapMs;
-        finished = raceCore.slot(slot).finished;
+        for (int s = 0; s < MAX_ACTIVE; s++) positions[s] = rc.position(s), laps[s] = rc.laps(s);
+        best = rc.slot(slot).bestLapMs;
+        finished = rc.slot(slot).finished;
     }
     applyGateConfig();
-    Serial.printf("[Race] slot %d: counted again with %u / %u: %d passes\n", slot, enter, exit, kept);
+    Serial.printf("[Race] slot %d: counted again with %u / %u: %d passes%s\n", slot, enter, exit, kept,
+                  onLast ? (rewrote ? " (cleared race, SD file written again)" : " (cleared race)") : "");
+    if (onLast) {   // the goggles and the race cards are past it: only the browsers' views
+        JsonDocument d;
+        d["type"] = "last_race_changed";
+        d["pilot"] = slot;
+        d["saved"] = rewrote;
+        wsJson(d);
+        if (rosterIdx) *rosterIdx = ri;
+        return kept;
+    }
     elrsLapEdit(slot, laps[slot], positions[slot], best, finished);
     for (int s = 0; s < MAX_ACTIVE; s++)
         if (s != slot && positions[s] > 0) elrsPosition(s, laps[s], positions[s]);
@@ -233,6 +258,39 @@ int raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx) {
     wsJson(d);
     if (rosterIdx) *rosterIdx = ri;
     return kept;
+}
+
+bool raceDeleteLastLap(int slot, int index, uint32_t lapMs, bool* saved) {
+    bool rewrote = false;
+    {
+        Guard g;
+        if (!lastValid || !lastRace.deleteLap(slot, index, lapMs)) return false;
+        if (lastFile.length()) rewrote = sdRewriteRace(lastFile, lastRace, lastElapsed);
+    }
+    Serial.printf("[Race] cleared race, slot %d: pass %d deleted%s\n", slot, index, rewrote ? " (SD file written again)" : "");
+    JsonDocument d;
+    d["type"] = "last_race_changed";
+    d["pilot"] = slot;
+    d["saved"] = rewrote;
+    wsJson(d);
+    if (saved) *saved = rewrote;
+    return true;
+}
+
+String raceLastJson(int slot) {
+    JsonDocument d;
+    Guard g;
+    d["ok"] = lastValid;
+    if (lastValid) {
+        d["file"] = lastFile.length() ? lastFile.substring(1) : String();
+        d["mode"] = lastRace.lapMode == race::LapMode::Holeshot ? "holeshot" : "immediate";
+        JsonArray a = d["laps"].to<JsonArray>();
+        for (int i = 0; i < lastRace.lapCount(); i++)
+            if (lastRace.lap(i).slot == slot) a.add(lastRace.lap(i).lapMs);
+    }
+    String s;
+    serializeJson(d, s);
+    return s;
 }
 
 String raceClear() {
@@ -245,8 +303,16 @@ String raceClear() {
         if (!hadLaps) reason = "empty";
         else if (settings.sdLogMode == 2) reason = "off";
         else if (!sdPresent) reason = "nosd";
-        else saved = sdSaveRace();
+        else saved = sdSaveRace(&lastFile);
         if (hadLaps && !saved && !reason[0]) reason = "error";
+        lastValid = hadLaps;
+        if (hadLaps) {
+            uint32_t now = millis();
+            lastRace = raceCore;
+            lastRace.stop(now);   // cleared while racing: stopped there (its end, for a count)
+            lastElapsed = lastRace.elapsed(now);
+            if (!saved) lastFile = "";
+        }
         raceCore.clear();
     }
     c5RecStop();

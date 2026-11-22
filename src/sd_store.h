@@ -3,10 +3,13 @@
 // the pilot's MAC column becomes the VTX frequency.
 #pragma once
 #include <Arduino.h>
+#include "race_core.h"
 
 void   sdInit();
 void   sdShutdown();                   // unmount before a restart
-bool   sdSaveRace();                   // caller holds gLock
+bool   sdSaveRace(String* savedPath = nullptr);   // caller holds gLock; the file written in *savedPath
+// Write a race over its file again (corrected after Clear; caller holds gLock).
+bool   sdRewriteRace(const String& path, const race::Core& c, uint32_t elapsedMs);
 // Wall clock from a browser (the S3 has no RTC): epoch in ms (UTC) and the
 // browser's UTC offset in minutes. Sets the system time, so race files get
 // real timestamps too.

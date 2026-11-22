@@ -6,7 +6,8 @@
 // race with the pilot's passes. To get a pass the receiver missed, move the
 // Enter / Exit lines until that peak counts (the passes these values would
 // give are shown as you go), then have the timer count the pilot's laps
-// again with them (race stopped, not cleared); the values are kept for the
+// again with them (racing, stopped, or cleared until the next start: then the
+// race's SD file is written again); the values are kept for the
 // pilot, so the next race counts with them.
 var rr={slot:-1,data:null,recMs:40,raceMs:0,t0:0,span:0,cur:-1,drag:null,bound:false,en:0,ex:0,lineDrag:null};
 
@@ -20,8 +21,13 @@ async function openRssiRec(slot){
   document.getElementById('rrFreq').textContent=p.freq?freqLabel(p.freq):'';
   document.getElementById('rssiRec').style.display='flex';
   rrBind();rrSize();rrShowValues();rrInfo('読み込み中…');
+  // No race since Clear: the race just cleared (its laps from the timer).
+  rr.last=null;
+  if(!raceRunning&&!slots.some(q=>q.rows&&q.rows.length)){
+    try{var lr=await (await fetch('/api/race/last?slot='+slot,{cache:'no-store'})).json();if(lr.ok)rr.last=lr;}catch(e){}
+  }
   await rrFetch();
-  if(!rr.raceMs){rrInfo('このレースの RSSI の記録がありません（レース中に記録します。クリアすると消えます）');rrDraw();}
+  if(!rr.raceMs){rrInfo('このレースの RSSI の記録がありません（レース中に記録します。次のスタートで消えます）');rrDraw();}
   else{rrWhole();rrInfo();}
   // Racing: the record grows; fetch it again every 2 s (the view keeps
   // its place; the whole-race view keeps showing the whole race).
@@ -55,7 +61,15 @@ function rrLapsChanged(){if(rr.slot>=0){rrDraw();rrInfo();}}
 // The pilot's passes counted, as race times (sums of the lap times).
 function rrPasses(){
   var p=slots[rr.slot],t=0;
+  if(rr.last)return (rr.last.laps||[]).map(ms=>(t+=ms));
   return (p&&p.rows?p.rows:[]).map(r=>(t+=r.lapMs));
+}
+function rrImmediate(){return rr.last?rr.last.mode==='immediate':lapMode==='immediate';}
+// The cleared race was changed (here or on another browser): its laps again.
+async function rrLastChanged(d){
+  if(rr.slot<0||!rr.last)return;
+  try{var lr=await (await fetch('/api/race/last?slot='+rr.slot,{cache:'no-store'})).json();if(lr.ok)rr.last=lr;}catch(e){}
+  rrDraw();rrInfo();
 }
 // The passes the Enter / Exit being tried would give: the timer's rule
 // (gate::findPasses on the record, then the cooldown and the race's end).
@@ -75,8 +89,8 @@ function rrPreview(){
   }
   return out;
 }
-function rrLabel(i){return lapMode==='immediate'?(i+1)+'周目':(i===0?'HS':i+'周目');}
-function rrLaps(nPasses){return lapMode==='immediate'?nPasses:Math.max(0,nPasses-1);}
+function rrLabel(i){return rrImmediate()?(i+1)+'周目':(i===0?'HS':i+'周目');}
+function rrLaps(nPasses){return rrImmediate()?nPasses:Math.max(0,nPasses-1);}
 function rrFmt(ms){
   var m=Math.floor(ms/60000),s=(ms%60000)/1000;
   return m+':'+(s<10?'0':'')+s.toFixed(2);
@@ -166,6 +180,7 @@ function rrInfo(msg){
   if(rr.en<=rr.ex)s+='　⚠ 入は出より大きくしてください';
   else if(!same)go.disabled=false;
   if(raceRunning)s+='\nレース中：記録を 2 秒ごとに読み直しています。数え直しは今の時点までの記録で行い、ゲートを通過中の分はそのままレースが数えます';
+  if(rr.last)s+='\nクリアしたレースを直しています'+(rr.last.file?'（数え直すと SD の '+rr.last.file+' を上書きします）':'（SD には保存されていません）');
   if(rr.cur>=0){
     var i=rrNearPass();
     s+='\n選んだ時刻 '+rrFmt(rr.cur)+'　RSSI '+rrVal(rr.cur)+(i>=0?'　← '+rrLabel(i)+'の通過':'');
@@ -181,7 +196,7 @@ function rrList(now,pre){
   if(!pre.length){box.innerHTML='<span class="res-muted">この値では通過がありません</span>';return;}
   var near=t=>now.some(x=>Math.abs(x-t)<=400),h='',prev=0;
   // 累計 as on the race card: from the holeshot in holeshot mode.
-  var hs=lapMode==='immediate'?0:pre[0];
+  var hs=rrImmediate()?0:pre[0];
   var rows=pre.map(function(t,i){var r={i:i,t:(i===0||!hs)?t:t-hs,lap:t-prev,isNew:!near(t)};prev=t;return r;});
   for(var k=rows.length-1;k>=0;k--){   // newest first, as the race card
     var r=rows[k];
@@ -215,13 +230,20 @@ async function rrRecount(){
   try{
     var r=await fetch('/api/laps/recount',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:rr.slot,enter:rr.en,exit:rr.ex})});
     var j={};try{j=await r.json();}catch(e){}
-    if(r.ok){p.enterRssi=rr.en;p.exitRssi=rr.ex;rrMsg('✓ 数え直しました（'+rrLaps(j.passes||0)+' 周）。入・出をパイロット情報に保存しました','var(--ok)');}
+    if(r.ok){p.enterRssi=rr.en;p.exitRssi=rr.ex;
+      rrMsg('✓ 数え直しました（'+rrLaps(j.passes||0)+' 周）。入・出をパイロット情報に保存しました'+(rr.last&&rr.last.file?'。SD の '+rr.last.file+' も上書きしました':''),'var(--ok)');}
     else rrMsg('⚠ 数え直せません（記録がありません）','var(--err)');
   }catch(e){rrMsg('⚠ 接続エラー','var(--err)');}
 }
 function rrDeleteLap(){
   var i=rrNearPass();if(i<0)return;
-  openLapDelete(slots[rr.slot],i);   // the race tab's confirmation
+  if(!rr.last){openLapDelete(slots[rr.slot],i);return;}   // the race tab's confirmation
+  // The cleared race: its own confirmation, and its SD file is written again.
+  var ms=rr.last.laps[i];
+  if(!confirm(rrLabel(i)+'（'+fmt(ms)+'）の通過を削除します'+(rr.last.file?'。SD の '+rr.last.file+' を上書きします':'')+'。'))return;
+  fetch('/api/laps/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot:rr.slot,index:i,lapTime:ms,last:true})})
+    .then(r=>rrMsg(r.ok?'🗑 削除しました':'⚠ 削除できません（一覧が変わっています）',r.ok?'var(--ok)':'var(--err)'))
+    .catch(()=>rrMsg('⚠ 接続エラー','var(--err)'));
 }
 
 // Whole race, or a close look (20 s around the time picked).

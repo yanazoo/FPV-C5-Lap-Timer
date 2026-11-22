@@ -39,6 +39,10 @@ bool raceDeleteLap(int slot, int index, uint32_t lapMs);
 // the next race counts with them. Returns the passes kept, or -1; the
 // pilot's roster index in *rosterIdx.
 int  raceRecount(int slot, uint16_t enter, uint16_t exit, int* rosterIdx);
+// After Clear (until the next start) the cleared race is kept: raceRecount
+// works on it, and a pass can be deleted; both write its SD file again.
+bool raceDeleteLastLap(int slot, int index, uint32_t lapMs, bool* saved);
+String raceLastJson(int slot);   // {"ok","file","mode","laps":[lapMs...]} of one channel
 // The admin's lap button: a pass for this slot now (the cooldown applies).
 // False if no race is running or nobody is in the slot.
 bool raceManualLap(int slot);

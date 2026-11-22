@@ -152,10 +152,7 @@ void settingsFromJson(JsonVariantConst doc) {
     if (!doc["vtxAuto"].isNull()) vtxAuto = doc["vtxAuto"] | true;
     if (!doc["assignMode"].isNull()) assignMode = assignModeValid(doc["assignMode"] | 0);
     if (!doc["recMin"].isNull() && recMinutesValid(doc["recMin"] | 0)) recMinutes = doc["recMin"] | REC_MIN_DEFAULT;
-    saveSettings();
-    // The record takes the new size now when no race needs it (racing, or
-    // stopped with laps to count again), else at the next start.
-    if (!raceActive() && !raceCore.running() && !raceCore.paused() && raceCore.lapCount() == 0) c5RecSize(recMinutes);
+    saveSettings();   // the record takes a new length at the next start (the cleared race may still need it)
 }
 
 // ELRS OSD (caller holds gLock).
@@ -663,6 +660,15 @@ void registerHttpRoutes() {
     onJson("/api/laps/delete", [](AsyncWebServerRequest* req, JsonDocument& d) {
         int slot = d["slot"] | -1, index = d["index"] | -1;
         uint32_t lapMs = d["lapTime"] | 0u;
+        if (d["last"] | false) {   // the race cleared last (RSSI view after Clear)
+            bool saved = false;
+            if (!raceDeleteLastLap(slot, index, lapMs, &saved)) {
+                req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
+                return;
+            }
+            req->send(200, "application/json", saved ? R"({"ok":true,"saved":true})" : R"({"ok":true,"saved":false})");
+            return;
+        }
         if (raceDeleteLap(slot, index, lapMs)) ok(req);
         else req->send(409, "application/json", R"({"ok":false,"reason":"no such lap"})");
     });
@@ -683,6 +689,12 @@ void registerHttpRoutes() {
             snprintf(b, sizeof b, R"({"type":"calib","id":%d,"enter":%d,"exit":%d})", ri, en, ex);
             wsText(b);
         }
+    });
+
+    // The race cleared last, one channel's passes (the RSSI view after Clear).
+    server.on(AsyncURIMatcher::exact("/api/race/last"), HTTP_GET, [](AsyncWebServerRequest* req) {
+        int slot = req->hasParam("slot") ? req->getParam("slot")->value().toInt() : -1;
+        req->send(200, "application/json", raceLastJson(slot));
     });
 
     // The race's RSSI record for one channel: uint16 little-endian, one

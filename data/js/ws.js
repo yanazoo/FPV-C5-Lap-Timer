@@ -218,6 +218,7 @@ function onMsg(d){
   if(d.type==='race_ready'){if(!raceRunning)onRaceReady();return;}
   if(d.type==='race_stage'){if(!raceRunning)showCountdown();return;}
   if(d.type==='race_clear'){recFull=false;onRaceClear();return;}
+  if(d.type==='last_race_changed'){if(typeof rrLastChanged==='function')rrLastChanged(d);return;}
   if(d.type==='laps_changed'){lapEpoch++;if(lapQueue)setTimeout(syncLaps,400);else syncLaps();return;}   // a lap was deleted
   if(d.type==='time_up'){toast('⏱ 時間切れ');return;}
   if(d.type==='race_start'){onRaceStart(d.ts);return;}

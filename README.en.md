@@ -280,7 +280,7 @@ missed flips during the OSD and reacted only sometimes).
 - **Counting again for a missed lap** ("RSSI" button): during a race the timer records
   every channel's RSSI (the highest reading of every 40 ms; not while paused).
   How long is set in Settings → "RSSI の記録時間": 5, 10 or 30 min, 1, 2, 3 or 4 h
-  (default 30 min; 4 h uses about 5.8 MB of PSRAM). When it is full the race
+  (default 30 min; 4 h uses about 5.8 MB of PSRAM; a new length applies from the next start). When it is full the race
   stops by itself: the laps stay and can be counted again, but that race
   can't be carried on (Start is off, so no lap past the record's end could be
   lost to a count); Clear and start a new race. The **"RSSI" button** at the end of a race card's RSSI row (logged in) shows
@@ -304,7 +304,10 @@ missed flips during the OSD and reacted only sometimes).
   - Works **during a race** too, and between Stop and Clear. While racing,
     the record is fetched again every 2 s and the count uses the record up
     to that moment (a pass still in the gate is left to the race). Clear
-    saves the race as corrected to SD and drops the RSSI record.
+    saves the race as corrected to SD.
+  - **After Clear, until the next start**, the RSSI view still shows that race
+    and can correct it; counting again or deleting rewrites the race's file on
+    SD. (The RSSI record goes at the next start.)
 - **Clear** saves the race to SD as CSV and clears every browser and goggle.
 - "音声テスト" plays the gate tone and a sample call (voice settings are in
   the Settings tab). Tap the page once after opening it so the browser may

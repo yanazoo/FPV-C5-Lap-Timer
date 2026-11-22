@@ -284,13 +284,16 @@ def rssi_record(slot):
     doesn't move them."""
     r = state["race"]
     race_ms = int(race_elapsed() * 1000) if (r["laps"] or r["running"]) else 0
+    last = r.get("last")
+    if not race_ms and last:   # cleared: the record is still the last race's
+        race_ms = int(last["elapsed"] * 1000)
     n = race_ms // 40 + 1 if race_ms else 0
     rnd = random.Random(slot)
     vals = [110 + rnd.randint(0, 25) for _ in range(n)]
     peaks = r.setdefault("peaks", {})
     if slot not in peaks:
         t, pk = 0, []
-        for l in r["laps"]:
+        for l in (r["laps"] or (last or {}).get("laps", [])):
             if l["slot"] == slot:
                 t += l["lapTime"]
                 pk.append((t, 480 + rnd.randint(0, 80)))
@@ -541,6 +544,13 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header("X-From", str(frm))
             self.end_headers()
             return self.wfile.write(body)
+        if p == "/api/race/last":
+            slot = int(parse_qs(u.query).get("slot", ["0"])[0])
+            last = state["race"].get("last")
+            if not last:
+                return self.reply({"ok": False})
+            return self.reply({"ok": True, "file": last["file"], "mode": "immediate" if state["settings"].get("lapMode") == 1 else "holeshot",
+                               "laps": [l["lapTime"] for l in last["laps"] if l["slot"] == slot]})
         if p == "/api/bind_uid":
             return self.reply({"tag": uid_tag(parse_qs(u.query).get("p", [""])[0])})
         if p == "/mock/seed":
@@ -854,6 +864,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if r.get("seq") is not token: return
                 r["seq"] = None
                 r.update(running=True, paused=False, t0=time.monotonic(), elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
+                r["last"] = None
                 broadcast({"type": "race_start", "ts": int(r["t0"] * 1000)})
             threading.Thread(target=seq, daemon=True).start()
             return self.reply({"ok": True})
@@ -909,17 +920,21 @@ class Handler(SimpleHTTPRequestHandler):
             CONN["viewHost"] = max(1, min(CONN["viewHost"], 9 - CONN["adminMax"], 8))
             return self.reply({"ok": True})
         if p == "/api/laps/delete":   # the timer's race::Core::deleteLap
-            mine = [l for l in r["laps"] if l["slot"] == d.get("slot")]
+            src = r["last"]["laps"] if d.get("last") and r.get("last") else r["laps"]
+            mine = [l for l in src if l["slot"] == d.get("slot")]
             i = d.get("index", -1)
             if not 0 <= i < len(mine) or (d.get("lapTime") and mine[i]["lapTime"] != d["lapTime"]):
                 return self.reply({"ok": False, "reason": "no such lap"}, 409)
             if i + 1 < len(mine):
                 mine[i + 1]["lapTime"] += mine[i]["lapTime"]
-            r["laps"].remove(mine[i])
-            broadcast({"type": "laps_changed", "pilot": d["slot"]})
+            src.remove(mine[i])
+            broadcast({"type": "last_race_changed" if d.get("last") else "laps_changed", "pilot": d["slot"]})
             return self.reply({"ok": True})
         if p == "/api/race/save":
             had = bool(r["laps"])
+            # Kept until the next start, as the timer does (the RSSI view after Clear).
+            r["last"] = {"laps": [dict(l) for l in r["laps"]], "elapsed": race_elapsed(),
+                         "file": "race_001.csv" if had else ""} if had else None
             r.update(running=False, paused=False, elapsed=0.0, laps=[], epoch=r["epoch"] + 1)
             broadcast({"type": "race_clear"})
             return self.reply({"ok": True, "saved": False, "reason": "nosd" if had else "empty"})
@@ -928,8 +943,10 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply({"ok": gone is not None})
         if p == "/api/laps/recount":   # race::Core::replaceSlot on gate::findPasses
             slot, en, ex = int(d.get("slot", -1)), int(d.get("enter", 0)), int(d.get("exit", 0))
-            if not (r["running"] or r["paused"]) or not 0 <= slot < 8 or en <= ex:
+            on_last = not (r["running"] or r["paused"] or r["laps"])
+            if (on_last and not r.get("last")) or not 0 <= slot < 8 or en <= ex:
                 return self.reply({"ok": False, "reason": "cannot"}, 409)
+            src = r["last"]["laps"] if on_last else r["laps"]
             race_ms, vals = rssi_record(slot)
             found, inside, peak, at = [], False, 0, 0
             for i, x in enumerate(vals):
@@ -944,7 +961,7 @@ class Handler(SimpleHTTPRequestHandler):
                 inside = False
                 found.append(at * 40 + 20)
             had, t = [], 0   # passes counted already keep their own time
-            for l in r["laps"]:
+            for l in src:
                 if l["slot"] == slot:
                     t += l["lapTime"]
                     had.append(t)
@@ -956,18 +973,22 @@ class Handler(SimpleHTTPRequestHandler):
                     continue
                 kept.append(t)
                 last = t
-            others = [l for l in r["laps"] if l["slot"] != slot]
+            others = [l for l in src if l["slot"] != slot]
             t0 = now_ms() - race_ms
             mine, prev = [], 0
             for t in kept:
                 mine.append({"slot": slot, "lapTime": t - prev, "ts": t0 + t})
                 prev = t
-            r["laps"] = sorted(others + mine, key=lambda l: l["ts"])
+            merged = sorted(others + mine, key=lambda l: l["ts"])
+            if on_last:
+                r["last"]["laps"] = merged
+            else:
+                r["laps"] = merged
             pid = state["active"][slot]
             if 0 <= pid < len(state["pilots"]):
                 state["pilots"][pid].update(enter=en, exit=ex)
                 broadcast({"type": "calib", "id": pid, "enter": en, "exit": ex})
-            broadcast({"type": "laps_changed", "pilot": slot})
+            broadcast({"type": "last_race_changed" if on_last else "laps_changed", "pilot": slot, "saved": on_last})
             return self.reply({"ok": True, "passes": len(kept)})
         if p == "/api/laps/manual":   # the admin's lap button: a pass now
             r = state["race"]
