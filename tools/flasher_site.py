@@ -84,11 +84,11 @@ def main():
         device(site, "netpack-s3", "ELRS Netpack（XIAO ESP32-S3）", "ESP32-S3",
                os.path.join(root, "third_party", "elrs-netpack", "elrs-xiao-webui", ".pio", "build", "xiao_esp32s3"),
                boot_app0()),
-        device(site, "bridge-c3", "ESP-NOW ブリッジ（XIAO ESP32-C3）", "ESP32-C3",
+        device(site, "bridge-c3", "ELRSバックパック-ブリッジ（XIAO ESP32-C3）", "ESP32-C3",
                os.path.join(br, "xiao_esp32c3"), boot_app0()),
-        device(site, "bridge-esp32", "ESP-NOW ブリッジ（ESP32 Wrover-E）", "ESP32",
+        device(site, "bridge-esp32", "ELRSバックパック-ブリッジ（ESP32 Wrover-E）", "ESP32",
                os.path.join(br, "esp32dev"), boot_app0()),
-        device(site, "bridge-c5", "ESP-NOW ブリッジ（XIAO ESP32-C5）", "ESP32-C5",
+        device(site, "bridge-c5", "ELRSバックパック-ブリッジ（XIAO ESP32-C5）", "ESP32-C5",
                os.path.join(br, "xiao_esp32c5"), boot_app0()),
     ]
     for d in devices:

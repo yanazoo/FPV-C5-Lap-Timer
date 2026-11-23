@@ -89,7 +89,7 @@ progress{width:100%;height:14px}
 </div>
 
 <div class="card">
-  <h2>ESP-NOW ブリッジ</h2>
+  <h2>ELRSバックパック-ブリッジ</h2>
   <p>ゴーグル OSD・送信機のリンクの読み取りに使います（elrs-netpack）。使っているボードを選んでください。</p>
   <div class="row">
     <label>ハード：<select id="brHw">
@@ -148,9 +148,9 @@ let devices = [
   {key:"timer-s3", name:"タイマー（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000,"littlefs.bin":0x670000}},
   {key:"receiver-c5", name:"受信機（XIAO ESP32-C5・FPVGate C5MK）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xf000,"firmware.bin":0x20000}},
   {key:"netpack-s3", name:"ELRS Netpack（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
-  {key:"bridge-c3", name:"ESP-NOW ブリッジ（XIAO ESP32-C3）", chip:"ESP32-C3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
-  {key:"bridge-c5", name:"ESP-NOW ブリッジ（XIAO ESP32-C5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
-  {key:"bridge-esp32", name:"ESP-NOW ブリッジ（ESP32 Wrover-E）", chip:"ESP32", offsets:{"bootloader.bin":0x1000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c3", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C3）", chip:"ESP32-C3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c5", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-esp32", name:"ELRSバックパック-ブリッジ（ESP32 Wrover-E）", chip:"ESP32", offsets:{"bootloader.bin":0x1000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
 ];
 const $ = id => document.getElementById(id);
 const files = [];   // {name, data: Uint8Array, addr: string}

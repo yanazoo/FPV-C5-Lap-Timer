@@ -1,18 +1,19 @@
 # ELRS OSD — UART 接続のセットアップ
 
-FPV C5 Lap Timer（XIAO ESP32-S3）から、elrs-netpack の **ESP-NOW ブリッジ**を UART で直接つなぎ、**HDZero ゴーグル**の ELRS バックパックへラップタイムを表示する手順です。ゴーグル OSD の**基本（推奨）の構成**です。
+FPV C5 Lap Timer（XIAO ESP32-S3）から、elrs-netpack の **ELRSバックパック-ブリッジ**を UART で直接つなぎ、**HDZero ゴーグル**の ELRS バックパックへラップタイムを表示する手順です。ゴーグル OSD の**基本（推奨）の構成**です。
 
 > ゴーグル OSD は **HDZero ゴーグルのみ対応**しています。
 
-WiFi 接続（netpack の XIAO を経由する方式）と違い、**netpack の XIAO も WiFi 設定も不要**です。ブリッジには次のどちらかを使います。
+WiFi 接続（netpack の XIAO を経由する方式）と違い、**netpack の XIAO も WiFi 設定も不要**です。ブリッジには次のどれかを使います。
 
 | ブリッジ用ボード | PlatformIO 環境 | 備考 |
 |---|---|---|
 | ESP32 Wrover-E（ESP32 開発ボード） | `esp32dev` | elrs-netpack 標準のボード |
 | **Seeed Studio XIAO ESP32-C3** | `xiao_esp32c3` | Wrover-E の代わりに使える小型ボード |
+| **Seeed Studio XIAO ESP32-C5** | `xiao_esp32c5` | 小型ボード（elrs-netpack v2.2.1 以降）。2.4 GHz の ch 1 だけを使います |
 
 ```
-XIAO ESP32-S3（タイマー） ──UART 115200bps── ESP-NOW ブリッジ（Wrover-E / XIAO C3）
+XIAO ESP32-S3（タイマー） ──UART 115200bps── ELRSバックパック-ブリッジ（Wrover-E / XIAO C3 / XIAO C5）
                                                     │ ESP-NOW（2.4GHz ch 1）
                                                     ▼
                                          ゴーグルの ELRS バックパック
@@ -30,6 +31,12 @@ XIAO ESP32-S3（タイマー） ──UART 115200bps── ESP-NOW ブリッジ�
 pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e xiao_esp32c3 -t upload --upload-port COMx
 ```
 
+**XIAO ESP32-C5 の場合**
+
+```powershell
+pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e xiao_esp32c5 -t upload --upload-port COMx
+```
+
 **ESP32 Wrover-E の場合**
 
 ```powershell
@@ -37,12 +44,12 @@ pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -t upload --u
 ```
 
 > Windows で `pio` が見つからない場合は `C:\Users\<ユーザー名>\.platformio\penv\Scripts\platformio.exe` を使ってください。
-> CI（GitHub Actions）の成果物 `elrs-espnow-bridge` にもビルド済みのバイナリがあります。
+> PlatformIO を使わない場合は、[Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/)の「ELRSバックパック-ブリッジ」でハード（XIAO C3 / XIAO C5 / Wrover-E）を選んで書き込めます。
 
 書き込み後、ブリッジの USB シリアル（115200bps）に次のように表示されれば正常です。
 
 ```
-[boot] ESP-NOW bridge (UART RX=GPIO20 TX=GPIO21)     ← XIAO C3 の場合（Wrover-E は GPIO26 / GPIO27）
+[boot] ESP-NOW bridge (UART RX=GPIO20 TX=GPIO21)     ← XIAO C3 の場合（XIAO C5 は GPIO12 / GPIO11、Wrover-E は GPIO26 / GPIO27）
 [wifi] channel fixed to 1
 [espnow] (re)initialized
 [boot] ready
@@ -60,6 +67,14 @@ TX と RX は**交差**させます（タイマーの TX → ブリッジの RX�
 |---|---|---|
 | D6 / GPIO43（TX） | → | D7 / GPIO20（RX） |
 | D7 / GPIO44（RX） | ← | D6 / GPIO21（TX） |
+| GND | — | GND |
+
+**XIAO ESP32-C5 の場合**（XIAO C3 と同じ D7 / D6）
+
+| XIAO ESP32-S3（タイマー） | 向き | XIAO ESP32-C5（ブリッジ） |
+|---|---|---|
+| D6 / GPIO43（TX） | → | D7 / GPIO12（RX） |
+| D7 / GPIO44（RX） | ← | D6 / GPIO11（TX） |
 | GND | — | GND |
 
 **ESP32 Wrover-E の場合**
@@ -83,7 +98,7 @@ TX と RX は**交差**させます（タイマーの TX → ブリッジの RX�
    - 「OSD」にチェックを入れ、Ch1〜8 のどれかに割り当てます。
 2. **ELRS OSD**
    - 「ELRS OSD を有効にする」をオン
-   - 接続方式：**「UART（ESP-NOW ブリッジに直結：XIAO C3 / Wrover）推奨」**（初期値）
+   - 接続方式：**「UART（ELRSバックパック-ブリッジに直結：XIAO C3 / C5 / Wrover）推奨」**（初期値）
    - 「保存」
 3. **「🥽 OSDテスト」** を押し、ゴーグルに `OSD TEST` / `FPV C5 LAP TIMER` が 5 秒間表示されれば完了です。
 
@@ -108,7 +123,7 @@ TX と RX は**交差**させます（タイマーの TX → ブリッジの RX�
 | `[uid] set to ...` は出るがゴーグルに表示されない | バインドフレーズがゴーグル側と完全に一致しているか（大文字・小文字・空白も区別）、ゴーグルのバックパックの電源が入っているか |
 | `[espnow] no peer yet, drop MSP` が出る | パイロットの OSD チェック・Ch 割り当てを確認（宛先 UID が設定されていない） |
 | 表示が抜ける・遅れる（クライアントモード） | ルーターの 2.4GHz チャンネルを 6〜11 にしてください。ESP-NOW は ch 1 固定なので、ルーターが ch 1〜4 だと電波を取り合います（ホストモードのタイマーは ch 6） |
-| 表示が抜ける・遅れる | ゴーグルまでの距離、ブリッジのアンテナ（XIAO C3 は付属アンテナを接続）、ESP-NOW チャンネル（ch 1 固定）。ブリッジも最新のファームウェアに書き込み直してください（古い版は受信確認を待つ方式で、電源の入っていないゴーグルがあると遅れました） |
+| 表示が抜ける・遅れる | ゴーグルまでの距離、ブリッジのアンテナ（XIAO C3 / C5 は付属アンテナを接続）、ESP-NOW チャンネル（ch 1 固定）。ブリッジも最新のファームウェアに書き込み直してください（古い版は受信確認を待つ方式で、電源の入っていないゴーグルがあると遅れました） |
 | 表示された行が一瞬消える・ちらつく | タイマー（S3）とブリッジの両方を最新のファームウェアに書き込み直してください（古い版はパケットが 1 つ落ちると行が消えました）。`git pull` の後に `git submodule update --init --recursive` を忘れずに |
 
 > UART 方式は線がつながっていることを確認できないため、設定画面の「ELRS netpack」欄は配線前でも「接続中 UART」と表示されます。実際に届いているかはブリッジのログで確認してください。
