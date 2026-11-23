@@ -253,7 +253,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 ### 3. ELRSバックパック-ブリッジ（elrs-netpack）を準備する
 
 - **UART 直結の場合（推奨）**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（XIAO ESP32-C3 / XIAO ESP32-C5 / Wrover-E）に書き込み・配線し、設定の接続方式は初期値の「UART」のままで使えます。
-- **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ELRSバックパック-ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`、XIAO ESP32-C5 は `xiao_esp32c5`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-Netpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
+- **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ELRSバックパック-ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`、XIAO ESP32-C5 は `xiao_esp32c5`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-NETpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
 
 ### 4. 初期設定（Web UI）
 
@@ -265,7 +265,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 | WiFi（ホストモード）のパスワード | `fpv-c5-lt` |
 | Web UI の URL | `http://20.0.0.1`（クライアントモードでは `http://fpv-c5-lt.local`） |
 | 管理者パスワード（ログイン） | `admin` |
-| netpack XIAO の設定用 AP（WiFi 接続で使う場合） | SSID `ELRS-Netpack-Setup` / パスワード `elrs-netpack` / `http://192.168.4.1` |
+| netpack XIAO の設定用 AP（WiFi 接続で使う場合） | SSID `ELRS-NETpack-Setup` / パスワード `elrs-netpack` / `http://192.168.4.1` |
 | パイロット情報 | `R2`〜`R5` の 4 人（Raceband R2 5695 / R3 5732 / R4 5769 / R5 5806 を Ch1〜Ch4 に割り当て、よみかたは「あーるつー」など、バインドフレーズは空欄＝名前、ゴーグル OSD は OFF） |
 
 初期のパイロット情報が入るのは、パイロット情報を一度も保存していないタイマー（新品、またはフラッシュを消去したもの）だけです。今のパイロット情報は書き込みで上書きされません（全員削除した場合も、空のままです）。名前は公開用の初期値なので、パイロット情報の「編集」で変えてください。初期状態に戻したいときは、`pio run -e xiao_esp32s3 -t erase` でフラッシュを消してから `upload` と `uploadfs` を書き込みます（WiFi などの設定もすべて初期値に戻ります）。
