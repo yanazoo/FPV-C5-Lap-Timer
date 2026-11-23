@@ -233,7 +233,7 @@ pio run -e xiaoc5 -t upload --upload-port <C5のポート>
 
 **かんたんな方法：Web 書き込みページ**（PlatformIO も git も不要）
 
-PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5）・ESP-NOW ブリッジ（XIAO C3 / Wrover-E）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。
+PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5）・ELRS Netpack（S3）・ESP-NOW ブリッジ（XIAO C3 / XIAO C5 / Wrover-E をハードで選択）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。同じページの「**ファイルを指定して書き込む**」では、試験版や前の版の .bin（またはリリースの zip）を選んで書き込めます。書き込み先のアドレスはファイル名から自動で入り（変更可）、firmware.bin には「最初のアプリから起動」（otadata）が自動で付きます。
 
 **PlatformIO で書き込む場合**
 

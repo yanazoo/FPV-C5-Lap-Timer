@@ -81,10 +81,15 @@ def main():
                ("littlefs.bin", os.path.join(s3, "littlefs.bin"), 1, (0x82,))),
         device(site, "receiver-c5", "FPVGate C5MK 受信機（XIAO ESP32-C5）", "ESP32-C5", c5,
                os.path.join(c5, "ota_data_initial.bin")),
+        device(site, "netpack-s3", "ELRS Netpack（XIAO ESP32-S3）", "ESP32-S3",
+               os.path.join(root, "third_party", "elrs-netpack", "elrs-xiao-webui", ".pio", "build", "xiao_esp32s3"),
+               boot_app0()),
         device(site, "bridge-c3", "ESP-NOW ブリッジ（XIAO ESP32-C3）", "ESP32-C3",
                os.path.join(br, "xiao_esp32c3"), boot_app0()),
         device(site, "bridge-esp32", "ESP-NOW ブリッジ（ESP32 Wrover-E）", "ESP32",
                os.path.join(br, "esp32dev"), boot_app0()),
+        device(site, "bridge-c5", "ESP-NOW ブリッジ（XIAO ESP32-C5）", "ESP32-C5",
+               os.path.join(br, "xiao_esp32c5"), boot_app0()),
     ]
     for d in devices:
         manifest = {
@@ -96,6 +101,11 @@ def main():
         }
         with open(os.path.join(site, "manifest-%s.json" % d["key"]), "w") as f:
             json.dump(manifest, f, ensure_ascii=False, indent=1)
+    # The offsets per device, for writing files of one's own.
+    with open(os.path.join(site, "devices.json"), "w") as f:
+        json.dump([{"key": d["key"], "name": d["name"], "chip": d["chip"],
+                    "offsets": {p["path"].split("/")[-1]: p["offset"] for p in d["parts"]}} for d in devices],
+                  f, ensure_ascii=False, indent=1)
     with open(os.path.join(site, "version.json"), "w") as f:
         json.dump({"version": tag}, f)
     print("flasher site for %s in %s: %s" % (tag, site, ", ".join(d["key"] for d in devices)))

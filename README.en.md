@@ -194,8 +194,12 @@ CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 **Without PlatformIO: the web flasher.** Open the
 [web flasher](https://yanazoo.github.io/FPV-C5-Lap-Timer/) in Chrome or Edge
 on a PC, plug the device in by USB and press "書き込む": the latest release
-for the timer (S3), the receiver (C5) and the ESP-NOW bridge (XIAO C3 /
-Wrover-E). Leave "Erase device" unticked to keep settings and pilots. It is
+for the timer (S3), the receiver (C5), ELRS Netpack (S3) and the ESP-NOW
+bridge (pick XIAO C3 / XIAO C5 / Wrover-E). Leave "Erase device" unticked to
+keep settings and pilots. "ファイルを指定して書き込む" (your own files) on the
+same page writes .bin files of a test build or an older release (or a release
+zip): addresses come from the file names (editable), and a firmware.bin gets
+the otadata that starts the first app slot. It is
 published to GitHub Pages with every release (once: Settings → Pages →
 Source: GitHub Actions).
 
