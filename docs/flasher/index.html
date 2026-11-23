@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>FPV C5 Lap Timer 書き込み</title>
 <script type="module" src="https://unpkg.com/esp-web-tools@10.5.2/dist/web/install-button.js?module"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
-:root{--bg:#0d1117;--sf:#161b22;--bd:#30363d;--tx:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--warn:#d29922;--ok:#3fb950}
-@media (prefers-color-scheme: light){:root{--bg:#f6f8fa;--sf:#fff;--bd:#d0d7de;--tx:#1f2328;--muted:#59636e;--accent:#0969da;--warn:#9a6700;--ok:#1a7f37}}
+:root{--bg:#0d1117;--sf:#161b22;--bd:#30363d;--tx:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--warn:#d29922;--ok:#3fb950;--err:#f85149;--in:#0d1117}
+@media (prefers-color-scheme: light){:root{--bg:#f6f8fa;--sf:#fff;--bd:#d0d7de;--tx:#1f2328;--muted:#59636e;--accent:#0969da;--warn:#9a6700;--ok:#1a7f37;--err:#cf222e;--in:#f6f8fa}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.6}
 main{max-width:760px;margin:0 auto;padding:24px 16px 48px}
@@ -21,8 +22,24 @@ h1{font-size:22px;margin:0 0 4px}
 .warn{color:var(--warn)}
 esp-web-install-button button,esp-web-install-button [slot=activate]{font:inherit}
 .btn{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:15px;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:default}
+.btn2{white-space:nowrap;background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer}
 .unsupported{color:var(--warn);font-size:14px}
 a{color:var(--accent)}
+h3{font-size:15px;margin:20px 0 6px}
+select,input[type=text]{background:var(--in);color:var(--tx);border:1px solid var(--bd);border-radius:6px;padding:6px 8px;font:inherit;font-size:14px}
+.files{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0}
+.files td,.files th{border-bottom:1px solid var(--bd);padding:6px 4px;text-align:left;vertical-align:middle}
+.files th{color:var(--muted);font-weight:600;font-size:12px}
+.files input[type=text]{width:100px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.files .nm{word-break:break-all}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.drop{border:2px dashed var(--bd);border-radius:8px;padding:14px;text-align:center;color:var(--muted);font-size:14px;cursor:pointer}
+.drop.on{border-color:var(--accent);color:var(--accent)}
+progress{width:100%;height:14px}
+#log{background:var(--in);border:1px solid var(--bd);border-radius:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;height:160px;overflow:auto;padding:6px;white-space:pre-wrap;margin-top:8px}
+.st{font-size:14px;font-weight:600;min-height:1.4em}
+.ok{color:var(--ok)}.err{color:var(--err)}
 </style>
 </head>
 <body>
@@ -40,6 +57,8 @@ a{color:var(--accent)}
     <li>タイマーは、クライアントモードでインターネットにつながっていれば、設定タブの「ファーム更新」からも更新できます（USB 不要）。</li>
   </ul>
 </div>
+
+<h3>最新版を書き込む</h3>
 
 <div class="card">
   <h2>タイマー（XIAO ESP32-S3）</h2>
@@ -61,27 +80,212 @@ a{color:var(--accent)}
 </div>
 
 <div class="card">
-  <h2>ESP-NOW ブリッジ（XIAO ESP32-C3）</h2>
-  <p>ゴーグル OSD・送信機のリンクの読み取りに使います（elrs-netpack）。</p>
-  <esp-web-install-button manifest="manifest-bridge-c3.json">
+  <h2>ELRS Netpack（XIAO ESP32-S3）</h2>
+  <p>WiFi 接続で使う場合の netpack の XIAO（TCP の中継・Web 設定画面・ホストモード・USB テザリング）。</p>
+  <esp-web-install-button manifest="manifest-netpack-s3.json">
     <button slot="activate" class="btn">書き込む</button>
     <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
   </esp-web-install-button>
 </div>
 
 <div class="card">
-  <h2>ESP-NOW ブリッジ（ESP32 Wrover-E）</h2>
-  <p>Wrover-E でブリッジを作った場合はこちら。</p>
-  <esp-web-install-button manifest="manifest-bridge-esp32.json">
+  <h2>ESP-NOW ブリッジ</h2>
+  <p>ゴーグル OSD・送信機のリンクの読み取りに使います（elrs-netpack）。使っているボードを選んでください。</p>
+  <div class="row">
+    <label>ハード：<select id="brHw">
+      <option value="manifest-bridge-c3.json">XIAO ESP32-C3</option>
+      <option value="manifest-bridge-c5.json">XIAO ESP32-C5</option>
+      <option value="manifest-bridge-esp32.json">ESP32 Wrover-E</option>
+    </select></label>
+  </div>
+  <esp-web-install-button id="brBtn" manifest="manifest-bridge-c3.json">
     <button slot="activate" class="btn">書き込む</button>
     <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
   </esp-web-install-button>
 </div>
 
+<h3>ファイルを指定して書き込む</h3>
+
+<div class="card">
+  <p>試験版・前の版など、手元の .bin（またはリリースの zip）を書き込みます（タイマーは firmware.bin と littlefs.bin の両方を）。ファイル名から書き込み先のアドレスを決めます（変更できます）。</p>
+  <div class="row">
+    <label>機器：<select id="dev"></select></label>
+  </div>
+  <div id="drop" class="drop">ここに .bin / .zip をドロップ、またはクリックして選ぶ
+    <input id="pick" type="file" accept=".bin,.zip" multiple hidden>
+  </div>
+  <table class="files" id="tbl" hidden>
+    <thead><tr><th>ファイル</th><th>大きさ</th><th>アドレス</th><th></th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div class="note" style="color:var(--muted)">
+    アドレスの目安：<span id="hint"></span>。<code>*-full.bin</code>（1 つにまとめたもの）は <code>0x0</code>、<code>firmware.bin</code> だけなら設定はそのまま残ります。
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="erase"> 書き込む前にすべて消去する（<span class="warn">設定も消えます</span>）</label>
+  </div>
+  <div class="row">
+    <button class="btn" id="go" disabled>接続して書き込む</button>
+    <span class="unsupported" id="noserial" hidden>このブラウザーでは書き込めません。PC の Chrome / Edge で開いてください。</span>
+  </div>
+  <progress id="prog" value="0" max="100" hidden></progress>
+  <div class="st" id="st"></div>
+  <div id="log" hidden></div>
+</div>
+
 <p class="note"><a href="https://github.com/yanazoo/FPV-C5-Lap-Timer/releases/latest">リリースノート・ビルド済みファイル（GitHub）</a></p>
 </main>
 <script>
+document.getElementById('brHw').addEventListener('change',e=>document.getElementById('brBtn').setAttribute('manifest',e.target.value));
 fetch('version.json').then(r=>r.json()).then(v=>{document.getElementById('ver').textContent='リリース '+v.version;}).catch(()=>{});
+</script>
+<script type="module">
+import {ESPLoader, Transport} from "https://unpkg.com/esptool-js@0.5.7/bundle.js";
+
+// The offsets of each device (devices.json from the release build; these
+// are the same, for when it can't be read).
+let devices = [
+  {key:"timer-s3", name:"タイマー（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000,"littlefs.bin":0x670000}},
+  {key:"receiver-c5", name:"受信機（XIAO ESP32-C5・FPVGate C5MK）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xf000,"firmware.bin":0x20000}},
+  {key:"netpack-s3", name:"ELRS Netpack（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c3", name:"ESP-NOW ブリッジ（XIAO ESP32-C3）", chip:"ESP32-C3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c5", name:"ESP-NOW ブリッジ（XIAO ESP32-C5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-esp32", name:"ESP-NOW ブリッジ（ESP32 Wrover-E）", chip:"ESP32", offsets:{"bootloader.bin":0x1000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+];
+const $ = id => document.getElementById(id);
+const files = [];   // {name, data: Uint8Array, addr: string}
+const hex = n => "0x" + n.toString(16);
+
+function dev(){ return devices.find(d => d.key === $("dev").value) || devices[0]; }
+function fillDevices(){
+  const cur = $("dev").value;
+  $("dev").innerHTML = devices.map(d => `<option value="${d.key}">${d.name}</option>`).join("");
+  if (cur) $("dev").value = cur;
+  showHint();
+}
+function showHint(){
+  const o = dev().offsets;
+  $("hint").textContent = Object.keys(o).map(k => k + " " + hex(o[k])).join("、");
+}
+// Where a file goes, from its name (the device's part names: bootloader,
+// partitions, otadata, firmware, littlefs; a whole image at 0x0).
+function guess(name){
+  const n = name.toLowerCase(), o = dev().offsets;
+  if (/full|merged|factory/.test(n)) return 0;
+  if (n.includes("boot_app0") || n.includes("otadata") || n.includes("ota_data")) return o["otadata.bin"];
+  for (const k of Object.keys(o)) {
+    const stem = k.replace(/\.bin$/, "").replace(/s$/, "");
+    if (stem !== "firmware" && stem !== "otadata" && n.includes(stem)) return o[k];
+  }
+  return o["firmware.bin"];
+}
+function render(){
+  $("tbl").hidden = !files.length;
+  $("rows").innerHTML = files.map((f, i) =>
+    `<tr><td class="nm">${f.name.replace(/[<&]/g, "")}</td><td>${(f.data.length/1024).toFixed(0)} KB</td>` +
+    `<td><input type="text" value="${f.addr}" data-i="${i}"></td><td><button class="btn2" data-del="${i}">外す</button></td></tr>`).join("");
+  $("go").disabled = !files.length || !("serial" in navigator);
+}
+$("rows").addEventListener("input", e => { if (e.target.dataset.i) files[e.target.dataset.i].addr = e.target.value.trim(); });
+$("rows").addEventListener("click", e => { if (e.target.dataset.del) { files.splice(+e.target.dataset.del, 1); render(); } });
+$("dev").addEventListener("change", () => {
+  showHint();
+  files.forEach(f => f.addr = hex(f.name.startsWith("otadata（") ? dev().offsets["otadata.bin"] : guess(f.name)));
+  render();
+});
+
+async function addFiles(list){
+  for (const f of list) {
+    if (f.name.toLowerCase().endsWith(".zip")) {
+      // A release zip: its bootloader / partitions / firmware, plus the
+      // otadata that selects the first app slot.
+      try {
+        const z = await JSZip.loadAsync(f);
+        for (const name of Object.keys(z.files)) {
+          if (!name.toLowerCase().endsWith(".bin") || z.files[name].dir) continue;
+          const base = name.split("/").pop();
+          files.push({name: base, data: await z.files[name].async("uint8array"), addr: hex(guess(base))});
+        }
+      } catch (e) { status("zip を開けませんでした：" + e, "err"); }
+    } else {
+      files.push({name: f.name, data: new Uint8Array(await f.arrayBuffer()), addr: hex(guess(f.name))});
+    }
+  }
+  addOtadata();
+  files.sort((a, b) => parseInt(a.addr) - parseInt(b.addr));
+  render();
+}
+// A firmware.bin goes to the first app slot; a netpack updated online may
+// be starting from the second. The otadata cleared (all 0xFF, as Arduino's
+// boot_app0.bin) starts the first again. Added unless one is there (or a
+// whole image at 0x0).
+function addOtadata(){
+  const o = dev().offsets;
+  const fw = files.some(f => parseInt(f.addr) === o["firmware.bin"]);
+  const has = files.some(f => parseInt(f.addr) === o["otadata.bin"] || parseInt(f.addr) === 0 && f.data.length > o["otadata.bin"]);
+  if (fw && !has) files.push({name: "otadata（最初のアプリから起動）", data: new Uint8Array(8192).fill(0xff), addr: hex(o["otadata.bin"])});
+}
+$("drop").addEventListener("click", () => $("pick").click());
+$("pick").addEventListener("change", e => { addFiles(e.target.files); e.target.value = ""; });
+["dragenter","dragover"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.add("on"); }));
+["dragleave","drop"].forEach(t => $("drop").addEventListener(t, e => { e.preventDefault(); $("drop").classList.remove("on"); }));
+$("drop").addEventListener("drop", e => addFiles(e.dataTransfer.files));
+
+function status(t, cls){ $("st").textContent = t; $("st").className = "st " + (cls || ""); }
+function log(t){ const l = $("log"); l.hidden = false; l.textContent += t; l.scrollTop = l.scrollHeight; }
+const terminal = { clean(){ $("log").textContent = ""; }, writeLine(d){ log(d + "\n"); }, write(d){ log(d); } };
+
+$("go").addEventListener("click", async () => {
+  // Addresses: numbers, in order, not overlapping.
+  const list = [];
+  for (const f of files) {
+    const a = parseInt(f.addr);
+    if (!/^(0x[0-9a-f]+|\d+)$/i.test(f.addr) || isNaN(a)) { status(f.name + " のアドレスが正しくありません", "err"); return; }
+    list.push({f, a});
+  }
+  list.sort((x, y) => x.a - y.a);
+  for (let i = 1; i < list.length; i++)
+    if (list[i-1].a + list[i-1].f.data.length > list[i].a) { status(list[i-1].f.name + " と " + list[i].f.name + " の書き込み先が重なっています", "err"); return; }
+  const erase = $("erase").checked;
+  if (erase && !confirm("すべて消去してから書き込みます。WiFi などの設定も消えます。よろしいですか？")) return;
+
+  let transport;
+  $("go").disabled = true;
+  try {
+    const port = await navigator.serial.requestPort();
+    transport = new Transport(port, false);
+    const loader = new ESPLoader({transport, baudrate: 921600, romBaudrate: 115200, terminal});
+    status("接続しています…");
+    const chip = await loader.main();
+    const want = dev().chip;
+    // "ESP32-S3 (QFN56) …" / "ESP32-D0WD-V3 …": the family is the start.
+    const fam = (chip.match(/^ESP32-[A-Z]\d+/) || [chip.startsWith("ESP32") ? "ESP32" : chip])[0];
+    if (fam !== want && !confirm("つながった機器は " + chip + " です（選んだ機器は " + want + "）。このまま書き込みますか？")) throw "中止しました";
+    $("prog").hidden = false; $("prog").value = 0;
+    const total = list.reduce((s, x) => s + x.f.data.length, 0);
+    const before = list.map((x, i) => list.slice(0, i).reduce((s, y) => s + y.f.data.length, 0));
+    status("書き込んでいます…");
+    await loader.writeFlash({
+      fileArray: list.map(x => ({data: loader.ui8ToBstr(x.f.data), address: x.a})),
+      flashSize: "keep", flashMode: "keep", flashFreq: "keep",
+      eraseAll: erase, compress: true,
+      reportProgress: (i, written, size) => { $("prog").value = Math.round((before[i] + written / size * list[i].f.data.length) / total * 100); },
+    });
+    $("prog").value = 100;
+    await loader.after();
+    status("書き込みました。機器を再起動しました。", "ok");
+  } catch (e) {
+    status("失敗：" + (e && e.message ? e.message : e), "err");
+  } finally {
+    try { if (transport) await transport.disconnect(); } catch (e) {}
+    $("go").disabled = !files.length;
+  }
+});
+
+if (!("serial" in navigator)) $("noserial").hidden = false;
+fillDevices();
+fetch("devices.json").then(r => r.json()).then(d => { if (Array.isArray(d) && d.length) { devices = d; fillDevices(); } }).catch(() => {});
+render();
 </script>
 </body>
 </html>

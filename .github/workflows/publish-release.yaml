@@ -64,7 +64,8 @@ jobs:
           pio run -e xiao_esp32s3
           pio run -e xiao_esp32s3 -t buildfs
           pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
-          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3
+          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3 -e xiao_esp32c5
+          pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3
 
       - name: Package
         if: steps.params.outputs.skip == 'false'
@@ -79,7 +80,9 @@ jobs:
             bootloader.bin partitions.bin firmware.bin littlefs.bin
           pack "fpvgate-c5mk-${TAG}-xiaoc5.zip" third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5 \
             bootloader.bin partitions.bin ota_data_initial.bin firmware.bin
-          for env in esp32dev xiao_esp32c3; do
+          pack "elrs-netpack-${TAG}-xiao_esp32s3.zip" third_party/elrs-netpack/elrs-xiao-webui/.pio/build/xiao_esp32s3 \
+            bootloader.bin partitions.bin firmware.bin
+          for env in esp32dev xiao_esp32c3 xiao_esp32c5; do
             pack "elrs-espnow-bridge-${TAG}-${env}.zip" \
               third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/$env \
               bootloader.bin partitions.bin firmware.bin
