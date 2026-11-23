@@ -108,6 +108,7 @@ function switchTab(tab){
   // Returning to a tab: repaint its live widgets immediately (the hot RSSI
   // path only touches the DOM of the currently-active tab).
   if(tab==='race')slots.forEach(p=>updateRaceCard(p));
+  if(tab==='calib'&&typeof calibLoopsStart==='function')calibLoopsStart();
   // SD card polling on the timer: on for the settings and SD tabs. "Off"
   // is not sent again when it was off already (race <-> calibration): each
   // request takes the timer's time. "On" is always sent: another admin's

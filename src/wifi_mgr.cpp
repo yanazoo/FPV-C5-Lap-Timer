@@ -72,6 +72,7 @@ static bool     everJoined = false;  // joined the network since this boot
 static bool     waitRacing = false;  // the current wait for the link is a race's (netRaceHoldSec)
 static bool     fellBack = false;
 static uint32_t staSinceMs = 0;      // start of the current wait for a link
+static volatile uint32_t linkEpoch = 0;   // netLinkEpoch()
 
 static void startAp() {
     if (staMode) {
@@ -176,6 +177,8 @@ void netBegin() {
         WiFi.onEvent(onStaDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
         WiFi.setHostname(MDNS_NAME);   // before the STA interface comes up
         WiFi.mode(WIFI_STA);
+        // 20 MHz, like the access points it joins (the netpack's is 20 MHz).
+        esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
         pickNetwork();
         WiFi.setAutoReconnect(true);
         // Look on every channel and take the strongest access point of the
@@ -264,6 +267,7 @@ void netLoop() {
             rtcStaTrying = 0;
             rtcProbe.restarts = 0;
             lastReason = loggedReason = 0;
+            linkEpoch = linkEpoch + 1;
             Serial.printf("[WiFi] client: joined \"%s\"  IP=%s  (http://%s.local)\n", staSsid.c_str(),
                           WiFi.localIP().toString().c_str(), MDNS_NAME);
         }
@@ -274,7 +278,8 @@ void netLoop() {
         staJoined = false;
         staSinceMs = now;
         rtcStaTrying = kStaTrying;
-        Serial.println("[WiFi] client: link lost, reconnecting");
+        linkEpoch = linkEpoch + 1;
+        Serial.printf("[WiFi] client: link lost (reason %u %s), reconnecting\n", lastReason, reasonText(lastReason));
     }
     // Link lost during a race (or with laps not yet cleared): wait longer
     // for the router, netRaceHoldSec (0: as long as it takes). Every phone
@@ -303,6 +308,10 @@ void netLoop() {
 }
 
 bool netIsAp() { return apUp; }
+
+uint32_t netLinkEpoch() { return linkEpoch; }
+
+bool netUp() { return apUp || (staMode && staJoined); }
 
 IPAddress netIp() { return apUp ? AP_IP : WiFi.localIP(); }
 

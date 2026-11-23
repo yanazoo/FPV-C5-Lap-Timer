@@ -3,16 +3,22 @@
 var charts={};
 var chartDirty=Array(N).fill(false);
 
-// Runs at 60fps via rAF; draws only when calib tab is active and data changed.
-// The hot RSSI path only pushes chart data while the calib tab is open, so
-// off-tab this loop has nothing dirty to do.
-(function chartLoop(){
-  requestAnimationFrame(chartLoop);
+// Runs via rAF while the calib tab is open (calibLoopsStart() from
+// switchTab), drawing only what changed. Off the tab it stops: a loop at the
+// screen's rate on every tab kept phones busy for nothing.
+var chartRaf=0;
+function chartLoop(){
+  chartRaf=0;
   if(activeTab!=='calib')return;
+  chartRaf=requestAnimationFrame(chartLoop);
   for(var i=0;i<N;i++){
     if(chartDirty[i]&&charts[i]){drawChart(i);if(zoomId===i)drawZoom();chartDirty[i]=false;}
   }
-})();
+}
+function calibLoopsStart(){
+  if(!chartRaf)chartRaf=requestAnimationFrame(chartLoop);
+  if(!micRaf)micRaf=requestAnimationFrame(micLoop);
+}
 
 function buildCalibCards(){
   var g=document.getElementById('calibGrid');g.innerHTML='';
@@ -261,11 +267,14 @@ function pushMic(lvl){
   micChart.data.copyWithin(0,1);micChart.data[199]=lvl;micDirty=true;
   if(activeTab==='calib'){var n=document.getElementById('micNow');if(n)n.textContent=lvl;}
 }
-(function micLoop(){
-  requestAnimationFrame(micLoop);
-  if(activeTab!=='calib'||!micDirty)return;
+var micRaf=0;
+function micLoop(){
+  micRaf=0;
+  if(activeTab!=='calib')return;
+  micRaf=requestAnimationFrame(micLoop);
+  if(!micDirty)return;
   micDirty=false;drawMic();
-})();
+}
 function drawMic(){
   var c=micChart;if(!c)return;
   var cv=c.cv;if(cv.offsetWidth&&cv.offsetWidth!==cv.width)cv.width=cv.offsetWidth;
