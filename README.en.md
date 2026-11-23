@@ -19,7 +19,7 @@ An FPV drone lap timer. No transponder on the
 quad: a **XIAO ESP32-C5 running [FPVGate C5MK](https://github.com/yanazoo/FPVGateC5MK)**
 measures each pilot's own 5.8 GHz VTX at ~1 kHz, a **XIAO ESP32-S3** detects
 gate passes at the RSSI peak, and lap times go to the pilots' **HDZero**
-goggles through the ESP-NOW bridge of
+goggles through the ELRS Backpack bridge of
 **[elrs-netpack](https://github.com/yanazoo/elrs-netpack)** and the goggles'
 ELRS backpack, using a firmware port of
 **[vrxc_elrs](https://github.com/yanazoo/vrxc_elrs)**'s OSD logic.
@@ -41,7 +41,7 @@ VTX 5.8 GHz ─▶ XIAO ESP32-C5 (C5MK) ─UART 921600─▶ XIAO ESP32-S3 (this
                                                         │ MSP v2: A. UART 115200 direct (recommended),
                                                         │ or B. WiFi TCP 8080 via the netpack XIAO
                                                         ▼
-               ESP-NOW bridge (XIAO ESP32-C3 or ESP32 Wrover-E) ─ESP-NOW ch1─▶ HDZero goggles
+               ELRS Backpack bridge (XIAO ESP32-C3 / C5 or ESP32 Wrover-E) ─ESP-NOW ch1─▶ HDZero goggles
 ```
 
 ## Screenshots (web UI)
@@ -153,19 +153,19 @@ also open in Excel.
     print (`qr_host_YYYYMMDD_HHMM.png` / `qr_client_YYYYMMDD_HHMM.png`).
   - Settings backups and QR images hold the WiFi password, so only a
     logged-in admin can download them.
-- Goggle OSD, option A (recommended, the base setup): the ESP-NOW bridge
-  (`elrs-espnow-bridge` on a XIAO ESP32-C3 or ESP32 Wrover-E) is wired
+- Goggle OSD, option A (recommended, the base setup): the ELRS Backpack bridge
+  (`elrs-espnow-bridge` on a XIAO ESP32-C3, XIAO ESP32-C5 or ESP32 Wrover-E) is wired
   straight to the S3 over UART; no netpack XIAO and no WiFi setup — see
   [docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) (Japanese). Connect GND only, not the power pins.
 
-  | XIAO ESP32-S3 | | XIAO ESP32-C3 (`xiao_esp32c3`) | ESP32 Wrover-E (`esp32dev`) |
-  |---|---|---|---|
-  | D6 / GPIO43 (TX) | → | D7 / GPIO20 (RX) | GPIO26 (RX) |
-  | D7 / GPIO44 (RX) | ← | D6 / GPIO21 (TX) | GPIO27 (TX) |
-  | GND | — | GND | GND |
+  | XIAO ESP32-S3 | | XIAO ESP32-C3 (`xiao_esp32c3`) | XIAO ESP32-C5 (`xiao_esp32c5`) | ESP32 Wrover-E (`esp32dev`) |
+  |---|---|---|---|---|
+  | D6 / GPIO43 (TX) | → | D7 / GPIO20 (RX) | D7 / GPIO12 (RX) | GPIO26 (RX) |
+  | D7 / GPIO44 (RX) | ← | D6 / GPIO21 (TX) | D6 / GPIO11 (TX) | GPIO27 (TX) |
+  | GND | — | GND | GND | GND |
 
 - Option B (the next choice, WiFi): the full elrs-netpack (netpack XIAO +
-  ESP-NOW bridge); the netpack XIAO joins the same WiFi as the timer (its AP
+  ELRS Backpack bridge); the netpack XIAO joins the same WiFi as the timer (its AP
   in host mode, or the same router in client mode) and the timer finds it on
   port 8080 automatically (`auto` scans AP clients, or looks up
   `elrs-netpack.local` in client mode). A bridge wired to the UART may stay
@@ -182,7 +182,7 @@ pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5 -t upload
 # S3 timer + web UI
 pio run -e xiao_esp32s3 -t upload
 pio run -e xiao_esp32s3 -t uploadfs
-# ESP-NOW bridge (xiao_esp32c3 or esp32dev)
+# ELRS Backpack bridge (xiao_esp32c3 or esp32dev)
 pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e xiao_esp32c3 -t upload
 ```
 
@@ -256,7 +256,7 @@ director's bind phrase ("ディレクターバインドフレーズ") and pick t
 kind: **toggle** (a switch that stays put: on starts, off stops) or **push**
 (a button: each press starts or stops; presses within 1.5 s count once). On
 the TX, assign the switch to Lua → Backpack → **DVR Rec**. The radio sends
-the switch once per flip: use the ESP-NOW bridge from elrs-netpack **v2.12+**,
+the switch once per flip: use the ELRS Backpack bridge from elrs-netpack **v2.12+**,
 which also hears it while sending the OSD on a pilot's UID (older bridges
 missed flips during the OSD and reacted only sometimes).
 
@@ -321,7 +321,7 @@ missed flips during the OSD and reacted only sometimes).
   message catches up within a second.
 
 After `git pull`, run `git submodule update --init --recursive` and flash the
-S3 (`upload` and `uploadfs`) and, for the UART link, the ESP-NOW bridge again.
+S3 (`upload` and `uploadfs`) and, for the UART link, the ELRS Backpack bridge again.
 
 ### 📶 Automatic channels from the pilots' ELRS links (optional)
 
@@ -428,7 +428,7 @@ To cover lost packets:
   as spaces for 8 s.
 - **Race clock**: each second only the clock row; the whole screen for a few
   seconds after a change and every 2 s.
-- **ESP-NOW bridge**: **connectionless** (broadcast, no ACK wait, no retries),
+- **ELRS Backpack bridge**: **connectionless** (broadcast, no ACK wait, no retries),
   each update sent **3 times** at least 3 ms apart. Goggles that are off
   don't delay anyone; two goggles on one bind phrase both show the OSD.
 - In client mode, put the router on 2.4 GHz **channel 6–11** (ESP-NOW is
@@ -464,7 +464,7 @@ To cover lost packets:
 
 ## Restart and a fixed IP address
 
-- Settings → "🔄 再起動" → "タイマーを再起動": pulling the plug, remotely, for when something is wrong. The timer (XIAO ESP32-S3) closes the browsers' connections, tells the router (or the phones on its access point) it is leaving, unmounts the SD card, **stops for 2 s** and starts much like a power-on. The C5 receiver and the ESP-NOW bridge keep running and the links come back after the restart; the page reopens by itself (log in again).
+- Settings → "🔄 再起動" → "タイマーを再起動": pulling the plug, remotely, for when something is wrong. The timer (XIAO ESP32-S3) closes the browsers' connections, tells the router (or the phones on its access point) it is leaving, unmounts the SD card, **stops for 2 s** and starts much like a power-on. The C5 receiver and the ELRS Backpack bridge keep running and the links come back after the restart; the page reopens by itself (log in again).
 - Settings → "🔄 再起動" → "🔁 全員の画面を再読み込み" (admins): every open page (viewers too) reloads; the timer keeps running.
 - When the timer has restarted (the button, a power cycle, `uploadfs`), open pages reload themselves on reconnecting.
 - Under Settings → "🔄 再起動": the uptime, why the timer last started (power-on, the restart button, a crash...), free memory, and how many starts followed a crash (kept across power cycles).
@@ -501,8 +501,8 @@ vrxc_elrs Python source and compares bind-phrase UIDs and OSD bytes with the
 firmware's, byte for byte. The web UI runs against a mock server with no
 hardware: `python3 tools/mock_server.py`, then `http://localhost:8000`
 (`/mock/seed` loads sample pilots and a race). CI (`.github/workflows/ci.yml`) runs them and
-builds the S3 timer, the C5 firmware and the ESP-NOW bridge (Wrover-E and
-XIAO ESP32-C3).
+builds the S3 timer, the C5 firmware, the netpack XIAO and the ELRS Backpack bridge
+(Wrover-E, XIAO ESP32-C3 and XIAO ESP32-C5).
 
 ## Sister project: ESP-NOW Lap Timer
 
