@@ -374,6 +374,9 @@ static void onPass(const C5Pass& p) {
 // closes a client whose queue fills (a dead phone), so one stale connection
 // can't stop telemetry for everyone else.
 static void sendTelemetry() {
+    int admins, viewers;
+    wsCounts(admins, viewers);
+    if (!admins) return;   // only admins get it (wsTelemetry): don't build it for nobody
     JsonDocument d;
     d["type"] = "rssi_all";
     d["ts"] = millis();

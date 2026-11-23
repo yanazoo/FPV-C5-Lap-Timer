@@ -32,12 +32,28 @@ uint32_t          recCap = 0;          // samples per channel the buffer holds
 volatile bool     recOn = false;
 volatile uint32_t recStart = 0;        // millis() of race time 0 (moved past pauses)
 volatile uint32_t recEnd = 0;          // race time recorded so far, ms
+// Cells below this are cleared for the race being recorded. A new race
+// clears as it goes (here, on the link task) instead of all at once at the
+// start: up to 5.8 MB of PSRAM, which held up the web server (and the WiFi
+// buffers, also in PSRAM) for a moment at every start.
+volatile uint32_t recClean = 0;
+volatile bool     recFresh = false;    // a new race: clear from 0 again
+
+// Clear every channel's cells up to and including index i.
+void recClear(uint32_t i) {
+    if (recFresh) recClean = 0, recFresh = false;
+    if (i >= recCap) i = recCap - 1;
+    for (uint32_t k = recClean; k <= i; k++)
+        for (int s = 0; s < 8; s++) recBuf[s * recCap + k] = 0;
+    if (i + 1 > recClean) recClean = i + 1;
+}
 
 void record(uint8_t slot, uint16_t v) {
     if (!recOn || !recBuf) return;
     uint32_t t = millis() - recStart;
     uint32_t i = t / C5_REC_MS;
     if (i >= recCap) return;
+    if (recFresh || i >= recClean) recClear(i);
     uint16_t& cell = recBuf[slot * recCap + i];
     if (v > cell) cell = v;
     if (t > recEnd) recEnd = t;
@@ -103,6 +119,11 @@ void linkTask(void*) {
             avail -= (int)got;
         }
         c5.tick(micros());
+        // Channels without readings: their cells are cleared here too.
+        if (recOn && recBuf) {
+            uint32_t i = (millis() - recStart) / C5_REC_MS;
+            if (i < recCap && (recFresh || i >= recClean)) recClear(i);
+        }
         uint32_t now = millis();
         if (now - lastRate >= 1000) {
             for (int i = 0; i < 8; i++) {
@@ -157,8 +178,8 @@ void c5RecStart(uint32_t raceStartMs, bool fresh) {
     if (!recBuf) return;
     recOn = false;
     if (fresh) {
-        memset(recBuf, 0, 8 * recCap * sizeof(uint16_t));
         recEnd = 0;
+        recFresh = true;   // the link task clears as the race goes
     }
     recStart = raceStartMs;
     recOn = true;
@@ -175,7 +196,7 @@ uint32_t c5RecSize(uint32_t minutes) {
     // Shorter if PSRAM can't hold it (halving, down to 5 min).
     for (uint32_t cap = want; cap >= 5u * 60000u / C5_REC_MS; cap /= 2) {
         recBuf = (uint16_t*)heap_caps_calloc(8 * cap, sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-        if (recBuf) { recCap = cap; break; }
+        if (recBuf) { recCap = cap; recClean = 0; recFresh = false; break; }
     }
     uint32_t got = recCap * C5_REC_MS / 60000u;
     if (!recBuf) Serial.println("[C5] no PSRAM: no RSSI recording for the race");

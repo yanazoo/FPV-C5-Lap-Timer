@@ -39,6 +39,7 @@ char     host[64] = "auto";
 uint16_t port = ELRS_TCP_PORT;
 
 uint32_t  lastAttempt = 0;
+const uint32_t ELRS_RETRY_MS = 2000;   // between attempts to reach the netpack
 IPAddress lastGood;
 volatile uint32_t netpackAddr = 0;   // lastGood, for the web task
 
@@ -322,13 +323,18 @@ void disconnect() {
     setStatus(false, "");
 }
 
-bool tryConnect(IPAddress ip) {
-    if (!client.connect(ip, port, 400)) return false;
+// timeoutMs: 1.5 s for the netpack's own address (a weak link may need the
+// SYN sent again; 400 ms gave up on a netpack that was there), 400 ms when
+// trying every device on the timer's access point (phones refuse at once).
+bool tryConnect(IPAddress ip, int timeoutMs = 1500) {
+    if (!client.connect(ip, port, timeoutMs)) return false;
     client.setNoDelay(true);
-    // TCP keepalive (5 s idle, 3 probes 2 s apart): if the netpack reboots
-    // or drops off WiFi between races, notice within ~11 s and reconnect,
-    // instead of holding a dead connection until the next OSD write.
-    int fd = client.fd(), on = 1, idle = 5, intvl = 2, cnt = 3;
+    // TCP keepalive (10 s idle, 4 probes 3 s apart, ~22 s): a netpack gone
+    // without a word is noticed and the connection made again. Not
+    // shorter: on a weak link a few lost probes dropped a good connection
+    // (the timer sends something every 5 s anyway; the WiFi link itself
+    // going is seen at once, netLinkEpoch()).
+    int fd = client.fd(), on = 1, idle = 10, intvl = 3, cnt = 4;
     setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof on);
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof idle);
     setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof intvl);
@@ -369,7 +375,7 @@ bool connectAuto() {
     for (int i = 0; i < n; i++) {
         IPAddress ip(pairs[i].ip.addr);
         if (ip == IPAddress() || ip == lastGood) continue;
-        if (tryConnect(ip)) return true;
+        if (tryConnect(ip, 400)) return true;
     }
     return false;
 }
@@ -416,13 +422,30 @@ void serviceTransport(uint32_t now) {
         uartParkAt = now - LISTEN_CFG_MS;
     }
     parkUartBridge(now);
+    // The WiFi link went or came back (client mode): the connection from
+    // before is dead; the netpack (host mode) dropped it when the timer
+    // left its WiFi. Make it again at once rather than finding out at the
+    // next write and waiting for the retry.
+    static uint32_t epoch = 0;
+    uint32_t e = netLinkEpoch();
+    if (e != epoch) {
+        epoch = e;
+        if (client.connected() || st.connected) {
+            Serial.println("[ELRS] WiFi link changed: netpack connection made again");
+            client.stop();
+            setStatus(false, "");
+        }
+        lastAttempt = now - ELRS_RETRY_MS;
+    }
     if (!client.connected()) {
         if (st.connected) {
             Serial.println("[ELRS] netpack connection lost");
             client.stop();
             setStatus(false, "");
         }
-        if (now - lastAttempt < 5000) return;
+        // No WiFi link (client mode, rejoining): nothing to try, and a
+        // name lookup would hold this task (the OSD) for a second.
+        if (!netUp() || now - lastAttempt < ELRS_RETRY_MS) return;
         lastAttempt = now;
         if (strcmp(host, "auto") == 0 || !host[0]) connectAuto();
         else connectHost();
@@ -435,7 +458,7 @@ void serviceTransport(uint32_t now) {
 void handle(const Event& e, uint32_t now) {
     switch (e.kind) {
     case Ev::Config:    refreshConfig(); break;
-    case Ev::Reconnect: refreshConfig(); disconnect(); lastAttempt = now - 5000; break;
+    case Ev::Reconnect: refreshConfig(); disconnect(); lastAttempt = now - ELRS_RETRY_MS; break;
     // Stage: 3-2-1 on the race clock row, with the browsers' countdown.
     case Ev::Stage:     engine.onRaceStage(now, e.text, 3); break;
     // The race has been running since e.at: start the clock that far in.

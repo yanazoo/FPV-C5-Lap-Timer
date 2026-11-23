@@ -38,3 +38,9 @@ void      netLoop();       // call from loop()
 bool      netIsAp();
 IPAddress netIp();
 NetStatus netStatus();
+// Client mode: counts each time the link to the network is lost or made
+// again. A connection made before a change is dead (the other end dropped
+// it, or will): the netpack's TCP is made afresh at once.
+uint32_t  netLinkEpoch();
+// Client mode joined, or host mode (the access point is always up).
+bool      netUp();
