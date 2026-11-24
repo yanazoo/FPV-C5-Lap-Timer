@@ -10,6 +10,7 @@
 #include "sd_store.h"
 #include "nvs_store.h"
 #include "ws_handler.h"
+#include "sys_diag.h"
 
 race::Core raceCore;
 
@@ -418,8 +419,10 @@ void sendC5Status() {
     d["gaps"]     = c.seqGaps;
     d["bad"]      = c.badRecords;
     // The S3's own chip temperature (its internal sensor; runs 10-20 C above
-    // the air around it), for the header.
-    float t = temperatureRead();
+    // the air around it), for the header. In the sensor's high range
+    // (sysCpuTemp): temperatureRead()'s 10-50 C range read high temperatures
+    // with a large error.
+    float t = sysCpuTemp();
     if (t == t && t > -40 && t < 150) d["cpuTemp"] = (int)lroundf(t);
     JsonArray rate = d["rate"].to<JsonArray>();
     for (int i = 0; i < 8; i++) rate.add(c.rate[i]);
