@@ -4,10 +4,19 @@ name: Web flasher (GitHub Pages)
 # site (docs/flasher + that release's files) on GitHub Pages. A workflow_run
 # job runs on the default branch, the only one the github-pages environment
 # takes deployments from. Needs Settings -> Pages -> Source: GitHub Actions.
+#
+# Run by hand (Actions -> this workflow -> Run workflow, or the API) with the
+# id of a "Publish Release" run to put that release's site up again, e.g.
+# after GitHub failed the deployment.
 on:
   workflow_run:
     workflows: ["Publish Release"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Publish Release run id whose flasher-site to deploy"
+        required: true
 
 permissions:
   actions: read
@@ -20,11 +29,11 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy2.outputs.page_url }}
     steps:
       # A run that only updated an existing release's notes built no site.
       - id: site
@@ -33,7 +42,7 @@ jobs:
         with:
           name: flasher-site
           path: site
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ github.event.inputs.run_id || github.event.workflow_run.id }}
           github-token: ${{ github.token }}
 
       - uses: actions/upload-pages-artifact@v3
@@ -41,6 +50,23 @@ jobs:
         with:
           path: site
 
+      # The artifact just uploaded is sometimes not listed yet when
+      # deploy-pages looks for it ("Fetching artifact metadata failed ... No
+      # artifacts named github-pages"): wait a little first, and once more
+      # before a second try.
+      - name: Let the artifact show up
+        if: steps.site.outcome == 'success'
+        run: sleep 30
+
       - id: deploy
         if: steps.site.outcome == 'success'
+        continue-on-error: true
+        uses: actions/deploy-pages@v4
+
+      - name: Wait before trying again
+        if: steps.site.outcome == 'success' && steps.deploy.outcome == 'failure'
+        run: sleep 90
+
+      - id: deploy2
+        if: steps.site.outcome == 'success' && steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
