@@ -126,6 +126,9 @@ void settingsToJson(JsonObject doc) {
     doc["vtxAuto"]       = vtxAuto;
     doc["recMin"]        = recMinutes;
     doc["recMinNow"]     = c5RecCapMs() / 60000;   // what the record holds now (less if PSRAM is short)
+    // PSRAM was short for the length set (it takes a new length at the next
+    // start: until then the length now is the old one, not a shortage).
+    doc["recShort"]      = (c5RecAskedMin() == recMinutes && c5RecCapMs() / 60000 < recMinutes);
 }
 // Takes gLock and saves; the caller applies (applyGateConfig) and tells
 // the browsers (wsSettings).

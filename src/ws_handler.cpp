@@ -366,6 +366,12 @@ static void addSettings(JsonDocument& d) {
     d["startDelaySec"] = startDelaySec;
     d["assignMode"]    = assignMode;
     d["vtxAuto"]       = vtxAuto;
+    // The RSSI record's length: missing here, a page that took its settings
+    // from the WebSocket (init) never set its select, which showed its
+    // first choice (5 min) whatever was saved.
+    d["recMin"]        = recMinutes;
+    d["recMinNow"]     = c5RecCapMs() / 60000;
+    d["recShort"]      = (c5RecAskedMin() == recMinutes && c5RecCapMs() / 60000 < recMinutes);
 }
 
 void wsSettings() {

@@ -187,7 +187,12 @@ void c5RecStart(uint32_t raceStartMs, bool fresh) {
 
 void c5RecStop() { recOn = false; }
 
+static uint32_t recAskedMin = 0;   // the length last asked of c5RecSize()
+
+uint32_t c5RecAskedMin() { return recAskedMin; }
+
 uint32_t c5RecSize(uint32_t minutes) {
+    recAskedMin = minutes;
     uint32_t want = minutes * 60000u / C5_REC_MS;
     if (recBuf && want == recCap) return minutes;
     recOn = false;
