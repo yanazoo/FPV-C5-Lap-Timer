@@ -20,3 +20,8 @@ void   sysBootNote();                    // first thing in setup()
 void   sysRequestRestart(uint32_t inMs);   // done from loop() (sysLoop)
 void   sysLoop(uint32_t now);
 String sysJson();
+// The S3's chip temperature, C (its internal sensor), or NAN. Measured in
+// the sensor's 20-100 C range (the chip runs well above the air around
+// it), below 20 C in its -10-80 C range: Arduino's temperatureRead() uses
+// 10-50 C only, and read 80-odd C with a large error.
+float  sysCpuTemp();

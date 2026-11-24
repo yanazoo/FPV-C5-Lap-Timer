@@ -7,6 +7,7 @@
 #include <esp_sleep.h>
 #include <esp_system.h>
 #include <esp_wifi.h>
+#include <driver/temperature_sensor.h>
 #include "data_model.h"
 #include "sd_store.h"
 #include "wifi_mgr.h"
@@ -17,6 +18,28 @@ esp_reset_reason_t bootReason = ESP_RST_UNKNOWN;
 uint32_t crashes = 0, boots = 0, lastCrashBoot = 0;
 uint8_t  lastCrash = 0;
 volatile uint32_t restartAt = 0;   // millis(), 0 = none
+
+// The chip temperature sensor, in one of two ranges (see sysCpuTemp()).
+temperature_sensor_handle_t tsens = nullptr;
+bool tsensHigh = true;   // 20-100 C, else -10-80 C
+
+bool tsensOpen(bool high) {
+    if (tsens) {
+        temperature_sensor_disable(tsens);
+        temperature_sensor_uninstall(tsens);
+        tsens = nullptr;
+    }
+    temperature_sensor_config_t cfg = high ? (temperature_sensor_config_t)TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100)
+                                           : (temperature_sensor_config_t)TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+    if (temperature_sensor_install(&cfg, &tsens) != ESP_OK) { tsens = nullptr; return false; }
+    if (temperature_sensor_enable(tsens) != ESP_OK) {
+        temperature_sensor_uninstall(tsens);
+        tsens = nullptr;
+        return false;
+    }
+    tsensHigh = high;
+    return true;
+}
 
 bool isCrash(esp_reset_reason_t r) {
     return r == ESP_RST_PANIC || r == ESP_RST_INT_WDT || r == ESP_RST_TASK_WDT || r == ESP_RST_WDT ||
@@ -113,4 +136,19 @@ String sysJson() {
     String s;
     serializeJson(d, s);
     return s;
+}
+
+float sysCpuTemp() {
+    if (!tsens && !tsensOpen(true)) return NAN;
+    float t;
+    if (temperature_sensor_get_celsius(tsens, &t) == ESP_OK) {
+        // Near the range's edge: the other range next time (each is most
+        // accurate inside its own span).
+        if (tsensHigh && t < 22) tsensOpen(false);
+        else if (!tsensHigh && t > 75) tsensOpen(true);
+        return t;
+    }
+    // Out of this range: read again in the other one.
+    if (!tsensOpen(!tsensHigh) || temperature_sensor_get_celsius(tsens, &t) != ESP_OK) return NAN;
+    return t;
 }
