@@ -450,11 +450,16 @@ function saveTotalLaps(){
 var REC_MIN_LABEL={5:'5 分',10:'10 分',30:'30 分',60:'1 時間',120:'2 時間',180:'3 時間',240:'4 時間'};
 function showRecMin(st){
   var s=document.getElementById('recMinSelect');if(!s)return;
-  if(document.activeElement!==s&&st.recMin)s.value=String(st.recMin);
-  var n=document.getElementById('recMinNote');
-  if(n&&st.recMinNow!==undefined&&st.recMin&&st.recMinNow<st.recMin&&!n.dataset.short){
-    n.dataset.short='1';n.insertAdjacentHTML('afterbegin','<b style="color:var(--warn)">⚠ メモリーが足りないため、今は '+(st.recMinNow||0)+' 分まで記録します。</b> ');
-  }
+  if(st.recMin)s.value=String(st.recMin);
+  // The memory warning follows the timer (recShort: PSRAM was short for
+  // the length set); it used to stay once shown, and to show for a length
+  // just chosen (the record takes it at the next start).
+  var n=document.getElementById('recMinNote');if(!n)return;
+  var w=document.getElementById('recMinShort');
+  if(st.recShort){
+    if(!w){w=document.createElement('b');w.id='recMinShort';w.style.color='var(--warn)';n.prepend(w);}
+    w.textContent='⚠ メモリーが足りないため、今は '+st.recMinNow+' 分まで記録します。 ';
+  }else if(w)w.remove();
 }
 function saveRecMin(){
   var v=parseInt(document.getElementById('recMinSelect').value,10);

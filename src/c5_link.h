@@ -49,6 +49,9 @@ void     c5RecStop();
 // it): the minutes it holds (less if PSRAM is short, 0 without PSRAM).
 uint32_t c5RecSize(uint32_t minutes);
 uint32_t c5RecCapMs();   // race time the record holds, ms (0: none)
+// The length last asked of c5RecSize() (minutes): with c5RecCapMs() smaller,
+// PSRAM was short for it.
+uint32_t c5RecAskedMin();
 uint32_t c5RecMs();
 // A slot's record (racing: still being written; samples are single 16-bit
 // stores, so reading it is safe).
