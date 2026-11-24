@@ -243,7 +243,16 @@ function updateHeaderStatus(){
   el.className='c5-badge '+(ok&&(!e.enabled||e.connected)?'ok':'ng');
   el.title='C5: '+(c.online?c.state:'OFFLINE')+(e.enabled?' / ELRS: '+(e.connected?e.peer:'未接続'):'');
   var t=document.getElementById('cpuTemp');
-  if(t)t.textContent=c.cpuTemp!==undefined?'CPU '+c.cpuTemp+'℃':'';
+  if(t){
+    // The chip's temperature, coloured by how hot: up to 69 C as usual,
+    // 70-84 C yellow (check the place and the air around it), 85 C and over
+    // red (cool it down soon).
+    var ct=c.cpuTemp;
+    t.textContent=ct!==undefined?'CPU '+ct+'℃':'';
+    t.classList.toggle('warm',ct!==undefined&&ct>=70&&ct<85);
+    t.classList.toggle('hot',ct!==undefined&&ct>=85);
+    t.title='タイマー（ESP32-S3）のチップの温度'+(ct>=85?'：高温です。早めに冷やしてください':ct>=70?'：高めです。置き場所・通気を見直してください':'');
+  }
 }
 
 // tries: a request lost on the way (a busy WiFi) is asked for again; a page
