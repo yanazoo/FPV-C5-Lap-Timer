@@ -82,7 +82,14 @@ progress{width:100%;height:14px}
 <div class="card">
   <h2>ELRS-NETpack（XIAO ESP32-S3）</h2>
   <p>WiFi 接続で使う場合の netpack の XIAO（TCP の中継・Web 設定画面・ホストモード・USB テザリング）。</p>
-  <esp-web-install-button manifest="manifest-netpack-s3.json">
+  <div class="row">
+    <label>配線：<select id="npHw">
+      <option value="manifest-netpack-s3.json">通常（netpack の配線）</option>
+      <option value="manifest-netpack-s3-tw.json">タイマー流用（FPV C5 Lap Timer の配線のまま）</option>
+    </select></label>
+  </div>
+  <p class="note" id="npTw" hidden>ブリッジなしで組んだ FPV C5 Lap Timer を netpack にする場合：S3 はこの版、C5 は下のブリッジの「XIAO ESP32-C5（タイマー流用）」を書き込みます。配線はタイマーのまま（S3 D3/D4 ⇔ C5 D4/D5、5V 給電）。ブザーは D5（GPIO6、− は GND）、モード切り替えスイッチは D1（GPIO2）、通知 LED は D0（GPIO1）です。タイマーに戻すときは、S3 にタイマー、C5 に受信機を書き込みます。</p>
+  <esp-web-install-button id="npBtn" manifest="manifest-netpack-s3.json">
     <button slot="activate" class="btn">書き込む</button>
     <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
   </esp-web-install-button>
@@ -95,6 +102,7 @@ progress{width:100%;height:14px}
     <label>ハード：<select id="brHw">
       <option value="manifest-bridge-c3.json">XIAO ESP32-C3</option>
       <option value="manifest-bridge-c5.json">XIAO ESP32-C5</option>
+      <option value="manifest-bridge-c5-tw.json">XIAO ESP32-C5（タイマー流用）</option>
       <option value="manifest-bridge-esp32.json">ESP32 Wrover-E</option>
     </select></label>
   </div>
@@ -137,6 +145,7 @@ progress{width:100%;height:14px}
 </main>
 <script>
 document.getElementById('brHw').addEventListener('change',e=>document.getElementById('brBtn').setAttribute('manifest',e.target.value));
+document.getElementById('npHw').addEventListener('change',e=>{document.getElementById('npBtn').setAttribute('manifest',e.target.value);document.getElementById('npTw').hidden=!e.target.value.includes('-tw');});
 fetch('version.json').then(r=>r.json()).then(v=>{document.getElementById('ver').textContent='リリース '+v.version;}).catch(()=>{});
 </script>
 <script type="module">
@@ -148,8 +157,10 @@ let devices = [
   {key:"timer-s3", name:"タイマー（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000,"littlefs.bin":0x670000}},
   {key:"receiver-c5", name:"受信機（XIAO ESP32-C5・FPVGate C5MK）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xf000,"firmware.bin":0x20000}},
   {key:"netpack-s3", name:"ELRS-NETpack（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"netpack-s3-tw", name:"ELRS-NETpack（XIAO ESP32-S3・タイマー流用）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-c3", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C3）", chip:"ESP32-C3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-c5", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c5-tw", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C5・タイマー流用）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-esp32", name:"ELRSバックパック-ブリッジ（ESP32 Wrover-E）", chip:"ESP32", offsets:{"bootloader.bin":0x1000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
 ];
 const $ = id => document.getElementById(id);

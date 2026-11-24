@@ -84,12 +84,18 @@ def main():
         device(site, "netpack-s3", "ELRS-NETpack（XIAO ESP32-S3）", "ESP32-S3",
                os.path.join(root, "third_party", "elrs-netpack", "elrs-xiao-webui", ".pio", "build", "xiao_esp32s3"),
                boot_app0()),
+        # A timer made into a netpack, on its own wiring (elrs-netpack "timerwiring").
+        device(site, "netpack-s3-tw", "ELRS-NETpack（XIAO ESP32-S3・タイマー流用）", "ESP32-S3",
+               os.path.join(root, "third_party", "elrs-netpack", "elrs-xiao-webui", ".pio", "build", "xiao_esp32s3_timerwiring"),
+               boot_app0()),
         device(site, "bridge-c3", "ELRSバックパック-ブリッジ（XIAO ESP32-C3）", "ESP32-C3",
                os.path.join(br, "xiao_esp32c3"), boot_app0()),
         device(site, "bridge-esp32", "ELRSバックパック-ブリッジ（ESP32 Wrover-E）", "ESP32",
                os.path.join(br, "esp32dev"), boot_app0()),
         device(site, "bridge-c5", "ELRSバックパック-ブリッジ（XIAO ESP32-C5）", "ESP32-C5",
                os.path.join(br, "xiao_esp32c5"), boot_app0()),
+        device(site, "bridge-c5-tw", "ELRSバックパック-ブリッジ（XIAO ESP32-C5・タイマー流用）", "ESP32-C5",
+               os.path.join(br, "xiao_esp32c5_timerwiring"), boot_app0()),
     ]
     for d in devices:
         manifest = {

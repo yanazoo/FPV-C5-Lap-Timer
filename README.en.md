@@ -171,6 +171,12 @@ also open in Excel.
   `elrs-netpack.local` in client mode). A bridge wired to the UART may stay
   connected: while WiFi is selected the timer parks it so it doesn't get in
   the netpack's way.
+- A second timer made into a netpack: an FPV C5 Lap Timer built without a
+  bridge (S3 + C5) becomes a netpack + bridge with no rewiring. From the web
+  flasher, write ELRS-NETpack with wiring "タイマー流用" (timer's) to the S3
+  and the bridge "XIAO ESP32-C5（タイマー流用）" to the C5 (elrs-netpack's
+  README, "An FPV C5 Lap Timer made into a netpack"). Back to a timer: the
+  timer to the S3, the receiver to the C5.
 
 ## Build and flash
 
@@ -194,8 +200,9 @@ CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 **Without PlatformIO: the web flasher.** Open the
 [web flasher](https://yanazoo.github.io/FPV-C5-Lap-Timer/) in Chrome or Edge
 on a PC, plug the device in by USB and press "書き込む": the latest release
-for the timer (S3), the receiver (C5), ELRS Netpack (S3) and the ESP-NOW
-bridge (pick XIAO C3 / XIAO C5 / Wrover-E). Leave "Erase device" unticked to
+for the timer (S3), the receiver (C5), ELRS-NETpack (S3; wiring standard /
+timer's) and the ESP-NOW bridge (pick XIAO C3 / XIAO C5 / XIAO C5 timer's
+wiring / Wrover-E). Leave "Erase device" unticked to
 keep settings and pilots. "ファイルを指定して書き込む" (your own files) on the
 same page writes .bin files of a test build or an older release (or a release
 zip): addresses come from the file names (editable), and a firmware.bin gets

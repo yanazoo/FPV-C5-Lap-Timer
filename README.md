@@ -233,7 +233,7 @@ pio run -e xiaoc5 -t upload --upload-port <C5のポート>
 
 **かんたんな方法：Web 書き込みページ**（PlatformIO も git も不要）
 
-PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5）・ELRS Netpack（S3）・ELRSバックパック-ブリッジ（XIAO C3 / XIAO C5 / Wrover-E をハードで選択）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。同じページの「**ファイルを指定して書き込む**」では、試験版や前の版の .bin（またはリリースの zip）を選んで書き込めます。書き込み先のアドレスはファイル名から自動で入り（変更可）、firmware.bin には「最初のアプリから起動」（otadata）が自動で付きます。
+PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5）・ELRS-NETpack（S3、配線：通常 / タイマー流用）・ELRSバックパック-ブリッジ（XIAO C3 / XIAO C5 / XIAO C5（タイマー流用）/ Wrover-E をハードで選択）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。同じページの「**ファイルを指定して書き込む**」では、試験版や前の版の .bin（またはリリースの zip）を選んで書き込めます。書き込み先のアドレスはファイル名から自動で入り（変更可）、firmware.bin には「最初のアプリから起動」（otadata）が自動で付きます。
 
 **PlatformIO で書き込む場合**
 
@@ -254,6 +254,7 @@ CI（GitHub Actions）の成果物にもビルド済みバイナリがありま�
 
 - **UART 直結の場合（推奨）**：netpack の XIAO は不要です。[docs/ELRS_UART_SETUP.md](docs/ELRS_UART_SETUP.md) のとおりブリッジ（XIAO ESP32-C3 / XIAO ESP32-C5 / Wrover-E）に書き込み・配線し、設定の接続方式は初期値の「UART」のままで使えます。
 - **WiFi 接続の場合**：`third_party/elrs-netpack` の README に従い、ELRSバックパック-ブリッジ（Wrover-E は環境 `esp32dev`、XIAO ESP32-C3 は `xiao_esp32c3`、XIAO ESP32-C5 は `xiao_esp32c5`）に `elrs-espnow-bridge`、netpack の XIAO に `elrs-xiao-webui` を書き込みます。netpack のキャプティブポータル（`ELRS-NETpack-Setup` / `http://192.168.4.1`）で、接続先 WiFi を **本タイマーの SSID とパスワード**（既定 `FPV-C5-LT` / `fpv-c5-lt`）に設定します（タイマーをクライアントモードで使う場合は、タイマーと同じルーターの SSID / パスワード）。タイマーは接続してきた機器（クライアントモードでは `elrs-netpack.local`）から netpack（TCP 8080）を自動で見つけます（設定の「netpack アドレス」= `auto`）。IP や `elrs-netpack.local` を直接指定することもできます。
+- **2 台目のタイマーを netpack にする場合**：ブリッジなしで組んだ FPV C5 Lap Timer（S3 ＋ C5）は、**配線を変えずに** netpack ＋ブリッジにできます。Web 書き込みページで、S3 に ELRS-NETpack の配線「**タイマー流用**」、C5 に ELRSバックパック-ブリッジの「**XIAO ESP32-C5（タイマー流用）**」を書き込みます（詳しくは elrs-netpack の README「FPV C5 Lap Timer を netpack にする」）。タイマーに戻すときは、S3 にタイマー、C5 に受信機を書き込みます。
 
 ### 4. 初期設定（Web UI）
 

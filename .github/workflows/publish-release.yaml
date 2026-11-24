@@ -64,8 +64,8 @@ jobs:
           pio run -e xiao_esp32s3
           pio run -e xiao_esp32s3 -t buildfs
           pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
-          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3 -e xiao_esp32c5
-          pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3
+          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3 -e xiao_esp32c5 -e xiao_esp32c5_timerwiring
+          pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3 -e xiao_esp32s3_timerwiring
 
       - name: Package
         if: steps.params.outputs.skip == 'false'
