@@ -125,12 +125,25 @@ also open in Excel.
 
 ## Wiring
 
-| XIAO ESP32-S3 | | XIAO ESP32-C5 |
-|---|---|---|
-| D3 / GPIO4 (TX) | → | D4 / GPIO23 (RX) |
-| D4 / GPIO5 (RX) | ← | D5 / GPIO24 (TX) |
-| 5V | — | 5V (**power the C5 from 5 V**, not the S3's 3V3) |
-| GND | — | GND |
+| XIAO ESP32-S3 | | XIAO ESP32-C5 | generic ESP32-C5 board / module |
+|---|---|---|---|
+| D3 / GPIO4 (TX) | → | D4 / GPIO23 (RX) | GPIO4 (RX) |
+| D4 / GPIO5 (RX) | ← | D5 / GPIO24 (TX) | GPIO5 (TX) |
+| 5V | — | 5V (**power the C5 from 5 V**, not the S3's 3V3) | 5V |
+| GND | — | GND | GND |
+
+Boards other than the XIAO (v2.3.8):
+- **S3**: an ESP32-S3 module or board with **8 MB octal PSRAM and 8 MB+ flash**
+  (ESP32-S3-WROOM-1(U)-N16R8 and the like) takes the same firmware. Wire by
+  the same **GPIO numbers** (C5 on GPIO4/5, SD CS 21 / SCK 7 / MISO 8 /
+  MOSI 9, ELRS bridge GPIO43/44). Without the Sense's PDM microphone
+  (GPIO42/41) the microphone features stay hidden.
+- **C5**: a non-XIAO ESP32-C5 board or module (ESP32-C5-WROOM-1, Waveshare
+  ESP32-C5-Zero and the like; 4 MB+ flash): pick the receiver board
+  "**ESP32-C5 汎用ボード・モジュール**" (generic) in the web flasher and wire
+  **GPIO4 (RX), GPIO5 (TX)** as above (FPVGate C5MK's `c5zero` build). The
+  same C5 as a bridge (a timer made into a netpack): the bridge board
+  "ESP32-C5 汎用ボード・モジュール" (the same GPIO4/5).
 
 - microSD: XIAO ESP32-S3 Sense slot (CS 21, SCK 7, MISO 8, MOSI 9).
   - **Races**: each race is saved on Clear as `race_NNN_YYYYMMDD_HHMM.csv`
@@ -200,9 +213,9 @@ CI artifacts `fpv_c5-xiao_esp32s3`, `fpvgate_c5mk-xiaoc5` and
 **Without PlatformIO: the web flasher.** Open the
 [web flasher](https://yanazoo.github.io/FPV-C5-Lap-Timer/) in Chrome or Edge
 on a PC, plug the device in by USB and press "書き込む": the latest release
-for the timer (S3), the receiver (C5), ELRS-NETpack (S3; wiring standard /
-timer's) and the ESP-NOW bridge (pick XIAO C3 / XIAO C5 / XIAO C5 timer's
-wiring / Wrover-E). Leave "Erase device" unticked to
+for the timer (S3), the receiver (C5: XIAO / generic), ELRS-NETpack (S3;
+wiring standard / timer's) and the ESP-NOW bridge (pick XIAO C3 / XIAO C5 /
+XIAO C5 timer's wiring / generic ESP32-C5 / Wrover-E). Leave "Erase device" unticked to
 keep settings and pilots. "ファイルを指定して書き込む" (your own files) on the
 same page writes .bin files of a test build or an older release (or a release
 zip): addresses come from the file names (editable), and a firmware.bin gets

@@ -75,12 +75,17 @@ def main():
     shutil.copy(os.path.join(root, "docs", "flasher", "index.html"), os.path.join(site, "index.html"))
     s3 = os.path.join(root, ".pio", "build", "xiao_esp32s3")
     c5 = os.path.join(root, "third_party", "FPVGateC5MK", "multipilot", ".pio", "build", "xiaoc5")
+    c5gen = os.path.join(root, "third_party", "FPVGateC5MK", "multipilot", ".pio", "build", "c5zero")
     br = os.path.join(root, "third_party", "elrs-netpack", "elrs-espnow-bridge", ".pio", "build")
     devices = [
         device(site, "timer-s3", "FPV C5 Lap Timer（XIAO ESP32-S3）", "ESP32-S3", s3, boot_app0(),
                ("littlefs.bin", os.path.join(s3, "littlefs.bin"), 1, (0x82,))),
         device(site, "receiver-c5", "FPVGate C5MK 受信機（XIAO ESP32-C5）", "ESP32-C5", c5,
                os.path.join(c5, "ota_data_initial.bin")),
+        # A generic ESP32-C5 board / module: FPVGate C5MK's c5zero build
+        # (the link on GPIO4 RX / GPIO5 TX).
+        device(site, "receiver-c5-gen", "FPVGate C5MK 受信機（ESP32-C5 汎用・GPIO4/5）", "ESP32-C5", c5gen,
+               os.path.join(c5gen, "ota_data_initial.bin")),
         device(site, "netpack-s3", "ELRS-NETpack（XIAO ESP32-S3）", "ESP32-S3",
                os.path.join(root, "third_party", "elrs-netpack", "elrs-xiao-webui", ".pio", "build", "xiao_esp32s3"),
                boot_app0()),
@@ -94,6 +99,8 @@ def main():
                os.path.join(br, "esp32dev"), boot_app0()),
         device(site, "bridge-c5", "ELRSバックパック-ブリッジ（XIAO ESP32-C5）", "ESP32-C5",
                os.path.join(br, "xiao_esp32c5"), boot_app0()),
+        device(site, "bridge-c5-gen", "ELRSバックパック-ブリッジ（ESP32-C5 汎用・GPIO4/5）", "ESP32-C5",
+               os.path.join(br, "esp32c5"), boot_app0()),
         device(site, "bridge-c5-tw", "ELRSバックパック-ブリッジ（XIAO ESP32-C5・タイマー流用）", "ESP32-C5",
                os.path.join(br, "xiao_esp32c5_timerwiring"), boot_app0()),
     ]

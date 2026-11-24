@@ -129,12 +129,16 @@ SD カードの使い方（保存の方式・フォーマット）は「[microSD
 
 ### 配線：XIAO ESP32-S3（タイマー）⇔ XIAO ESP32-C5（受信機）
 
-| XIAO ESP32-S3 | 方向 | XIAO ESP32-C5 |
-|---|---|---|
-| D3 / GPIO4（TX） | → | D4 / GPIO23（RX） |
-| D4 / GPIO5（RX） | ← | D5 / GPIO24（TX） |
-| 5V（VUSB） | — | 5V（VUSB） |
-| GND | — | GND |
+| XIAO ESP32-S3 | 方向 | XIAO ESP32-C5 | ESP32-C5 汎用ボード・モジュール |
+|---|---|---|---|
+| D3 / GPIO4（TX） | → | D4 / GPIO23（RX） | GPIO4（RX） |
+| D4 / GPIO5（RX） | ← | D5 / GPIO24（TX） | GPIO5（TX） |
+| 5V（VUSB） | — | 5V（VUSB） | 5V |
+| GND | — | GND | GND |
+
+**XIAO 以外のボード**（v2.3.8）
+- **S3**：ESP32-S3-WROOM-1(U)-N16R8 など、**PSRAM 8MB（オクタル）・フラッシュ 8MB 以上**の ESP32-S3 モジュール・ボードにも、XIAO と同じファームをそのまま書き込めます。配線は XIAO と同じ **GPIO 番号**です（C5 は GPIO4・GPIO5、SD は CS 21・SCK 7・MISO 8・MOSI 9、ELRS ブリッジは GPIO43・GPIO44）。マイク（Sense の PDM マイク、GPIO42・41）が無いボードでは、マイクの機能は出ません。
+- **C5**：XIAO ではない ESP32-C5 のボード・モジュール（ESP32-C5-WROOM-1、Waveshare ESP32-C5-Zero など、フラッシュ 4MB 以上）は、Web 書き込みページの受信機のハードで「**ESP32-C5 汎用ボード・モジュール**」を選び、上の表のとおり **GPIO4（RX）・GPIO5（TX）**でつなぎます（FPVGate C5MK の汎用版 `c5zero`）。同じ C5 をブリッジにする場合（タイマーを netpack にするなど）は、ブリッジのハードで「ESP32-C5 汎用ボード・モジュール」（同じ GPIO4/5）を選びます。
 
 > [!IMPORTANT]
 > **C5 は必ず 5V から給電してください。** S3 の 3V3 ピンから給電すると、C5 の無線起動時の電流に耐えられず起動しません（FPVGate C5MK の検証結果）。信号線は 3.3V ロジックです。
@@ -233,7 +237,7 @@ pio run -e xiaoc5 -t upload --upload-port <C5のポート>
 
 **かんたんな方法：Web 書き込みページ**（PlatformIO も git も不要）
 
-PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5）・ELRS-NETpack（S3、配線：通常 / タイマー流用）・ELRSバックパック-ブリッジ（XIAO C3 / XIAO C5 / XIAO C5（タイマー流用）/ Wrover-E をハードで選択）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。同じページの「**ファイルを指定して書き込む**」では、試験版や前の版の .bin（またはリリースの zip）を選んで書き込めます。書き込み先のアドレスはファイル名から自動で入り（変更可）、firmware.bin には「最初のアプリから起動」（otadata）が自動で付きます。
+PC の Chrome / Edge で [Web 書き込みページ](https://yanazoo.github.io/FPV-C5-Lap-Timer/) を開き、機器を USB でつないで「書き込む」を押します。タイマー（S3）・受信機（C5：XIAO / 汎用をハードで選択）・ELRS-NETpack（S3、配線：通常 / タイマー流用）・ELRSバックパック-ブリッジ（XIAO C3 / XIAO C5 / XIAO C5（タイマー流用）/ ESP32-C5 汎用 / Wrover-E をハードで選択）の最新リリースを書き込めます。「デバイスを消去する」にチェックを入れなければ、設定とパイロット情報は残ります。同じページの「**ファイルを指定して書き込む**」では、試験版や前の版の .bin（またはリリースの zip）を選んで書き込めます。書き込み先のアドレスはファイル名から自動で入り（変更可）、firmware.bin には「最初のアプリから起動」（otadata）が自動で付きます。
 
 **PlatformIO で書き込む場合**
 

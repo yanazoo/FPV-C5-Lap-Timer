@@ -62,7 +62,7 @@ progress{width:100%;height:14px}
 
 <div class="card">
   <h2>タイマー（XIAO ESP32-S3）</h2>
-  <p>ファームと Web 画面の両方を書き込みます。</p>
+  <p>ファームと Web 画面の両方を書き込みます。XIAO ESP32-S3 のほか、ESP32-S3-WROOM-1(U)-N16R8 などの ESP32-S3 モジュール・ボード（PSRAM 8MB オクタル、フラッシュ 8MB 以上）にも同じものを書き込めます（配線は同じ GPIO 番号）。</p>
   <esp-web-install-button manifest="manifest-timer-s3.json">
     <button slot="activate" class="btn">書き込む</button>
     <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。PC の Chrome / Edge で開いてください。</span>
@@ -71,9 +71,15 @@ progress{width:100%;height:14px}
 </div>
 
 <div class="card">
-  <h2>受信機（XIAO ESP32-C5・FPVGate C5MK）</h2>
-  <p>VTX の電波を測る受信機です。</p>
-  <esp-web-install-button manifest="manifest-receiver-c5.json">
+  <h2>受信機（ESP32-C5・FPVGate C5MK）</h2>
+  <p>VTX の電波を測る受信機です。使っているボードを選んでください。</p>
+  <div class="row">
+    <label>ハード：<select id="rxHw">
+      <option value="manifest-receiver-c5.json">XIAO ESP32-C5（GPIO23 RX / GPIO24 TX）</option>
+      <option value="manifest-receiver-c5-gen.json">ESP32-C5 汎用ボード・モジュール（GPIO4 RX / GPIO5 TX）</option>
+    </select></label>
+  </div>
+  <esp-web-install-button id="rxBtn" manifest="manifest-receiver-c5.json">
     <button slot="activate" class="btn">書き込む</button>
     <span slot="unsupported" class="unsupported">このブラウザーでは書き込めません。</span>
   </esp-web-install-button>
@@ -103,6 +109,7 @@ progress{width:100%;height:14px}
       <option value="manifest-bridge-c3.json">XIAO ESP32-C3</option>
       <option value="manifest-bridge-c5.json">XIAO ESP32-C5</option>
       <option value="manifest-bridge-c5-tw.json">XIAO ESP32-C5（タイマー流用）</option>
+      <option value="manifest-bridge-c5-gen.json">ESP32-C5 汎用ボード・モジュール（GPIO4 RX / GPIO5 TX）</option>
       <option value="manifest-bridge-esp32.json">ESP32 Wrover-E</option>
     </select></label>
   </div>
@@ -145,6 +152,7 @@ progress{width:100%;height:14px}
 </main>
 <script>
 document.getElementById('brHw').addEventListener('change',e=>document.getElementById('brBtn').setAttribute('manifest',e.target.value));
+document.getElementById('rxHw').addEventListener('change',e=>document.getElementById('rxBtn').setAttribute('manifest',e.target.value));
 document.getElementById('npHw').addEventListener('change',e=>{document.getElementById('npBtn').setAttribute('manifest',e.target.value);document.getElementById('npTw').hidden=!e.target.value.includes('-tw');});
 fetch('version.json').then(r=>r.json()).then(v=>{document.getElementById('ver').textContent='リリース '+v.version;}).catch(()=>{});
 </script>
@@ -156,10 +164,12 @@ import {ESPLoader, Transport} from "https://unpkg.com/esptool-js@0.5.7/bundle.js
 let devices = [
   {key:"timer-s3", name:"タイマー（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000,"littlefs.bin":0x670000}},
   {key:"receiver-c5", name:"受信機（XIAO ESP32-C5・FPVGate C5MK）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xf000,"firmware.bin":0x20000}},
+  {key:"receiver-c5-gen", name:"受信機（ESP32-C5 汎用・FPVGate C5MK）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xf000,"firmware.bin":0x20000}},
   {key:"netpack-s3", name:"ELRS-NETpack（XIAO ESP32-S3）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"netpack-s3-tw", name:"ELRS-NETpack（XIAO ESP32-S3・タイマー流用）", chip:"ESP32-S3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-c3", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C3）", chip:"ESP32-C3", offsets:{"bootloader.bin":0x0,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-c5", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
+  {key:"bridge-c5-gen", name:"ELRSバックパック-ブリッジ（ESP32-C5 汎用・GPIO4/5）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-c5-tw", name:"ELRSバックパック-ブリッジ（XIAO ESP32-C5・タイマー流用）", chip:"ESP32-C5", offsets:{"bootloader.bin":0x2000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
   {key:"bridge-esp32", name:"ELRSバックパック-ブリッジ（ESP32 Wrover-E）", chip:"ESP32", offsets:{"bootloader.bin":0x1000,"partitions.bin":0x8000,"otadata.bin":0xe000,"firmware.bin":0x10000}},
 ];
