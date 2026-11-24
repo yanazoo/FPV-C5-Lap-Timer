@@ -101,7 +101,7 @@ jobs:
             third_party/elrs-netpack/elrs-espnow-bridge/.pio/build/*/firmware.bin
 
   build-netpack:
-    name: Build elrs-netpack XIAO ESP32-S3 and ESP-NOW bridge (XIAO ESP32-C5)
+    name: Build elrs-netpack XIAO ESP32-S3 and ESP-NOW bridge (XIAO ESP32-C5), standard and timerwiring
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,5 +113,5 @@ jobs:
       # pioarduino 55.03.x (both): platformio-core 6.1.18 and its penv.
       - run: pip install "platformio==6.1.18"
       - run: bash tools/ci_penv.sh
-      - run: pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3
-      - run: pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e xiao_esp32c5
+      - run: pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3 -e xiao_esp32s3_timerwiring
+      - run: pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e xiao_esp32c5 -e xiao_esp32c5_timerwiring
