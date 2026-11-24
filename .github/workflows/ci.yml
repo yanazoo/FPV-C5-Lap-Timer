@@ -66,7 +66,7 @@ jobs:
       # SCons without SCons.Tool.FortranCommon and the build stops there.
       - run: pip install "platformio==6.1.18"
       - run: bash tools/ci_penv.sh
-      - run: pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
+      - run: pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5 -e c5zero
       - uses: actions/upload-artifact@v4
         with:
           name: fpvgate_c5mk-xiaoc5

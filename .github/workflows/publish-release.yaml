@@ -63,8 +63,8 @@ jobs:
           bash tools/ci_penv.sh
           pio run -e xiao_esp32s3
           pio run -e xiao_esp32s3 -t buildfs
-          pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5
-          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3 -e xiao_esp32c5 -e xiao_esp32c5_timerwiring
+          pio run -d third_party/FPVGateC5MK/multipilot -e xiaoc5 -e c5zero
+          pio run -d third_party/elrs-netpack/elrs-espnow-bridge -e esp32dev -e xiao_esp32c3 -e xiao_esp32c5 -e xiao_esp32c5_timerwiring -e esp32c5
           pio run -d third_party/elrs-netpack/elrs-xiao-webui -e xiao_esp32s3 -e xiao_esp32s3_timerwiring
 
       - name: Package
@@ -79,6 +79,9 @@ jobs:
           pack "fpv-c5-lap-timer-${TAG}-xiao_esp32s3.zip" .pio/build/xiao_esp32s3 \
             bootloader.bin partitions.bin firmware.bin littlefs.bin
           pack "fpvgate-c5mk-${TAG}-xiaoc5.zip" third_party/FPVGateC5MK/multipilot/.pio/build/xiaoc5 \
+            bootloader.bin partitions.bin ota_data_initial.bin firmware.bin
+          # A generic ESP32-C5 (the link on GPIO4 RX / GPIO5 TX).
+          pack "fpvgate-c5mk-${TAG}-esp32c5.zip" third_party/FPVGateC5MK/multipilot/.pio/build/c5zero \
             bootloader.bin partitions.bin ota_data_initial.bin firmware.bin
           pack "elrs-netpack-${TAG}-xiao_esp32s3.zip" third_party/elrs-netpack/elrs-xiao-webui/.pio/build/xiao_esp32s3 \
             bootloader.bin partitions.bin firmware.bin
