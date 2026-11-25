@@ -1017,7 +1017,9 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.reply({"ok": False, "reason": "password"}, 401)
             n = len(SD_FILES)
             SD_FILES.clear()
-            return self.reply({"ok": True, "removed": n})
+            # As the firmware: started at once, the result on the WebSocket.
+            threading.Timer(1.5, lambda: broadcast({"type": "sd_erased", "ok": True, "removed": n})).start()
+            return self.reply({"ok": True, "started": True})
         if p == "/api/clock":
             return self.reply({"ok": True})
         if p == "/api/sd/pilots/backup":

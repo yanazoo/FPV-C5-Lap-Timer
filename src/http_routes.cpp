@@ -971,11 +971,10 @@ void registerHttpRoutes() {
             busy = raceCore.running() || raceCore.paused() || raceCore.lapCount() > 0;
         }
         if (busy) { req->send(409, "application/json", R"({"ok":false,"reason":"race"})"); return; }
-        int n = sdEraseAll();
-        if (n < 0) { req->send(503, "application/json", R"({"ok":false,"reason":"nosd"})"); return; }
-        char b[48];
-        snprintf(b, sizeof b, R"({"ok":true,"removed":%d})", n);
-        req->send(200, "application/json", b);
+        int r = sdEraseStart();
+        if (r < 0) { req->send(503, "application/json", R"({"ok":false,"reason":"nosd"})"); return; }
+        if (r == 0) { req->send(409, "application/json", R"({"ok":false,"reason":"busy"})"); return; }
+        req->send(200, "application/json", R"({"ok":true,"started":true})");   // the result comes as sd_erased
     });
 
     // The clock of a logged-in browser (the S3 has no RTC): race files get
