@@ -422,13 +422,20 @@ async function confirmSdErase(){
     var r=await fetch('/api/sd/erase',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pw.value})});
     var j={};try{j=await r.json();}catch(e){}
     if(r.status===401){say('パスワードが違います');return;}
+    if(r.status===409&&j.reason==='busy'){say('フォーマット中です。終わるまでお待ちください');return;}
     if(r.status===409){say('レース中、またはクリアしていないラップがあります。クリアしてからもう一度行ってください');return;}
     if(!j.ok){say('フォーマットできませんでした（SDカードを確認してください）');return;}
     closeSdErase();
-    toast('🧹 SDカードをフォーマットしました（'+j.removed+' 件削除）');
-    resFull={};resSel=null;
-    document.getElementById('resDetail').style.display='none';
-    document.getElementById('resPilots').style.display='none';
-    refreshSdFiles();
+    // The timer deletes the files in the background and says when done
+    // (onSdErased, from the WebSocket): a full card takes a while.
+    toast('🧹 SDカードをフォーマットしています…（終わるとお知らせします）',8000);
   }catch(e){say('接続エラー');}
+}
+function onSdErased(d){
+  if(!d.ok){toast('⚠ フォーマットできませんでした（SDカードを確認してください）',8000);return;}
+  toast('🧹 SDカードをフォーマットしました（'+d.removed+' 件削除）',6000);
+  resFull={};resSel=null;
+  var a=document.getElementById('resDetail'),b=document.getElementById('resPilots');
+  if(a)a.style.display='none';if(b)b.style.display='none';
+  if(typeof refreshSdFiles==='function')refreshSdFiles();
 }

@@ -19,7 +19,10 @@ void   sdSetClock(int64_t epochMs, int tzMin);
 void   sdNoteRaceStart();
 // Delete every file and folder on the card. Returns the number of entries
 // removed, -1 without a card.
-int    sdEraseAll();
+// Format (delete every file) in the background: 1 started, 0 already
+// running, -1 no card. Browsers get {"type":"sd_erased",...} when done.
+int    sdEraseStart();
+bool   sdErasing();
 // Backups are named with the date and time they were saved
 // (pilots_20261110_1432.csv), or plain (pilots.csv) before the timer knows
 // the date. sdStampedName gives that name; sdBackupName accepts both forms.

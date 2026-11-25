@@ -18,6 +18,10 @@ bool sdPollEnabled = false;
 // SD is used from the web server task and loop(). Lock order: gLock, then
 // sdMutex; code holding sdMutex never takes gLock.
 static SemaphoreHandle_t sdMutex;
+// A format (sdEraseStart) is running: the card is left to it, and every
+// other SD call returns at once (a web request waiting for the lock would
+// set off the AsyncTCP watchdog, as the format itself used to).
+static volatile bool eraseRunning = false;
 struct SdGuard {
     SdGuard()  { xSemaphoreTakeRecursive(sdMutex, portMAX_DELAY); }
     ~SdGuard() { xSemaphoreGiveRecursive(sdMutex); }
@@ -64,6 +68,7 @@ static void sdCheckHotplug(uint32_t now) {
     static uint32_t last = 0;
     if (now - last < (sdPresent ? 3000UL : 1000UL)) return;
     last = now;
+    if (eraseRunning) return;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (raceActive()) return;   // a start came while waiting for the card
     bool present = mount();
@@ -207,6 +212,7 @@ static bool writeRace(const char* path, const race::Core& c, uint32_t elapsedMs)
 }
 
 bool sdSaveRace(String* savedPath) {
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     if (settings.sdLogMode == 1) pruneRaceFiles(SD_MAX_RACE_FILES);
@@ -236,6 +242,7 @@ bool sdSaveRace(String* savedPath) {
 }
 
 bool sdRewriteRace(const String& path, const race::Core& c, uint32_t elapsedMs) {
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent || !path.length() || !SD.exists(path)) return false;
     return writeRace(path.c_str(), c, elapsedMs);
@@ -282,6 +289,7 @@ bool sdBackupRoster(String& path) {
             csv += line;
         }
     }
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     File f = SD.open(path, FILE_WRITE);
@@ -347,6 +355,7 @@ String sdListJson() {
     JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
     {
+        if (eraseRunning) return "[]";   // formatting: the card is busy (never wait for it)
         SdGuard g;
         if (sdPresent) {
             File root = SD.open("/");
@@ -372,6 +381,7 @@ static bool safePath(const String& p) { return p.startsWith("/") && p.indexOf(".
 
 bool sdReadFile(const String& path, String& out) {
     if (!safePath(path)) return false;
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     File f = SD.open(path, FILE_READ);
@@ -385,6 +395,7 @@ bool sdReadFile(const String& path, String& out) {
 
 bool sdAppendFile(const String& path, const uint8_t* data, size_t len, bool first) {
     if (!safePath(path)) return false;
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     File f = SD.open(path, first ? FILE_WRITE : FILE_APPEND);
@@ -396,6 +407,7 @@ bool sdAppendFile(const String& path, const uint8_t* data, size_t len, bool firs
 
 size_t sdReadAt(const String& path, size_t offset, uint8_t* out, size_t len) {
     if (!safePath(path)) return 0;
+    if (eraseRunning) return 0;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return 0;
     File f = SD.open(path, FILE_READ);
@@ -407,6 +419,7 @@ size_t sdReadAt(const String& path, size_t offset, uint8_t* out, size_t len) {
 
 int32_t sdFileSize(const String& path) {
     if (!safePath(path)) return -1;
+    if (eraseRunning) return -1;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return -1;
     File f = SD.open(path, FILE_READ);
@@ -418,6 +431,7 @@ int32_t sdFileSize(const String& path) {
 
 bool sdReplaceFile(const String& from, const String& to) {
     if (!safePath(from) || !safePath(to)) return false;
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     if (SD.exists(to)) SD.remove(to);
@@ -428,6 +442,7 @@ bool sdReplaceFile(const String& from, const String& to) {
 
 bool sdWriteFile(const String& path, const uint8_t* data, size_t len) {
     if (!safePath(path)) return false;
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     if (!sdPresent) return false;
     File f = SD.open(path, FILE_WRITE);
@@ -441,6 +456,7 @@ bool sdWriteFile(const String& path, const uint8_t* data, size_t len) {
 
 bool sdDeleteFile(const String& path) {
     if (!safePath(path)) return false;
+    if (eraseRunning) return false;   // formatting: the card is busy (never wait for it)
     SdGuard g;
     return sdPresent && SD.remove(path);
 }
@@ -478,10 +494,35 @@ static int eraseDir(const String& dir) {
     return n;
 }
 
-int sdEraseAll() {
-    SdGuard g;
-    if (!sdPresent) return -1;
-    int n = eraseDir("/");
-    Serial.printf("[SD] erased %d entries\n", n);
-    return n;
+// Format: deleting every file takes from a moment to minutes (a card with
+// many races). It used to run in the web request (the AsyncTCP task),
+// whose watchdog restarted the timer before it was done: the card was left
+// as it was. Now its own task does it and tells the browsers when done.
+
+static void eraseTask(void*) {
+    int n;
+    {
+        SdGuard g;
+        n = sdPresent ? eraseDir("/") : -1;
+    }
+    Serial.printf("[SD] format: erased %d entries\n", n);
+    char b[64];
+    snprintf(b, sizeof b, R"({"type":"sd_erased","ok":%s,"removed":%d})", n >= 0 ? "true" : "false", n < 0 ? 0 : n);
+    wsText(b);
+    eraseRunning = false;
+    vTaskDelete(nullptr);
 }
+
+int sdEraseStart() {
+    if (!sdPresent) return -1;
+    if (eraseRunning) return 0;
+    eraseRunning = true;
+    // A deep stack: eraseDir goes down folder by folder, 16 names a level.
+    if (xTaskCreate(eraseTask, "sdErase", 12288, nullptr, 1, nullptr) != pdPASS) {
+        eraseRunning = false;
+        return -1;
+    }
+    return 1;
+}
+
+bool sdErasing() { return eraseRunning; }

@@ -230,6 +230,7 @@ function onMsg(d){
       :'⏹ RSSI の記録時間（'+(REC_MIN_LABEL[d.min]||d.min+' 分')+'）に達したので、レースをストップしました。続けるにはクリアしてください',10000);
     return;}
   if(d.type==='sd_status'){updateSdSection(d.present);return;}
+  if(d.type==='sd_erased'){if(typeof onSdErased==='function')onSdErased(d);return;}
 }
 
 // Header: C5 receiver and ELRS link at a glance.
