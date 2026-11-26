@@ -86,6 +86,19 @@ void sysBootNote() {
                   isCrash(bootReason) ? "  (after a crash)" : "");
 }
 
+void sysClearCrashes() {
+    Preferences p;
+    p.begin("diag", false);
+    p.putUInt("crashes", 0);
+    p.remove("last");
+    p.remove("lastAt");
+    p.end();
+    crashes = 0;
+    lastCrash = 0;
+    lastCrashBoot = 0;
+    Serial.println("[Sys] crash count cleared");
+}
+
 void sysRequestRestart(uint32_t inMs) { restartAt = millis() + (inMs ? inMs : 1); }
 
 void sysLoop(uint32_t now) {

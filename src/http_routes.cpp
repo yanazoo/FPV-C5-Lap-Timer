@@ -1124,6 +1124,16 @@ void registerHttpRoutes() {
         req->send(200, "application/json", sysJson());
     });
 
+    // The crash count back to 0, so a new one shows. Admin only (token).
+    onJson("/api/sys/clear-crashes", [](AsyncWebServerRequest* req, JsonDocument& d) {
+        if (!wsTokenValid(String(d["token"] | ""))) {
+            req->send(403, "application/json", R"({"ok":false,"reason":"login"})");
+            return;
+        }
+        sysClearCrashes();
+        ok(req);
+    });
+
     fwUpdateRoutes();
 
     // ── Static files, then the captive portal catch-all ────────────────────

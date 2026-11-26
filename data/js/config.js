@@ -727,6 +727,17 @@ async function reloadAllPages(){
     if(!r.ok)throw 0;
   }catch(e){toast('⚠️ 接続エラー');}
 }
+// The crash count back to 0 (a new crash then shows again).
+async function clearCrashes(){
+  if(!confirm('エラーによる再起動の記録を消します。よろしいですか？'))return;
+  try{
+    var r=await fetch('/api/sys/clear-crashes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:authToken})});
+    if(r.status===403){toast('⚠️ ログインし直してください');return;}
+    if(!r.ok)throw 0;
+    toast('✓ 記録を消しました');
+    loadSysInfo();
+  }catch(e){toast('⚠️ 接続エラー');}
+}
 // After a restart: wait until the timer answers again, then reload the page.
 function waitForRestart(){
   toast('🔄 再起動しています…（戻ったら自動で開き直します）',8000);
@@ -760,7 +771,8 @@ async function loadSysInfo(){
     if(fb!=='-'&&wb!=='-'&&fb.replace('+','')!==wb.replace('+',''))
       h+='<br><span style="color:var(--warn)">⚠ ファームと Web 画面のビルドが違います。upload と uploadfs の両方を、同じ版で書き込んでください</span>';
     if(s.crashes)h+='<br><span style="color:var(--warn)">⚠ エラーによる再起動：これまで '+s.crashes+' 回（最後は'
-      +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>';
+      +(s.lastCrashAgo?' '+s.lastCrashAgo+' 回前の起動':'今回の起動')+'・'+(SYS_REASON[s.lastCrash]||s.lastCrash)+'）</span>'
+      +' <button class="btn-gray-soft" style="font-size:12px;padding:3px 10px" onclick="clearCrashes()">記録を消す</button>';
     el.innerHTML=h;
   }catch(e){el.textContent='';}
 }
