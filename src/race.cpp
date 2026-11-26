@@ -404,6 +404,7 @@ static void sendTelemetry() {
 }
 
 static uint32_t startWaitLeft(uint32_t now);
+static uint32_t readyLeft(uint32_t now);
 
 void sendC5Status() {
     C5Status c = c5Status();
@@ -448,6 +449,10 @@ void sendC5Status() {
         rs["laps"]   = raceCore.lapCount();
         rs["epoch"]  = raceEpoch;
         rs["wait"]   = startWaitLeft(now);   // a delayed start under way: ms to go
+        // Saying "レディ" (ms to the 3-2-1): a browser that missed race_ready
+        // says it from this.
+        uint32_t rl = readyLeft(now);
+        if (rl) rs["ready"] = rl;
     }
     wsJson(d);
 }
@@ -570,12 +575,31 @@ static uint32_t startWaitLeft(uint32_t now) {
     return left > 0 ? (uint32_t)left : 1;
 }
 
-static void rdReady() {
+// "レディ" left before the 3-2-1, ms (0: not saying it).
+static uint32_t readyLeft(uint32_t now) {
+    if (rdPhase != RD_READY) return 0;
+    int32_t left = (int32_t)(rdNextAt - now);
+    return left > 0 ? (uint32_t)left : 0;
+}
+
+// race_ready went missing now and then on every browser at once (the
+// 3-2-1 came, "レディ" didn't): it is sent a second time 0.3 s later, and
+// the 1 Hz status carries it too ("ready"). A browser says it only once.
+static const uint32_t RD_READY_AGAIN_MS = 300;
+static bool rdReadyAgain = false;
+
+static void sendReady() {
     JsonDocument d;
     d["type"] = "race_ready";
     wsJson(d);
+}
+
+static void rdReady() {
+    sendReady();
+    Serial.printf("[Race] ready (%u browsers)\n", (unsigned)ws.count());
     rdPhase = RD_READY;
     rdNextAt = millis() + RD_READY_MS;
+    rdReadyAgain = true;
 }
 
 static void rdStart() {
@@ -635,6 +659,10 @@ static void serviceRaceDirector() {
         } else {                           // toggle: on = start, off = stop
             v ? rdStart() : rdStop();
         }
+    }
+    if (rdPhase == RD_READY && rdReadyAgain && (int32_t)(millis() - (rdNextAt - RD_READY_MS + RD_READY_AGAIN_MS)) >= 0) {
+        rdReadyAgain = false;
+        sendReady();
     }
     if (rdPhase != RD_IDLE && (int32_t)(millis() - rdNextAt) >= 0) {
         if (rdPhase == RD_WAIT) {

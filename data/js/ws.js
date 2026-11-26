@@ -65,6 +65,8 @@ function reconcileRace(r){
     if(!r.wait&&!r.run&&performance.now()>waitEnd+2000)endWait();   // called off elsewhere, race_stop lost
     else return;
   }
+  // Saying "レディ" and this browser missed race_ready: say it now.
+  if(r.ready>0&&!countdownH&&!raceRunning&&performance.now()>=readyUntil){onRaceReady();return;}
   if(countdownH||performance.now()<readyUntil)return;   // a start is under way
   var epochChanged=seenEpoch!==null&&r.epoch!==seenEpoch;
   seenEpoch=r.epoch;
