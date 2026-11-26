@@ -94,7 +94,7 @@ var sfx={
   exit:  (slot)=>{rhBeep(35,chTone(slot),BEEP_VOL,'sawtooth',0.02);rhBeepAt(70,35,chTone(slot),BEEP_VOL,'sawtooth');}
 };
 
-var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0;
+var speechQ=[],speechBusy=false,speechWarmedUp=false,lastSpeechStart=0,warmAt=0;
 // The utterance the queue is saying now: {u, at, softMs, hardMs}. Kept here
 // until it ends: an utterance nothing refers to can be dropped by the
 // browser before it has been said (and its onend never comes).
@@ -236,24 +236,37 @@ function warmSpeech(){
     // A real (silent) word: iOS doesn't count an empty utterance.
     var u=new SpeechSynthesisUtterance('あ');u.lang='ja-JP';u.volume=0;u.rate=2;
     var v=getJaVoice();if(v)u.voice=v;
-    lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
+    warmAt=lastSpeechStart=Date.now();speechSynthesis.speak(u);speechWarmedUp=true;
   }catch(e){}
 }
 function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
   speechWarmedUp=true;
-  var done=false,started=performance.now(),poll=null,cap=null;
-  function finish(){if(done)return;done=true;clearInterval(poll);clearTimeout(cap);go();}
-  try{
-    var u=new SpeechSynthesisUtterance('レディ');
-    u.lang='ja-JP';u.rate=speechRate;
-    var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
-    u.onend=finish;u.onerror=finish;
-    if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
-    lastSpeechStart=Date.now();speechSynthesis.speak(u);
-  }catch(e){finish();return;}
-  poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
+  var done=false,started=0,poll=null,cap=null,hold=null;
+  function finish(){if(done)return;done=true;clearInterval(poll);clearInterval(hold);clearTimeout(cap);go();}
+  function say(){
+    clearInterval(hold);
+    try{
+      var u=new SpeechSynthesisUtterance('レディ');
+      u.lang='ja-JP';u.rate=speechRate;
+      var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
+      u.onend=finish;u.onerror=finish;
+      if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
+      started=performance.now();lastSpeechStart=Date.now();speechSynthesis.speak(u);
+    }catch(e){finish();return;}
+    poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
+  }
+  // The Start tap has just said the silent warm-up word (warmSpeech): on
+  // iOS a speak() while it is still being said is often dropped, and
+  // "レディ" went unheard whenever the phone had been locked (back from
+  // the lock screen, the warm-up runs again on the next tap). Wait for it
+  // to finish (it is short; 0.8 s at most).
+  if(IS_IOS&&Date.now()-warmAt<800&&(speechSynthesis.speaking||speechSynthesis.pending)){
+    hold=setInterval(()=>{
+      if(!(speechSynthesis.speaking||speechSynthesis.pending)||Date.now()-warmAt>=800)say();
+    },30);
+  }else say();
   cap=setTimeout(finish,2500);
 }
 
