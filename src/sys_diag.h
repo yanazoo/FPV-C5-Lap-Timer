@@ -12,11 +12,12 @@
 // Diagnostics: the reason for the last start, and a count of starts after a
 // crash (panic, watchdog, brown-out) kept in NVS, so it survives the power
 // cut that got a crashing timer back. GET /api/sys shows them with the free
-// memory.
+// memory; an admin can clear the count (POST /api/sys/clear-crashes).
 #pragma once
 #include <Arduino.h>
 
 void   sysBootNote();                    // first thing in setup()
+void   sysClearCrashes();               // the crash count back to 0 (button on the page)
 void   sysRequestRestart(uint32_t inMs);   // done from loop() (sysLoop)
 void   sysLoop(uint32_t now);
 String sysJson();

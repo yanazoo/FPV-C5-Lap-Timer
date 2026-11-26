@@ -390,6 +390,7 @@ def apply_radio_vtx():
 OWNER = {}   # auto in races: slot -> pilot whose slot it is in this race (laps stay with it)
 
 
+SYS = {"crashes": 1}   # 0 after "clear" on the settings tab
 FW = {"state": "idle", "latest": "", "phase": 0, "pct": 0, "error": "", "uploads": []}
 
 
@@ -618,7 +619,8 @@ class Handler(SimpleHTTPRequestHandler):
             return self.reply(fw_status())
         if p == "/api/sys":
             return self.reply({"uptime": int(time.monotonic()), "reason": "restart", "boots": 12,
-                               "crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3, "heap": 182000,
+                               **({"crashes": 1, "lastCrash": "panic", "lastCrashAgo": 3} if SYS["crashes"]
+                                  else {"crashes": 0}), "heap": 182000,
                                "heapMin": 151000, "heapMax": 110000, "psram": 0,
                                "build": os.environ.get("MOCK_FW_BUILD", "9a84395")})
         if p == "/api/sd/status":
@@ -744,6 +746,11 @@ class Handler(SimpleHTTPRequestHandler):
             if d.get("token", "") not in live_sessions():
                 return self.reply({"ok": False, "reason": "login"}, 403)
             broadcast({"type": "reload"})
+            return self.reply({"ok": True})
+        if p == "/api/sys/clear-crashes":
+            if d.get("token", "") not in live_sessions():
+                return self.reply({"ok": False, "reason": "login"}, 403)
+            SYS["crashes"] = 0
             return self.reply({"ok": True})
         if p == "/api/mic":
             MIC.update({k: d[k] for k in MIC if k in d})
