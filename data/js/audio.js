@@ -243,29 +243,46 @@ function announceStart(then){
   var go=then||function(){};
   if(typeof speechSynthesis==='undefined'||!voiceEnabled||announceMode==='none'||announceMode==='beep'){go();return;}
   speechWarmedUp=true;
-  var done=false,started=0,poll=null,cap=null,hold=null;
+  var done=false,started=0,begun=false,tries=0,poll=null,cap=null,hold=null;
   function finish(){if(done)return;done=true;clearInterval(poll);clearInterval(hold);clearTimeout(cap);go();}
   function say(){
-    clearInterval(hold);
+    clearInterval(hold);hold=null;
+    if(tries>1)return;
+    tries++;
     try{
       var u=new SpeechSynthesisUtterance('レディ');
       u.lang='ja-JP';u.rate=speechRate;
       var jaVoice=getJaVoice();if(jaVoice)u.voice=jaVoice;
+      u.onstart=()=>{begun=true;};
       u.onend=finish;u.onerror=finish;
       if(IS_IOS&&speechSynthesis.paused)speechSynthesis.resume();
       started=performance.now();lastSpeechStart=Date.now();speechSynthesis.speak(u);
     }catch(e){finish();return;}
-    poll=setInterval(()=>{if(performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
+    if(!poll)poll=setInterval(()=>{if(started&&performance.now()-started>400&&!speechSynthesis.speaking)finish();},100);
+    // iOS sometimes takes a speak() and says nothing (the engine is stuck):
+    // nothing started and nothing speaking 0.35 s later, clear it and say
+    // it once more (still well before the 3-2-1, 1.5 s after race_ready).
+    if(IS_IOS&&tries===1)setTimeout(()=>{
+      if(begun||speechSynthesis.speaking||speechSynthesis.pending)return;
+      started=0;
+      try{speechSynthesis.cancel();}catch(e){}
+      setTimeout(say,80);   // Safari drops a speak() made with the cancel()
+    },350);
   }
   // The Start tap has just said the silent warm-up word (warmSpeech): on
-  // iOS a speak() while it is still being said is often dropped, and
-  // "レディ" went unheard whenever the phone had been locked (back from
-  // the lock screen, the warm-up runs again on the next tap). Wait for it
-  // to finish (it is short; 0.8 s at most).
+  // iOS a speak() while it is still being said is often dropped. Wait for
+  // it to finish (it is short; 0.8 s at most).
   if(IS_IOS&&Date.now()-warmAt<800&&(speechSynthesis.speaking||speechSynthesis.pending)){
     hold=setInterval(()=>{
       if(!(speechSynthesis.speaking||speechSynthesis.pending)||Date.now()-warmAt>=800)say();
     },30);
+  }else if(IS_IOS&&(speechCur||speechSynthesis.speaking||speechSynthesis.pending)){
+    // Still saying (or stuck on) a lap call from the last race: on iOS the
+    // new word queues behind it, or is lost with an engine that never ends
+    // it. That call is old news now: clear it, then say レディ.
+    speechQ=[];speechCur=null;speechBusy=false;
+    try{speechSynthesis.cancel();}catch(e){}
+    hold=setTimeout(say,80);
   }else say();
   cap=setTimeout(finish,2500);
 }
