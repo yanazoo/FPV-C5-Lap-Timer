@@ -862,7 +862,15 @@ class Handler(SimpleHTTPRequestHandler):
                         time.sleep(0.05)
                         if r.get("seq") is not token: r["waitEnd"] = 0; return
                     r["waitEnd"] = 0
-                broadcast({"type": "race_ready"}); time.sleep(1.5)
+                # As the firmware: race_ready, again 0.3 s later, and "ready" in
+                # the 1 Hz status. MOCK_DROP_READY=1 loses both messages.
+                r["readyEnd"] = time.monotonic() + 1.5
+                drop = os.environ.get("MOCK_DROP_READY") == "1"
+                if not drop: broadcast({"type": "race_ready"})
+                time.sleep(0.3)
+                if not drop: broadcast({"type": "race_ready"})
+                time.sleep(1.2)
+                r["readyEnd"] = 0
                 if r.get("seq") is not token: return
                 broadcast({"type": "race_stage"})
                 r["phase"] = "countdown"
@@ -1093,6 +1101,8 @@ if __name__ == "__main__":
                            "links": links_json(), "cand": cand_json(),
                            "race": {"run": r["running"], "paused": r["paused"], "el": int(race_elapsed() * 1000),
                                     "now": now_ms(), "laps": len(r["laps"]), "epoch": r["epoch"],
-                                    "wait": max(0, int((r.get("waitEnd", 0) - time.monotonic()) * 1000)) if r.get("waitEnd") else 0}})
+                                    "wait": max(0, int((r.get("waitEnd", 0) - time.monotonic()) * 1000)) if r.get("waitEnd") else 0,
+                                    **({"ready": max(1, int((r["readyEnd"] - time.monotonic()) * 1000))}
+                                       if r.get("readyEnd", 0) > time.monotonic() else {})}})
     threading.Thread(target=telemetry, daemon=True).start()
     ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()

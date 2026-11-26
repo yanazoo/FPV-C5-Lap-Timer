@@ -373,6 +373,8 @@ var readyUntil=0;   // until then the 1 Hz status mustn't undo the start
 function onRaceReady(){
   clearStartWatchdog();endWait();
   if(countdownH)return;
+  // The timer sends it twice (and in the 1 Hz status): say it once.
+  if(performance.now()<readyUntil)return;
   readyUntil=performance.now()+2500;
   ['btnStart','btnClear'].forEach(id=>{var b=document.getElementById(id);if(b)b.disabled=true;});
   timerEl.classList.remove('running');
