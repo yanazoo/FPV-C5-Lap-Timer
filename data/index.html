@@ -328,18 +328,27 @@ body.viewer #btnVoiceTest{padding:10px 28px;width:auto}
    narrow for 4). */
 @media(min-width:1200px){
   main,.header-inner{max-width:1600px}
-  /* Eighth-width cards, centred: fewer than eight pilots sit in the middle. */
+  /* The cards share the width: --n is the number of pilots on cards (set
+     by buildRaceCards, at least 2), so 8 pilots get eighths as before and
+     4 pilots quarters. */
   .pilot-race-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
-  .pilot-race-grid>.pilot-race-card{flex:0 0 calc((100% - 42px) / 8);min-width:0}
-  /* Narrow cards: compact text so lap times and totals fit. */
-  .pilot-race-grid .pilot-card-header{padding:6px 7px;font-size:12px;gap:4px;flex-wrap:wrap}
-  .pilot-race-grid .p-freq{margin-left:0}
-  .pilot-race-grid .rssi-mini-bar,.pilot-race-grid .pilot-best-row{padding:3px 6px}
+  .pilot-race-grid>.pilot-race-card{flex:0 0 calc((100% - (var(--n,8) - 1) * 6px) / var(--n,8));min-width:0;
+    container-type:inline-size}
+  /* Text grows with the card (cqi: 1% of the card's width). At an eighth of
+     the window each size is at its minimum, the compact size the narrow
+     cards had; wider cards get larger text, up to the maximum. */
+  .pilot-race-grid .pilot-card-header{padding:clamp(6px,2.5cqi,12px) clamp(7px,3cqi,14px);font-size:clamp(12px,5cqi,22px);gap:4px;flex-wrap:wrap}
+  .pilot-race-grid .p-freq{margin-left:0;font-size:clamp(10px,3cqi,14px)}
+  .pilot-race-grid .p-lapcount{font-size:clamp(11px,3.5cqi,16px)}
+  .pilot-race-grid .rssi-mini-bar,.pilot-race-grid .pilot-best-row{padding:clamp(3px,1.5cqi,8px) clamp(6px,3cqi,14px)}
   .pilot-race-grid .pilot-best-row{flex-wrap:wrap;gap:2px 6px}
-  .pilot-race-grid .pilot-best{font-size:13px}
-  .pilot-race-grid .lapTable{font-size:10px}
-  .pilot-race-grid .lapTable tbody td{padding:3px 2px}
-  .pilot-race-grid .lapTable tbody td.lap-time{font-size:12px}
+  .pilot-race-grid .best-label{font-size:clamp(9px,3cqi,13px);width:auto}
+  .pilot-race-grid .pilot-best{font-size:clamp(13px,7cqi,34px)}
+  .pilot-race-grid .lap-table-wrap{max-height:max(220px,100cqi)}
+  .pilot-race-grid .lapTable{font-size:clamp(10px,4.5cqi,18px)}
+  .pilot-race-grid .lapTable thead th{font-size:clamp(10px,3.5cqi,15px)}
+  .pilot-race-grid .lapTable tbody td{padding:clamp(3px,1.2cqi,6px) 2px}
+  .pilot-race-grid .lapTable tbody td.lap-time{font-size:clamp(12px,6cqi,28px)}
 }
 @media(orientation:portrait) and (max-width:900px),(max-width:600px){.pilot-race-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){

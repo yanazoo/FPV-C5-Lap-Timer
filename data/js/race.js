@@ -142,6 +142,8 @@ function buildRaceCards(){
       body : document.getElementById('lapBody'+p.id)
     };
   });
+  // Wide windows: the cards share the width (CSS --n; one pilot gets half).
+  g.style.setProperty('--n',Math.max(2,shown));
   var none=document.getElementById('noPilotsMsg');
   if(none)none.style.display=shown?'none':'block';
   // Rebuilding the cards (another browser assigned pilots) keeps the laps.
