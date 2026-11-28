@@ -357,37 +357,78 @@ async function startPilotScan(){
   renderPilots(null);
   box.scrollIntoView({behavior:'smooth',block:'start'});
 }
-function resPilotStats(){
+// The day a race was flown, "2026/11/08" (the timer's clock, else the
+// file's time); '' when it isn't known.
+function resDay(s){
+  if(!s.sortKey)return '';
+  var d=new Date(s.sortKey);
+  return d.getFullYear()+'/'+pad(d.getMonth()+1,2)+'/'+pad(d.getDate(),2);
+}
+var resPilotDay='';   // '' every day, else one day (resDay); '?' races with no date
+// Per pilot over the races read (one day, or all): races, wins, laps and
+// flying time in all, the average lap, and the best lap.
+function resPilotStats(day){
   var map={};
   resFiles().forEach(f=>{
     var s=resGet(f);if(!s)return;
+    if(day&&(resDay(s)||'?')!==day)return;
     var lead=s.pilots[0];
     s.pilots.forEach((p,i)=>{
       if(p.name==='---')return;
-      var m=map[p.name]||(map[p.name]={name:p.name,slot:p.slot,races:0,wins:0,best:0,bestRace:'',hist:[]});
+      var m=map[p.name]||(map[p.name]={name:p.name,slot:p.slot,races:0,wins:0,laps:0,total:0,best:0,bestRace:'',hist:[]});
       m.races++;
       if(i===0&&(lead.count||lead.best))m.wins++;
+      m.laps+=p.count||0;
+      m.total+=p.total||0;
       if(p.best&&(!m.best||p.best<m.best)){m.best=p.best;m.bestRace=resNo(f.name);}
       if(p.best)m.hist.push({key:s.sortKey||resNum(f.name),no:resNo(f.name),best:p.best});
     });
   });
   return Object.keys(map).map(k=>map[k]).sort((a,b)=>((a.best?0:1)-(b.best?0:1))||(a.best-b.best));
 }
+// The days with races read, newest first: [{day, races}].
+function resPilotDays(){
+  var n={};
+  resFiles().forEach(f=>{var s=resGet(f);if(!s)return;var d=resDay(s)||'?';n[d]=(n[d]||0)+1;});
+  return Object.keys(n).sort((a,b)=>a==='?'?1:b==='?'?-1:(a<b?1:a>b?-1:0)).map(d=>({day:d,races:n[d]}));
+}
+// Flying time: 1:23:45 / 12:34.5 / 45.6 s.
+function fmtDur(ms){
+  if(!ms)return '—';
+  var t=Math.round(ms/100)/10,h=Math.floor(t/3600),m=Math.floor(t%3600/60),sec=t%60;
+  if(h)return h+':'+pad(m,2)+':'+pad(Math.floor(sec),2);
+  if(m)return m+':'+(sec<10?'0':'')+sec.toFixed(1);
+  return sec.toFixed(1)+' 秒';
+}
+function resPilotSetDay(d){resPilotDay=d;renderPilots(null);}
 function renderPilots(sel){   // sel: row index of the pilot whose trend is shown
   resPilotSel=sel;
   var box=document.getElementById('resPilots');
   var all=resFiles(),read=all.filter(f=>resGet(f)).length;
-  var st=resPilotStats();
+  var days=resPilotDays();
+  if(resPilotDay&&!days.some(d=>d.day===resPilotDay))resPilotDay='';
+  var st=resPilotStats(resPilotDay);
   var h='<div class="res-head"><b>👤 パイロット別</b><span class="res-muted">'+read+' / '+all.length+' 件から集計</span><span style="flex:1"></span>'
     +'<button class="btn-secondary res-btn" onclick="document.getElementById(\'resPilots\').style.display=\'none\'">✕</button></div>';
+  // Every day, or one day.
+  h+='<div class="res-head" style="margin-bottom:8px"><span class="res-muted">期間</span>'
+    +'<select onchange="resPilotSetDay(this.value)" style="width:auto;flex:none">'
+    +'<option value="">すべての日（'+days.reduce((a,d)=>a+d.races,0)+' レース）</option>'
+    +days.map(d=>'<option value="'+d.day+'"'+(d.day===resPilotDay?' selected':'')+'>'+(d.day==='?'?'日時不明':d.day)+'（'+d.races+' レース）</option>').join('')
+    +'</select></div>';
   if(!st.length){box.innerHTML=h+'<p class="res-muted">記録がありません</p>';return;}
-  h+='<div class="res-wrap"><table class="res-table"><tr><th class="l">パイロット</th><th>出走</th><th>1位</th><th>自己ベスト</th><th>レース</th></tr>';
+  h+='<div class="res-wrap"><table class="res-table res-nowrap"><tr><th class="l">パイロット</th><th>出走</th><th>1位</th><th>周回</th><th>飛行時間</th><th>平均ラップ</th><th>自己ベスト</th><th>レース</th></tr>';
+  var tl=0,tt=0;
   st.forEach((m,i)=>{
+    tl+=m.laps;tt+=m.total;
     h+='<tr style="cursor:pointer'+(sel===i?';background:var(--sf2)':'')+'" onclick="renderPilots('+i+')">'
       +'<td class="l"><span class="res-dot" style="background:'+PCOLORS[m.slot%PCOLORS.length]+'"></span>'+esc(m.name)+'</td>'
-      +'<td>'+m.races+'</td><td>'+m.wins+'</td><td class="'+(i===0&&m.best?'best':'')+'">'+(m.best?fmt(m.best):'—')+'</td><td class="res-muted">'+m.bestRace+'</td></tr>';
+      +'<td>'+m.races+'</td><td>'+m.wins+'</td><td>'+m.laps+'</td><td>'+fmtDur(m.total)+'</td>'
+      +'<td>'+(m.laps?fmt(Math.round(m.total/m.laps)):'—')+'</td>'
+      +'<td class="'+(i===0&&m.best?'best':'')+'">'+(m.best?fmt(m.best):'—')+'</td><td class="res-muted">'+m.bestRace+'</td></tr>';
   });
-  h+='</table></div><p class="res-muted" style="margin-top:6px">パイロットをタップすると、最速ラップの推移を表示します</p>';
+  h+='<tr style="font-weight:700"><td class="l">合計</td><td></td><td></td><td>'+tl+'</td><td>'+fmtDur(tt)+'</td><td></td><td></td><td></td></tr>';
+  h+='</table></div><p class="res-muted" style="margin-top:6px">周回・飛行時間はレースで数えたラップの合計です（ホールショットは含みません）。パイロットをタップすると、最速ラップの推移を表示します</p>';
   var m=sel!==null?st[sel]:null;
   if(m&&m.hist.length){
     var hist=m.hist.sort((a,b)=>a.key-b.key);
